@@ -1,0 +1,2 @@
+[DEBUG] ISCC after all detection: [C:\Users\tianl\AppData\Local\Programs\Inno Setup 6\ISCC.exe]
+[OK] ISCC found: C:\Users\tianl\AppData\Local\Programs\Inno Setup 6\ISCC.exe

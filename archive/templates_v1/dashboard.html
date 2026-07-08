@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RDM 工时填报系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f5f7fa;
+            font-family: 'Microsoft YaHei', sans-serif;
+        }
+        .navbar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .navbar-brand {
+            font-weight: 600;
+            font-size: 20px;
+        }
+        .main-container {
+            padding: 30px 0;
+        }
+        .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 2px 15px rgba(0,0,0,0.05);
+            margin-bottom: 25px;
+        }
+        .card-header {
+            background: white;
+            border-bottom: 2px solid #f5f7fa;
+            padding: 20px 25px;
+            border-radius: 15px 15px 0 0;
+        }
+        .card-header h5 {
+            margin: 0;
+            font-weight: 600;
+            color: #333;
+        }
+        .week-info {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 15px;
+            margin-bottom: 25px;
+        }
+        .week-info h2 {
+            font-size: 28px;
+            margin: 0;
+        }
+        .week-info p {
+            margin: 5px 0 0 0;
+            opacity: 0.9;
+        }
+        .day-header {
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 8px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        .day-header.weekend {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .day-header.today {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        .task-row {
+            background: white;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+            transition: box-shadow 0.2s;
+        }
+        .task-row:hover {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .task-name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .hours-input {
+            width: 60px;
+            text-align: center;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 8px;
+        }
+        .hours-input:focus {
+            border-color: #667eea;
+            outline: none;
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+        }
+        .btn-action {
+            border-radius: 8px;
+            padding: 10px 25px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+        }
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+        .task-total {
+            background: #e7f3ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+        .task-total strong {
+            color: #0066cc;
+            font-size: 18px;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+        .empty-state i {
+            font-size: 48px;
+            color: #dee2e6;
+            margin-bottom: 15px;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+        }
+        .completion-rate {
+            width: 80px;
+        }
+        .summary-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            margin-top: 20px;
+        }
+        .summary-box h3 {
+            margin: 0;
+            font-size: 36px;
+        }
+        .summary-box p {
+            margin: 5px 0 0 0;
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/dashboard">
+                <i class="bi bi-clock-history"></i> RDM 工时系统
+            </a>
+            <div class="d-flex align-items-center">
+                <span class="navbar-text me-3">
+                    <i class="bi bi-person-circle"></i> {{ username }}
+                </span>
+                <a href="/logout" class="btn btn-outline-light btn-sm">
+                    <i class="bi bi-box-arrow-right"></i> 退出
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 主内容 -->
+    <div class="container main-container">
+        <!-- 周信息 -->
+        <div class="week-info" id="weekInfo">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h2><i class="bi bi-calendar-week"></i> <span id="weekTitle">加载中...</span></h2>
+                    <p>第 <span id="weekNumber">-</span> 周 · <span id="weekRange">-</span></p>
+                </div>
+                <div class="col-md-4 text-end">
+                    <button class="btn btn-light" onclick="loadPreviousWeek()">
+                        <i class="bi bi-chevron-left"></i> 上周
+                    </button>
+                    <button class="btn btn-light ms-2" onclick="loadNextWeek()">
+                        下周 <i class="bi bi-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- 左侧：工时填写 -->
+            <div class="col-lg-8">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5><i class="bi bi-list-task"></i> 工时填写</h5>
+                        <button class="btn btn-sm btn-primary" onclick="addTask()">
+                            <i class="bi bi-plus-circle"></i> 添加任务
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <!-- 日期表头 -->
+                        <div class="row mb-3" id="dayHeaders">
+                            <!-- 使用 JavaScript 动态生成 -->
+                        </div>
+
+                        <!-- 任务列表 -->
+                        <div id="taskList">
+                            <div class="loading">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">加载中...</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 汇总信息 -->
+                        <div id="summaryBox" style="display: none;">
+                            <div class="summary-box">
+                                <p>本周总工时</p>
+                                <h3 id="totalHours">0</h3>
+                                <p>小时</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右侧：操作面板 -->
+            <div class="col-lg-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="bi bi-gear"></i> 操作</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-action btn-primary" onclick="submitTimesheet()">
+                                <i class="bi bi-check-circle"></i> 提交工时
+                            </button>
+                            <button class="btn btn-action btn-outline-primary" onclick="previewTimesheet()">
+                                <i class="bi bi-eye"></i> 预览
+                            </button>
+                            <button class="btn btn-action btn-outline-secondary" onclick="saveDraft()">
+                                <i class="bi bi-save"></i> 保存草稿
+                            </button>
+                            <button class="btn btn-action btn-outline-info" onclick="loadTemplate()">
+                                <i class="bi bi-file-earmark-text"></i> 加载模板
+                            </button>
+                        </div>
+
+                        <hr>
+
+                        <h6 class="mb-3">快速填充</h6>
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-sm btn-outline-success" onclick="fillWorkdays8()">
+                                <i class="bi bi-magic"></i> 工作日每天8小时
+                            </button>
+                            <button class="btn btn-sm btn-outline-warning" onclick="clearAll()">
+                                <i class="bi bi-trash"></i> 清空所有
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 使用说明 -->
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="bi bi-lightbulb"></i> 使用说明</h5>
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-unstyled mb-0" style="font-size: 14px;">
+                            <li class="mb-2"><i class="bi bi-check2 text-success"></i> 点击"添加任务"创建新任务</li>
+                            <li class="mb-2"><i class="bi bi-check2 text-success"></i> 在输入框中填写每天工时</li>
+                            <li class="mb-2"><i class="bi bi-check2 text-success"></i> 设置任务完成率</li>
+                            <li class="mb-2"><i class="bi bi-check2 text-success"></i> 预览确认后提交</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 预览模态框 -->
+    <div class="modal fade" id="previewModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-eye"></i> 工时预览</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="previewContent">
+                    <!-- 动态内容 -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" onclick="confirmSubmit()">
+                        <i class="bi bi-check-circle"></i> 确认提交
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let weekData = {
+            weekStart: '',
+            days: []
+        };
+        let tasks = [];
+        let taskIdCounter = 0;
+
+        // 页面加载时初始化
+        window.addEventListener('load', () => {
+            loadWeekInfo();
+            loadSavedData();
+        });
+
+        // 加载周信息
+        async function loadWeekInfo() {
+            try {
+                const response = await fetch('/api/week-info');
+                const data = await response.json();
+
+                if (data.success) {
+                    weekData = data;
+                    document.getElementById('weekTitle').textContent =
+                        `${data.days[0].date} ~ ${data.days[6].date}`;
+                    document.getElementById('weekNumber').textContent = data.week_number;
+                    document.getElementById('weekRange').textContent =
+                        `${data.week_start} 至 ${data.week_end}`;
+
+                    renderDayHeaders();
+                }
+            } catch (error) {
+                console.error('加载周信息失败:', error);
+            }
+        }
+
+        // 渲染日期表头
+        function renderDayHeaders() {
+            const container = document.getElementById('dayHeaders');
+            let html = '<div class="col-md-3"><strong>任务名称</strong></div>';
+
+            weekData.days.forEach((day, index) => {
+                let classes = 'day-header text-center';
+                if (day.is_weekend) classes += ' weekend';
+                if (day.is_today) classes += ' today';
+
+                html += `
+                    <div class="col-md" style="flex: 0 0 calc(14.28% - 5px);">
+                        <div class="${classes}">
+                            <div>${day.weekday}</div>
+                            <div style="font-size: 12px;">${day.day}日</div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += '<div class="col-md-1"><strong>完成率</strong></div>';
+            container.innerHTML = html;
+        }
+
+        // 添加任务
+        function addTask(name = '', hours = [0,0,0,0,0,0,0], rate = 100) {
+            const taskId = ++taskIdCounter;
+            tasks.push({ id: taskId, name, hours, rate });
+            renderTasks();
+        }
+
+        // 渲染任务列表
+        function renderTasks() {
+            const container = document.getElementById('taskList');
+
+            if (tasks.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="bi bi-inbox"></i>
+                        <p>暂无任务，点击"添加任务"开始填写工时</p>
+                    </div>
+                `;
+                document.getElementById('summaryBox').style.display = 'none';
+                return;
+            }
+
+            let html = '';
+            tasks.forEach((task, taskIndex) => {
+                html += `
+                    <div class="task-row" id="task-${task.id}">
+                        <div class="row align-items-center">
+                            <div class="col-md-3">
+                                <div class="task-name">
+                                    <input type="text" class="form-control form-control-sm"
+                                           value="${task.name}"
+                                           placeholder="任务名称"
+                                           onchange="updateTaskName(${task.id}, this.value)">
+                                </div>
+                            </div>
+
+                            ${task.hours.map((h, dayIndex) => `
+                                <div class="col-md" style="flex: 0 0 calc(14.28% - 5px);">
+                                    <input type="number"
+                                           class="hours-input form-control"
+                                           value="${h}"
+                                           min="0"
+                                           max="24"
+                                           step="0.5"
+                                           onchange="updateHours(${task.id}, ${dayIndex}, this.value)">
+                                </div>
+                            `).join('')}
+
+                            <div class="col-md-1">
+                                <div class="d-flex align-items-center">
+                                    <input type="number"
+                                           class="form-control form-control-sm completion-rate"
+                                           value="${task.rate}"
+                                           min="0"
+                                           max="100"
+                                           onchange="updateRate(${task.id}, this.value)">
+                                    <span class="ms-1">%</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-between align-items-center mt-2">
+                            <div class="task-total">
+                                小计: <strong>${task.hours.reduce((a, b) => a + b, 0)}</strong> 小时
+                            </div>
+                            <button class="btn btn-sm btn-outline-danger" onclick="removeTask(${task.id})">
+                                <i class="bi bi-trash"></i> 删除
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+            updateSummary();
+        }
+
+        // 更新任务名称
+        function updateTaskName(taskId, name) {
+            const task = tasks.find(t => t.id === taskId);
+            if (task) task.name = name;
+        }
+
+        // 更新工时
+        function updateHours(taskId, dayIndex, value) {
+            const task = tasks.find(t => t.id === taskId);
+            if (task) {
+                task.hours[dayIndex] = parseFloat(value) || 0;
+
+                // 实时更新小计
+                const taskRow = document.getElementById(`task-${taskId}`);
+                const total = task.hours.reduce((a, b) => a + b, 0);
+                taskRow.querySelector('.task-total strong').textContent = total;
+
+                updateSummary();
+            }
+        }
+
+        // 更新完成率
+        function updateRate(taskId, rate) {
+            const task = tasks.find(t => t.id === taskId);
+            if (task) task.rate = parseInt(rate);
+        }
+
+        // 删除任务
+        function removeTask(taskId) {
+            if (confirm('确定要删除这个任务吗？')) {
+                tasks = tasks.filter(t => t.id !== taskId);
+                renderTasks();
+            }
+        }
+
+        // 更新汇总
+        function updateSummary() {
+            const total = tasks.reduce((sum, task) => {
+                return sum + task.hours.reduce((a, b) => a + b, 0);
+            }, 0);
+
+            document.getElementById('totalHours').textContent = total;
+            document.getElementById('summaryBox').style.display = tasks.length > 0 ? 'block' : 'none';
+        }
+
+        // 快速填充：工作日8小时
+        function fillWorkdays8() {
+            tasks.forEach(task => {
+                task.hours = [8, 8, 8, 8, 8, 0, 0];
+            });
+            renderTasks();
+        }
+
+        // 清空所有
+        function clearAll() {
+            if (confirm('确定要清空所有任务吗？')) {
+                tasks = [];
+                renderTasks();
+            }
+        }
+
+        // 预览工时
+        async function previewTimesheet() {
+            if (tasks.length === 0) {
+                alert('请先添加任务');
+                return;
+            }
+
+            const data = {
+                weekStart: weekData.weekStart,
+                tasks: tasks.map(t => ({
+                    name: t.name,
+                    hours: t.hours,
+                    completionRate: t.rate
+                }))
+            };
+
+            try {
+                const response = await fetch('/api/preview', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    let html = '<h6>工时汇总</h6><table class="table table-bordered">';
+                    html += '<thead><tr><th>任务</th><th>总工时</th><th>完成率</th></tr></thead><tbody>';
+
+                    result.task_summary.forEach(task => {
+                        html += `
+                            <tr>
+                                <td>${task.name}</td>
+                                <td>${task.total_hours} 小时</td>
+                                <td>${task.completion_rate}%</td>
+                            </tr>
+                        `;
+                    });
+
+                    html += `</tbody>
+                        <tfoot>
+                            <tr class="table-primary">
+                                <th>总计</th>
+                                <th colspan="2">${result.total_hours} 小时</th>
+                            </tr>
+                        </tfoot>
+                    </table>`;
+
+                    document.getElementById('previewContent').innerHTML = html;
+                    new bootstrap.Modal(document.getElementById('previewModal')).show();
+                }
+            } catch (error) {
+                alert('预览失败: ' + error.message);
+            }
+        }
+
+        // 提交工时
+        async function submitTimesheet() {
+            if (tasks.length === 0) {
+                alert('请先添加任务');
+                return;
+            }
+
+            previewTimesheet();
+        }
+
+        // 确认提交
+        async function confirmSubmit() {
+            const data = {
+                weekStart: weekData.weekStart,
+                tasks: tasks.map(t => ({
+                    name: t.name,
+                    hours: t.hours,
+                    completionRate: t.rate
+                }))
+            };
+
+            try {
+                const response = await fetch('/api/submit-timesheet', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await response.json();
+
+                bootstrap.Modal.getInstance(document.getElementById('previewModal')).hide();
+
+                if (result.success) {
+                    alert('✓ 工时提交成功！');
+                    clearAll();
+                } else {
+                    alert('✗ 提交失败: ' + result.message);
+                }
+            } catch (error) {
+                alert('提交失败: ' + error.message);
+            }
+        }
+
+        // 保存草稿
+        function saveDraft() {
+            const data = {
+                weekStart: weekData.weekStart,
+                tasks: tasks
+            };
+            localStorage.setItem('timesheet_draft', JSON.stringify(data));
+            alert('草稿已保存');
+        }
+
+        // 加载保存的数据
+        function loadSavedData() {
+            const saved = localStorage.getItem('timesheet_draft');
+            if (saved) {
+                const data = JSON.parse(saved);
+                if (data.weekStart === weekData.weekStart) {
+                    tasks = data.tasks || [];
+                    taskIdCounter = tasks.length > 0 ? Math.max(...tasks.map(t => t.id)) : 0;
+                    renderTasks();
+                }
+            }
+        }
+
+        // 加载模板
+        function loadTemplate() {
+            if (confirm('加载模板将覆盖当前内容，是否继续？')) {
+                tasks = [
+                    { id: ++taskIdCounter, name: '项目开发', hours: [8,8,8,8,8,0,0], rate: 100 },
+                    { id: ++taskIdCounter, name: '代码评审', hours: [0,0,2,0,0,0,0], rate: 100 },
+                    { id: ++taskIdCounter, name: '文档编写', hours: [0,0,0,0,2,0,0], rate: 80 }
+                ];
+                renderTasks();
+            }
+        }
+
+        // 上周/下周
+        function loadPreviousWeek() {
+            alert('功能开发中...');
+        }
+
+        function loadNextWeek() {
+            alert('功能开发中...');
+        }
+    </script>
+</body>
+</html>

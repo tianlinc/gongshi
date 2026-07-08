@@ -1,0 +1,24 @@
+'f' is not recognized as an internal or external command,
+operable program or batch file.
+'ls12' is not recognized as an internal or external command,
+operable program or batch file.
+'mer' is not recognized as an internal or external command,
+operable program or batch file.
+'nguages" mkdir "!ISCC_DIR!Languages"' is not recognized as an internal or external command,
+operable program or batch file.
+'t' is not recognized as an internal or external command,
+operable program or batch file.
+The system cannot find the path specified.
+'��认步骤' is not recognized as an internal or external command,
+operable program or batch file.
+'er_Service_Setup.exe' is not recognized as an internal or external command,
+operable program or batch file.
+'��动注册并启动' is not recognized as an internal or external command,
+operable program or batch file.
+The filename, directory name, or volume label syntax is incorrect.
+'EI' is not recognized as an internal or external command,
+operable program or batch file.
+'Faster' is not recognized as an internal or external command,
+operable program or batch file.
+'停止并删除' is not recognized as an internal or external command,
+operable program or batch file.

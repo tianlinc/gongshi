@@ -1,0 +1,24 @@
+cache/
+__pycache__/
+*.pyc
+*.log
+cache/*_tasks.json
+.env
+# Runtime data (contains per-installation activation state)
+license_status.json
+# Platform/agent internal directories
+.claude/
+.multica/
+.agent_context/
+.team-backup/
+# Windows reserved device name (zero-byte file, accidentally created)
+nul
+# Prebuilt Chromium binaries (~400MB, not source code)
+**/playwright-browsers-prebuilt/
+# Build output
+build_output.txt
+build_error.txt
+dist/
+# Build artifacts (large .pkg files exceed GitHub limits)
+lightweight/build/
+service_installer/build/

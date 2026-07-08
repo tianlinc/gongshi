@@ -1,0 +1,28 @@
+{
+  "2026-06-01": {
+    "success": true,
+    "week_start": "2026-06-01",
+    "tasks": [
+      {
+        "task_id": "T-2026-0001",
+        "hours": [7.5, 8, 8, 7, 6.5, 0, 0],
+        "completion_rates": [75, 80, 80, 70, 65, null, null]
+      },
+      {
+        "task_id": "T-2026-0002",
+        "hours": [3, 2, 2.5, 4, 3, 0, 0],
+        "completion_rates": [30, 20, 25, 40, 30, null, null]
+      },
+      {
+        "task_id": "T-2026-0003",
+        "hours": [1, 0, 0, 0, 0, 0, 0],
+        "completion_rates": [100, null, null, null, null, null, null]
+      }
+    ]
+  },
+  "2026-06-08": {
+    "success": true,
+    "week_start": "2026-06-08",
+    "tasks": []
+  }
+}

@@ -1,0 +1,1701 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RDM 工时填报系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/app.css') }}" rel="stylesheet">
+</head>
+<body>
+
+<!-- 顶部导航 -->
+<nav class="navbar navbar-expand navbar-dark">
+    <div class="container">
+        <a class="navbar-brand me-2" href="/dashboard">
+            <i class="bi bi-clock-history"></i> 工时系统
+        </a>
+        <!-- 任务下拉（在导航栏内） -->
+        <div class="d-flex align-items-center me-3">
+            <input type="text" class="form-control form-control-sm navbar-search" id="taskSearchInput"
+                   placeholder="搜索任务..." style="display:none;">
+            <div class="dropdown" id="taskDropdown">
+                <button class="btn btn-sm btn-outline-light navbar-task-btn dropdown-toggle"
+                        type="button" data-bs-toggle="dropdown" id="taskDropdownBtn"
+                        style="border-color: rgba(255,255,255,0.3);">
+                    <span id="taskDropdownLabel">-- 加载中... --</span>
+                </button>
+                <div class="dropdown-menu task-dropdown-menu" id="taskDropdownMenu"
+                     style="max-height: 360px; overflow-y: auto; min-width: 320px;">
+                </div>
+            </div>
+        </div>
+        <button class="btn btn-sm btn-outline-light me-2" id="syncBtn"
+                title="从 RDM 实时抓取最新任务列表" style="font-size:12px;">
+            <i class="bi bi-arrow-repeat"></i> 从 RDM 同步
+        </button>
+        <button class="btn btn-sm btn-outline-light me-2" id="holidaySyncBtn"
+                title="同步中国法定节假日" style="display:none;font-size:12px;">
+            <i class="bi bi-calendar-heart"></i> 同步节假日
+        </button>
+        <span id="cacheInfo" style="display:none;color:rgba(255,255,255,0.7);font-size:12px;margin-right:12px;white-space:nowrap;"></span>
+        <div class="d-flex align-items-center ms-auto">
+            <span class="navbar-text me-3">
+                <i class="bi bi-person-circle"></i> <span id="navUsername">{{ username|default('-') }}</span>
+            </span>
+            <button class="btn btn-outline-light btn-sm me-2" id="licenseInfoBtn"
+                    title="查看 License 激活信息">
+                <i class="bi bi-shield-check"></i> License
+            </button>
+            <button class="btn btn-outline-light btn-sm" id="logoutBtn">
+                <i class="bi bi-box-arrow-right"></i> 退出
+            </button>
+        </div>
+    </div>
+</nav>
+
+<div class="container main-container">
+
+    <!-- 月份导航条 -->
+    <div class="month-bar">
+        <div class="month-nav">
+            <button class="btn-month" id="prevMonth" title="上个月">
+                <i class="bi bi-chevron-left"></i>
+            </button>
+            <h2 id="monthTitle">加载中...</h2>
+            <button class="btn-month" id="nextMonth" title="下个月">
+                <i class="bi bi-chevron-right"></i>
+            </button>
+            <span class="badge-current" id="monthBadge" style="display:none;">本月</span>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- 左侧：月历表格 -->
+        <div class="col-lg-9">
+            <div class="card month-calendar-card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5><i class="bi bi-calendar-month"></i> 工时月历</h5>
+                    <div class="d-flex align-items-center gap-2">
+                        <button class="btn btn-primary btn-sm" id="submitAllBtn">
+                            <i class="bi bi-check-circle"></i> 提交本月工时
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm" id="clearAllBtn">
+                            <i class="bi bi-eraser"></i> 清空输入
+                        </button>
+                        <button class="btn btn-outline-info btn-sm" id="teamLogsBtn" title="查看当前任务下所有成员的日报">
+                            <i class="bi bi-people"></i> 全员日报
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body" style="padding: 0;">
+                    <!-- 加载中 -->
+                    <div id="monthLoading" class="month-loading">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2 text-muted">正在加载任务列表...</p>
+                    </div>
+                    <!-- 加载失败 -->
+                    <div id="monthError" class="month-error" style="display:none;">
+                        <div class="empty-state">
+                            <div class="empty-icon"><i class="bi bi-exclamation-triangle text-warning"></i></div>
+                            <h5>加载失败</h5>
+                            <p id="monthErrorMsg">-</p>
+                            <button class="btn btn-outline-primary btn-sm" id="retryLoadBtn">
+                                <i class="bi bi-arrow-clockwise"></i> 重试
+                            </button>
+                        </div>
+                    </div>
+                    <!-- 日历表格 -->
+                    <div id="monthCalendarWrap" class="month-calendar-wrap" style="display:none;">
+                        <table class="month-calendar">
+                            <thead>
+                                <tr>
+                                    <th>一</th><th>二</th><th>三</th><th>四</th>
+                                    <th>五</th><th class="weekend-col">六</th><th class="weekend-col">日</th>
+                                </tr>
+                            </thead>
+                            <tbody id="monthCalendarBody"></tbody>
+                        </table>
+                        <div id="calendarStatus" class="calendar-status" style="display:none;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右侧：操作面板 -->
+        <div class="col-lg-3">
+            <div class="card action-panel">
+                <div class="card-body">
+                    <!-- 批量填充 -->
+                    <div class="bulk-fill-block">
+                        <div class="bulk-title">
+                            <i class="bi bi-magic"></i> 批量填充
+                        </div>
+                        <div class="bulk-hint">填入后覆盖当月 1 号~今天的所有空白日期</div>
+                        <div class="bulk-row">
+                            <label>每天小时</label>
+                            <input type="number" class="form-control form-control-sm"
+                                   id="bulkHour" step="1" min="0" max="24" value="8">
+                        </div>
+                        <div class="form-check form-switch mt-2">
+                            <input class="form-check-input" type="checkbox" id="bulkLadder" role="switch" checked>
+                            <label class="form-check-label" for="bulkLadder">
+                                阶梯比例
+                                <i class="bi bi-question-circle ms-1" id="ladderHelpIcon"
+                                   style="cursor:help;font-size:13px;color:#adb5bd;"
+                                   data-bs-toggle="tooltip" data-bs-placement="right"
+                                   data-bs-custom-class="ladder-tooltip"
+                                   data-bs-html="true"></i>
+                            </label>
+                        </div>
+                        <div class="bulk-row" id="ladderTargetRow" style="display:none;">
+                            <label>目标百分比</label>
+                            <input type="number" class="form-control form-control-sm"
+                                   id="bulkLadderTarget" step="1" min="2" max="100" value="100">
+                            <span class="bulk-suffix">%</span>
+                        </div>
+                        <div class="bulk-row" id="fixedRateRow">
+                            <label>每天完成率</label>
+                            <input type="number" class="form-control form-control-sm"
+                                   id="bulkRate" step="1" min="0" max="100" value="80" placeholder="可空">
+                            <span class="bulk-suffix">%</span>
+                        </div>
+                        <div class="d-grid gap-1 mt-2">
+                            <button class="btn btn-sm btn-outline-primary" id="bulkFillBtn"
+                                    title="只填工作日，周末空白会被清空">
+                                <i class="bi bi-calendar-week"></i> 应用到工作日
+                            </button>
+                            <button class="btn btn-sm btn-outline-primary" id="bulkFillAllBtn"
+                                    title="包含周末全部填">
+                                <i class="bi bi-calendar-check"></i> 应用到全月
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="summary-block">
+                        <div class="summary-grid">
+                            <div class="summary-card">
+                                <span>当月总工时</span>
+                                <strong id="sumTotal">0 h</strong>
+                            </div>
+                            <div class="summary-card">
+                                <span>已填天数</span>
+                                <strong id="sumFilledDays">0 天</strong>
+                            </div>
+                            <div class="summary-card">
+                                <span>未填天数</span>
+                                <strong id="sumUnfilledDays">0 天</strong>
+                            </div>
+                            <div class="summary-card">
+                                <span>当月工作日</span>
+                                <strong id="sumWorkdays">0 天</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<!-- 提交进度面板 -->
+<div class="modal fade progress-modal" id="progressModal" tabindex="-1"
+     data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header" id="progressHeader">
+                <h5 class="modal-title">
+                    <i class="bi bi-cloud-upload"></i> 正在提交本月工时
+                </h5>
+                <button type="button" class="btn btn-danger btn-sm" id="cancelSubmitBtn"
+                        title="取消提交">
+                    <i class="bi bi-x-lg"></i> 取消
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="d-flex justify-content-between mb-2">
+                    <span>进度：<strong id="progCount">0 / 0</strong></span>
+                    <span id="progPercent">0%</span>
+                </div>
+                <div class="progress">
+                    <div class="progress-bar" role="progressbar" style="width:0%;" id="progBar"></div>
+                </div>
+                <div class="task-list" id="progList"></div>
+                <p class="modal-footer-note" id="progNote">
+                    逐天提交，遇到失败立即停止
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 失败弹窗 -->
+<div class="modal fade fail-modal" id="failModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-x-circle-fill fail-icon"></i> 提交失败</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>日期 <strong id="failDay">-</strong> 提交失败</p>
+                <div class="fail-detail">
+                    <strong>失败原因：</strong>
+                    <span id="failReason">-</span>
+                </div>
+                <div class="pending-list">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <strong>后续 <span id="failPendingCount">0</span> 天未提交，请手动到 RDM 处理：</strong>
+                    <ul id="failPendingList"></ul>
+                </div>
+                <p class="text-muted mt-3" style="font-size:13px;">
+                    <i class="bi bi-info-circle"></i>
+                    已成功提交的天保持已提交状态。
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-primary"
+                        onclick="window.open('http://10.111.36.3:2029', '_blank')">
+                    <i class="bi bi-box-arrow-up-right"></i> 打开 RDM 网页
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">我知道了</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 全员日报弹窗 -->
+<div class="modal fade" id="teamLogsModal" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-people"></i> 全员日报
+                    <small class="text-muted ms-2" id="teamLogsTaskName" style="font-size:13px;"></small>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- 加载中 -->
+                <div id="teamLogsLoading" class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2 text-muted">正在加载全员日报...</p>
+                </div>
+                <!-- 错误 / 空态 -->
+                <div id="teamLogsError" class="text-center py-5" style="display:none;">
+                    <i class="bi bi-exclamation-triangle text-warning" style="font-size:36px;"></i>
+                    <p id="teamLogsErrorMsg" class="mt-2 text-muted"></p>
+                </div>
+                <!-- 表格 -->
+                <div id="teamLogsTableWrap" style="display:none;">
+                    <div class="mb-2 text-muted" style="font-size:13px;">
+                        <i class="bi bi-info-circle"></i>
+                        共 <strong id="teamLogsCount">0</strong> 条日报记录
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover team-logs-table">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width:80px;">成员</th>
+                                    <th style="width:100px;">日期</th>
+                                    <th style="width:70px;">工时</th>
+                                    <th style="width:70px;">完成率</th>
+                                    <th>描述</th>
+                                    <th>存在问题</th>
+                                </tr>
+                            </thead>
+                            <tbody id="teamLogsTbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- License 信息弹窗 -->
+<div class="modal fade" id="licenseInfoModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-shield-check"></i> License 激活信息
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- 加载中 -->
+                <div id="licenseLoading" class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2 text-muted">正在加载...</p>
+                </div>
+                <!-- 错误 -->
+                <div id="licenseError" class="text-center py-4" style="display:none;">
+                    <i class="bi bi-exclamation-triangle text-warning" style="font-size:36px;"></i>
+                    <p id="licenseErrorMsg" class="mt-2 text-muted"></p>
+                </div>
+                <!-- 信息表格 -->
+                <div id="licenseInfoTable" style="display:none;">
+                    <table class="table table-borderless mb-0" style="font-size:14px;">
+                        <tbody>
+                            <tr>
+                                <td style="width:90px;color:#888;">激活状态</td>
+                                <td><span id="licStatus"></span></td>
+                            </tr>
+                            <tr>
+                                <td style="color:#888;">授权类型</td>
+                                <td id="licType">-</td>
+                            </tr>
+                            <tr id="licExpRow">
+                                <td style="color:#888;">过期时间</td>
+                                <td id="licExp">-</td>
+                            </tr>
+                            <tr id="licActivatedRow">
+                                <td style="color:#888;">激活时间</td>
+                                <td id="licActivatedAt">-</td>
+                            </tr>
+                            <tr>
+                                <td style="color:#888;">SN 码</td>
+                                <td>
+                                    <code id="licSn" style="font-size:12px;word-break:break-all;">-</code>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <a href="/activate" class="btn btn-outline-success btn-sm">
+                    <i class="bi bi-arrow-repeat"></i> 重新激活
+                </a>
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+<script>
+/* ============================================================
+ * dashboard.html · 月历视图 v3
+ *
+ * 改动（2026-06-24 v3）：
+ *   - 提交/清空按钮移到 card header
+ *   - 同步按钮移到 month-bar 右侧
+ *   - 移除使用说明卡片
+ *   - 任务下拉改为自定义 dropdown（任务名 + 项目名小字）
+ *   - 应用到工作日时清空周末已有数据
+ * ============================================================ */
+
+(function () {
+
+    // ===== 状态 =====
+    const state = {
+        yearMonth: '',
+        tasks: [],
+        selectedTaskId: null,
+        monthData: {},        // {dateStr: {hour, rate, rdm: bool}}
+        tasksCached: false,
+        tasksCachedAt: null,
+        isSubmitting: false,
+        cancelSubmit: false,
+        holidays: {}          // {"MM-DD": {holiday:bool, name:str}, ...}
+    };
+
+    // ===== 初始化 =====
+    async function init() {
+        const now = new Date();
+        state.yearMonth = fmtYearMonth(now);
+        bindControls();
+        onLadderToggle();       // 默认开启阶梯比例模式
+        const holidaysReady = loadHolidays();  // 提前发起不阻塞
+        await loadTasks();
+        await holidaysReady;                    // 等节假日数据就绪再渲染
+        await refreshMonth();
+        document.getElementById('holidaySyncBtn').style.display = '';
+    }
+
+    // ===== 工具函数 =====
+    function fmtYearMonth(d) {
+        return d.getFullYear() + '-' + pad2(d.getMonth() + 1);
+    }
+
+    function parseYearMonth(ym) {
+        const [y, m] = ym.split('-').map(Number);
+        return { year: y, month: m };
+    }
+
+    function dateStrToDayIndex(dateStr) {
+        const [y, m, d] = dateStr.split('-').map(Number);
+        const jsDay = new Date(y, m - 1, d).getDay();
+        return jsDay === 0 ? 6 : jsDay - 1;
+    }
+
+    function dateStrToMonday(dateStr) {
+        const [y, m, d] = dateStr.split('-').map(Number);
+        return getWeekMonday(new Date(y, m - 1, d));
+    }
+
+    function getMonthRange() {
+        const { year, month } = parseYearMonth(state.yearMonth);
+        const first = fmtDate(new Date(year, month - 1, 1));
+        const last = fmtDate(new Date(year, month, 0));
+        return { first, last };
+    }
+
+    // ===== 节假日 =====
+    /** 静默加载节假日（页面初始化用） */
+    async function loadHolidays() {
+        try {
+            const year = parseYearMonth(state.yearMonth).year;
+            const resp = await apiCall('/api/holidays?year=' + year);
+            if (resp && resp.success) {
+                state.holidays = resp.holidays || {};
+            }
+        } catch (e) { /* 静默失败，按钮手动重试 */ }
+    }
+
+    /** 手动同步节假日（按钮触发，有 UI 反馈） */
+    async function syncHolidays() {
+        const btn = document.getElementById('holidaySyncBtn');
+        const origHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
+
+        try {
+            const year = parseYearMonth(state.yearMonth).year;
+            const resp = await apiCall('/api/holidays?year=' + year + '&refresh=true');
+            if (resp && resp.success) {
+                state.holidays = resp.holidays || {};
+                const count = Object.keys(state.holidays).length;
+                if (count > 0) {
+                    toast('已同步 ' + count + ' 条节假日数据', 'success');
+                } else {
+                    toast('节假日数据为空，请检查外网是否可达 timor.tech', 'warn', 6000);
+                }
+                refreshMonth();
+            } else {
+                toast('节假日同步失败：' + ((resp && resp.message) || '未知错误'), 'error', 5000);
+            }
+        } catch (e) {
+            toast('节假日同步失败：网络异常', 'error', 5000);
+        }
+
+        btn.disabled = false;
+        btn.innerHTML = origHtml;
+    }
+
+    /** 判断 dateStr (YYYY-MM-DD) 是否为工作日（含调休） */
+    function isWorkday(dateStr) {
+        const md = dateStr.slice(5); // "MM-DD"
+        const h = state.holidays[md];
+        if (h !== undefined) {
+            // holiday: true = 放假, false = 调休上班
+            return !h.holiday;
+        }
+        // 默认：周一~周五 = 工作日
+        const d = new Date(dateStr + 'T00:00:00');
+        const dow = d.getDay();
+        return dow !== 0 && dow !== 6;
+    }
+
+    // ===== 控件绑定 =====
+    function bindControls() {
+        document.getElementById('prevMonth').addEventListener('click', () => navigateMonth(-1));
+        document.getElementById('nextMonth').addEventListener('click', () => navigateMonth(1));
+
+        document.getElementById('taskSearchInput').addEventListener('input', onTaskSearch);
+
+        // 每次打开下拉时重建菜单，确保 active 状态正确
+        document.getElementById('taskDropdownBtn').addEventListener('shown.bs.dropdown', () => {
+            const q = document.getElementById('taskSearchInput').value;
+            buildDropdownItems(q);
+        });
+
+        document.getElementById('syncBtn').addEventListener('click', syncFromRDM);
+        document.getElementById('retryLoadBtn').addEventListener('click', refreshMonth);
+
+        document.getElementById('submitAllBtn').addEventListener('click', startBatchSubmit);
+        document.getElementById('cancelSubmitBtn').addEventListener('click', cancelBatchSubmit);
+        document.getElementById('clearAllBtn').addEventListener('click', clearAllInputs);
+
+        document.getElementById('bulkFillBtn').addEventListener('click', () => bulkFill(false));
+        document.getElementById('bulkFillAllBtn').addEventListener('click', () => bulkFill(true));
+        document.getElementById('bulkLadder').addEventListener('change', onLadderToggle);
+        document.getElementById('bulkLadderTarget').addEventListener('input', updateLadderHint);
+
+        // 初始化阶梯比例 tooltip
+        new bootstrap.Tooltip(document.getElementById('ladderHelpIcon'));
+
+        document.getElementById('holidaySyncBtn').addEventListener('click', syncHolidays);
+
+        document.getElementById('teamLogsBtn').addEventListener('click', showTeamLogs);
+
+        document.getElementById('licenseInfoBtn').addEventListener('click', showLicenseInfo);
+
+        document.getElementById('logoutBtn').addEventListener('click', async () => {
+            await apiCall('/api/logout', { method: 'POST' });
+            window.location.href = '/';
+        });
+    }
+
+    // ===== 月份导航 =====
+    function navigateMonth(delta) {
+        const oldYear = parseYearMonth(state.yearMonth).year;
+        const { year, month } = parseYearMonth(state.yearMonth);
+        let newMonth = month + delta;
+        let newYear = year;
+        if (newMonth > 12) { newMonth = 1; newYear++; }
+        if (newMonth < 1) { newMonth = 12; newYear--; }
+        state.yearMonth = newYear + '-' + pad2(newMonth);
+        if (newYear !== oldYear) loadHolidays();  // 跨年时刷新节假日
+        refreshMonth();
+    }
+
+    function updateMonthUI() {
+        const { year, month } = parseYearMonth(state.yearMonth);
+        document.getElementById('monthTitle').textContent = year + ' 年 ' + month + ' 月';
+        const now = new Date();
+        const isCurrent = (now.getFullYear() === year && now.getMonth() + 1 === month);
+        document.getElementById('monthBadge').style.display = isCurrent ? 'inline-block' : 'none';
+    }
+
+    // ===== 任务加载 =====
+    async function loadTasks() {
+        const resp = await apiCall('/api/tasks');
+        if (!resp || !resp.success) {
+            showMonthError((resp && resp.message) || '任务加载失败');
+            return false;
+        }
+        state.tasks = resp.tasks || [];
+        state.tasksCached = resp.cached || false;
+        state.tasksCachedAt = resp.cached_at || null;
+        updateCacheUI();
+        renderTaskDropdown();
+        return true;
+    }
+
+    // ===== 自定义任务下拉 =====
+    function renderTaskDropdown() {
+        const menu = document.getElementById('taskDropdownMenu');
+        const label = document.getElementById('taskDropdownLabel');
+        const searchInput = document.getElementById('taskSearchInput');
+
+        if (state.tasks.length === 0) {
+            label.textContent = '-- 暂无任务 --';
+            menu.innerHTML = '';
+            return;
+        }
+
+        if (state.tasks.length > 10) {
+            searchInput.style.display = '';
+            searchInput.value = '';
+        } else {
+            searchInput.style.display = 'none';
+        }
+
+        // 恢复之前的选择
+        const saved = localStorage.getItem('gongshi_selected_task');
+        if (!saved || !state.tasks.find(t => t.task_id === saved)) {
+            // 默认第一个
+            state.selectedTaskId = state.tasks[0].task_id;
+            localStorage.setItem('gongshi_selected_task', state.selectedTaskId);
+        } else {
+            state.selectedTaskId = saved;
+        }
+
+        updateDropdownLabel();
+        buildDropdownItems('');
+    }
+
+    function buildDropdownItems(filter) {
+        const menu = document.getElementById('taskDropdownMenu');
+        const q = (filter || '').toLowerCase();
+
+        let html = '';
+        let count = 0;
+        state.tasks.forEach(t => {
+            const searchText = (t.name + ' ' + t.project).toLowerCase();
+            if (q && !searchText.includes(q)) return;
+
+            const isSelected = t.task_id === state.selectedTaskId;
+            html += `<button class="dropdown-item task-dropdown-item${isSelected ? ' active' : ''}"
+                     type="button" data-task-id="${t.task_id}">`;
+            const statusBadge = t.status_code
+                ? ` <span class="task-item-status status-${t.status_code.toLowerCase()}">${escapeHtml(t.status)}</span>`
+                : '';
+            html += `<div class="task-item-name">${escapeHtml(t.name)}</div>`;
+            if (t.project) {
+                html += `<small class="task-item-project">${escapeHtml(t.project)}</small>`;
+            }
+            if (t.plan_start || t.plan_end) {
+                const planStr = (t.plan_start || '?') + ' ~ ' + (t.plan_end || '?');
+                html += `<small class="task-item-plan">${escapeHtml(planStr)}${statusBadge}</small>`;
+            } else if (statusBadge) {
+                html += `<small class="task-item-plan">${statusBadge}</small>`;
+            }
+            html += '</button>';
+            count++;
+        });
+
+        if (count === 0 && q) {
+            html = '<div class="dropdown-item-text text-muted">无匹配结果</div>';
+        }
+
+        menu.innerHTML = html;
+
+        // 绑定点击
+        menu.querySelectorAll('.task-dropdown-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.preventDefault();
+                const taskId = item.dataset.taskId;
+                state.selectedTaskId = taskId;
+                localStorage.setItem('gongshi_selected_task', taskId);
+                updateDropdownLabel();
+                // 关闭 dropdown
+                bootstrap.Dropdown.getInstance(document.getElementById('taskDropdownBtn')).hide();
+                refreshMonth();
+            });
+        });
+    }
+
+    function updateDropdownLabel() {
+        const label = document.getElementById('taskDropdownLabel');
+        const t = state.tasks.find(t => t.task_id === state.selectedTaskId);
+        if (t) {
+            label.textContent = t.name;
+            label.title = t.project ? (t.project + ' - ' + t.name) : t.name;
+        } else {
+            label.textContent = '-- 选择任务 --';
+        }
+    }
+
+    function onTaskSearch() {
+        const q = document.getElementById('taskSearchInput').value;
+        buildDropdownItems(q);
+        // 打开 dropdown 让用户看到过滤结果
+        const btn = document.getElementById('taskDropdownBtn');
+        const dropdown = bootstrap.Dropdown.getInstance(btn);
+        if (!dropdown._isShown()) {
+            dropdown.show();
+        }
+    }
+
+    function updateCacheUI() {
+        const info = document.getElementById('cacheInfo');
+        const syncBtn = document.getElementById('syncBtn');
+
+        if (state.tasksCached && state.tasksCachedAt) {
+            info.style.display = '';
+            info.textContent = '更新时间：' + (state.tasksCachedAt ? formatCachedTime(state.tasksCachedAt) : '');
+            syncBtn.style.display = '';
+            syncBtn.disabled = false;
+        } else {
+            info.style.display = '';
+            info.textContent = '实时数据';
+            syncBtn.style.display = '';
+            syncBtn.disabled = true;
+        }
+    }
+
+    async function syncFromRDM() {
+        const btn = document.getElementById('syncBtn');
+        const origHTML = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span>同步中...';
+
+        const resp = await apiCall('/api/tasks?refresh=true');
+        btn.disabled = false;
+        btn.innerHTML = origHTML;
+
+        if (!resp || !resp.success) {
+            toast((resp && resp.message) || '同步失败，请稍后重试', 'error');
+            return;
+        }
+
+        state.tasks = resp.tasks || [];
+        state.tasksCached = true;
+        state.tasksCachedAt = new Date().toISOString();
+        updateCacheUI();
+        renderTaskDropdown();
+
+        if (state.selectedTaskId) {
+            // 检查选中的任务是否还在列表里
+            if (!state.tasks.find(t => t.task_id === state.selectedTaskId)) {
+                state.selectedTaskId = state.tasks[0] ? state.tasks[0].task_id : null;
+                localStorage.setItem('gongshi_selected_task', state.selectedTaskId || '');
+            }
+            await refreshMonth();
+        }
+        toast('已从 RDM 同步 ' + (resp.tasks ? resp.tasks.length : 0) + ' 个任务', 'success');
+    }
+
+    // ===== 月份数据加载 =====
+    async function refreshMonth() {
+        showMonthLoading();
+        updateMonthUI();
+
+        if (!state.selectedTaskId || state.tasks.length === 0) {
+            state.monthData = {};
+            renderCalendar();
+            updateSummary();
+            hideMonthLoading();
+            return;
+        }
+
+        const resp = await apiCall(
+            '/api/timesheet-month?year_month=' + state.yearMonth +
+            '&task_id=' + state.selectedTaskId
+        );
+
+        if (!resp || !resp.success) {
+            if (resp && resp.message && (resp.message.includes('会话已过期') || resp.message === '未登录')) {
+                return;
+            }
+            showMonthError((resp && resp.message) || '月数据加载失败');
+            return;
+        }
+
+        hideMonthLoading();
+        hideMonthError();
+
+        // 填充 state.monthData，保留已有的本地编辑
+        const newData = {};
+        if (resp.days) {
+            resp.days.forEach(d => {
+                const dateStr = d.date;
+                const old = state.monthData[dateStr];
+                if (old && !old.rdm) {
+                    newData[dateStr] = { hour: old.hour, rate: old.rate, rdm: false };
+                } else if (d.existing_hour > 0 || d.existing_rate > 0) {
+                    newData[dateStr] = { hour: d.existing_hour, rate: d.existing_rate, rdm: true };
+                }
+            });
+        }
+        state.monthData = newData;
+
+        renderCalendar();
+        updateSummary();
+    }
+
+    // ===== 月历渲染（内联输入框） =====
+    function renderCalendar() {
+        const tbody = document.getElementById('monthCalendarBody');
+        const { year, month } = parseYearMonth(state.yearMonth);
+        const todayStr = fmtDate(new Date());
+
+        // 任务计划日期范围
+        const task = state.tasks.find(t => t.task_id === state.selectedTaskId);
+        const planStart = task ? (task.plan_start || '') : '';
+        const planEnd = task ? (task.plan_end || '') : '';
+
+        const firstDay = new Date(year, month - 1, 1);
+        const lastDay = new Date(year, month, 0);
+
+        const startDay = new Date(firstDay);
+        const firstDow = firstDay.getDay();
+        const offset = firstDow === 0 ? -6 : 1 - firstDow;
+        startDay.setDate(startDay.getDate() + offset);
+
+        let html = '';
+        let current = new Date(startDay);
+        for (let w = 0; w < 6; w++) {
+            const rowHasMonth = (() => {
+                for (let d = 0; d < 7; d++) {
+                    const check = new Date(current);
+                    check.setDate(current.getDate() + d);
+                    if (check.getMonth() === month - 1 && check.getFullYear() === year) return true;
+                }
+                return false;
+            })();
+
+            if (!rowHasMonth && w > 3) break;
+
+            html += '<tr>';
+            for (let d = 0; d < 7; d++) {
+                const date = new Date(current);
+                const dateStr = fmtDate(date);
+                const isCurrentMonth = date.getMonth() === month - 1 && date.getFullYear() === year;
+                const isRestDay = !isWorkday(dateStr);
+                const isToday = dateStr === todayStr;
+                const isFuture = dateStr > todayStr;
+                const entry = state.monthData[dateStr];
+                const isRdm = entry && entry.rdm;
+                const hour = entry ? entry.hour : 0;
+                const rate = entry ? entry.rate : 0;
+                // 任务计划日期范围外锁定；已填日期锁定
+                const isBeforePlanStart = planStart && dateStr < planStart;
+                const isAfterPlanEnd = planEnd && dateStr > planEnd;
+                const isOutOfPlanRange = isBeforePlanStart || isAfterPlanEnd;
+                const isRdmLocked = isRdm;
+                const disabled = !isCurrentMonth || isFuture || isOutOfPlanRange || isRdmLocked;
+                const isEditable = !disabled;
+
+                const cellCls = [];
+                if (!isCurrentMonth) cellCls.push('other-month');
+                if (isRestDay && isEditable) cellCls.push('weekend');
+                if (isToday) cellCls.push('today');
+                if (isFuture && isCurrentMonth) cellCls.push('future-disabled');
+                if (isRdm) cellCls.push('filled');
+                if (isEditable) cellCls.push('editable');
+
+                html += `<td class="${cellCls.join(' ')}" data-date="${dateStr}" data-in-month="${isCurrentMonth}">`;
+                // 日期号 + 节假日标记同行
+                const md = dateStr.slice(5);
+                const hInfo = state.holidays[md];
+                html += `<div class="day-header">`;
+                html += `<span class="day-number">${date.getDate()}</span>`;
+                if (hInfo && hInfo.holiday) {
+                    html += `<span class="holiday-badge">${escapeHtml(hInfo.name)}</span>`;
+                }
+                html += `</div>`;
+
+                if (isCurrentMonth) {
+                    const hourVal = (hour > 0) ? formatHour(hour) : '';
+                    const rateVal = (rate > 0) ? rate : '';
+                    html += `<div class="cell-inputs">`;
+                    html += `<input type="number" class="cell-hour" data-date="${dateStr}" data-kind="hour"
+                            step="1" min="0" max="24" value="${hourVal}" placeholder="0"
+                            ${disabled ? 'disabled' : ''}>`;
+                    html += `<input type="number" class="cell-rate" data-date="${dateStr}" data-kind="rate"
+                            step="1" min="0" max="100" value="${rateVal}" placeholder="--"
+                            ${disabled ? 'disabled' : ''}>`;
+                    html += `</div>`;
+                    if (isRdm) {
+                        const rateStr = rate > 0 ? (' / ' + rate + '%') : '';
+                        html += `<span class="day-badge">${formatHour(hour)}h${rateStr}</span>`;
+                    }
+                }
+
+                html += '</td>';
+                current.setDate(current.getDate() + 1);
+            }
+            html += '</tr>';
+        }
+        tbody.innerHTML = html;
+
+        tbody.querySelectorAll('.cell-hour, .cell-rate').forEach(el => {
+            el.addEventListener('input', onCellInput);
+            el.addEventListener('blur', onCellBlur);
+        });
+
+        // 更新月历底部状态文字
+        updateCalendarStatus();
+    }
+
+    // ===== 月历底部状态文字 =====
+    function updateCalendarStatus() {
+        const el = document.getElementById('calendarStatus');
+        if (!el) return;
+
+        const calendarWrap = document.getElementById('monthCalendarWrap');
+        if (!calendarWrap || calendarWrap.style.display === 'none') {
+            el.style.display = 'none';
+            return;
+        }
+
+        const { year, month } = parseYearMonth(state.yearMonth);
+        const firstDay = fmtDate(new Date(year, month - 1, 1));
+        const lastDay = fmtDate(new Date(year, month, 0));
+
+        // 检查选中任务的计划时间范围
+        const task = state.tasks.find(t => t.task_id === state.selectedTaskId);
+        const planStart = task ? (task.plan_start || '') : '';
+        const planEnd = task ? (task.plan_end || '') : '';
+
+        // 优先级1：计划时间范围提示
+        if (planEnd && firstDay > planEnd) {
+            el.style.display = '';
+            el.className = 'calendar-status warn';
+            el.innerHTML = '<i class="bi bi-info-circle"></i> 该任务计划已于 ' + planEnd + ' 结束';
+            return;
+        }
+        if (planStart && lastDay < planStart) {
+            el.style.display = '';
+            el.className = 'calendar-status warn';
+            el.innerHTML = '<i class="bi bi-info-circle"></i> 该任务计划于 ' + planStart + ' 开始';
+            return;
+        }
+
+        // 优先级2：RDM 已填数据统计
+        let rdmCount = 0;
+        for (const dateStr in state.monthData) {
+            if (dateStr < firstDay || dateStr > lastDay) continue;
+            if (state.monthData[dateStr].rdm) rdmCount++;
+        }
+
+        // 无选中任务时仅在有 RDM 数据时显示
+        if (!state.selectedTaskId) {
+            if (rdmCount > 0) {
+                el.style.display = '';
+                el.className = 'calendar-status info';
+                el.innerHTML = '<i class="bi bi-check-circle"></i> 已回填 ' + state.yearMonth +
+                               ' RDM 中 ' + rdmCount + ' 天已有工时（绿色标记）';
+            } else {
+                el.style.display = 'none';
+            }
+            return;
+        }
+
+        if (rdmCount > 0) {
+            el.style.display = '';
+            el.className = 'calendar-status info';
+            el.innerHTML = '<i class="bi bi-check-circle"></i> 已回填 ' + state.yearMonth +
+                           ' RDM 中 ' + rdmCount + ' 天已有工时（绿色标记）';
+            return;
+        }
+
+        // 优先级3：本月无填写
+        el.style.display = '';
+        el.className = 'calendar-status';
+        el.innerHTML = '<i class="bi bi-calendar"></i> 该任务在本月尚未填写';
+    }
+
+    // ===== 单元格输入处理 =====
+    function onCellInput(e) {
+        const dateStr = e.target.dataset.date;
+        const kind = e.target.dataset.kind;
+
+        let entry = state.monthData[dateStr];
+        if (!entry) {
+            entry = { hour: 0, rate: 0, rdm: false };
+            state.monthData[dateStr] = entry;
+        }
+
+        if (kind === 'hour') {
+            const raw = parseFloat(e.target.value);
+            if (!isNaN(raw) && raw > 24) {
+                e.target.classList.add('invalid');
+            } else {
+                e.target.classList.remove('invalid');
+            }
+            entry.hour = isNaN(raw) ? 0 : Math.max(0, Math.min(24, raw));
+        } else {
+            const raw = parseInt(e.target.value, 10);
+            if (!isNaN(raw) && (raw < 0 || raw > 100)) {
+                e.target.classList.add('invalid');
+            } else {
+                e.target.classList.remove('invalid');
+            }
+            entry.rate = e.target.value === '' ? 0 : Math.max(0, Math.min(100, isNaN(raw) ? 0 : raw));
+        }
+
+        updateSummary();
+    }
+
+    function onCellBlur(e) {
+        const dateStr = e.target.dataset.date;
+        const kind = e.target.dataset.kind;
+        const entry = state.monthData[dateStr];
+        if (!entry) return;
+
+        if (kind === 'hour') {
+            const v = clampHour(e.target.value);
+            entry.hour = v;
+            e.target.value = v === 0 ? '' : formatHour(v);
+            e.target.classList.remove('invalid');
+        } else {
+            const v = clampRate(e.target.value);
+            entry.rate = v || 0;
+            e.target.value = (v == null || v === 0) ? '' : v;
+            e.target.classList.remove('invalid');
+        }
+
+        if (entry.hour <= 0 && entry.rate <= 0 && !entry.rdm) {
+            delete state.monthData[dateStr];
+        }
+
+        updateSummary();
+    }
+
+    // ===== 批量提交 =====
+    async function startBatchSubmit() {
+        if (state.isSubmitting) return;
+        state.isSubmitting = true;
+        state.cancelSubmit = false;
+
+        const queue = [];
+        const { first, last } = getMonthRange();
+        const todayStr = fmtDate(new Date());
+
+        let skippedRdmCount = 0;
+
+        for (const dateStr in state.monthData) {
+            if (dateStr < first || dateStr > last) continue;
+            if (dateStr > todayStr) continue;
+            const entry = state.monthData[dateStr];
+            if (!entry || entry.hour <= 0) continue;
+
+            // 跳过 RDM 已填日期（RDM 上已提交的不可修改）
+            if (entry.rdm) {
+                skippedRdmCount++;
+                continue;
+            }
+
+            queue.push({
+                date: dateStr,
+                hour: entry.hour,
+                rate: entry.rate || null
+            });
+        }
+
+        if (skippedRdmCount > 0) {
+            toast('已跳过 ' + skippedRdmCount + ' 天 RDM 已填记录', 'info');
+        }
+
+        if (queue.length === 0) {
+            toast('本月没有需要提交的工时', 'warn');
+            state.isSubmitting = false;
+            return;
+        }
+
+        queue.sort((a, b) => a.date.localeCompare(b.date));
+
+        openProgressModal(queue);
+
+        let doneCount = 0;
+        const totalCount = queue.length;
+        const _lastFailMsg = { val: '' };
+        const _verifyIssues = [];
+
+        for (let i = 0; i < queue.length; i++) {
+            const day = queue[i];
+
+            // 检查用户是否取消提交
+            if (state.cancelSubmit) {
+                const remaining = queue.slice(i);
+                remaining.forEach(d => markProgItem(d.date, 'pending', '已取消（未开始）'));
+                state.isSubmitting = false;
+                onCancelStop(doneCount, remaining);
+                return;
+            }
+
+            markProgItem(day.date, 'in-progress',
+                '提交 ' + day.date + ' · ' + formatHour(day.hour) + 'h');
+
+            const result = await submitOneDay(day, _lastFailMsg);
+            if (result.ok) {
+                doneCount++;
+                updateProgress(doneCount, totalCount);
+                if (state.monthData[day.date]) {
+                    state.monthData[day.date].rdm = true;
+                }
+                // 更新进度项并展示一致性核对结果
+                let metaText = formatHour(day.hour) + 'h 已提交';
+                if (result.verify && !result.verify.verified) {
+                    metaText += ' ⚠ 核对差异: ' + result.verify.diff;
+                    _verifyIssues.push({ date: day.date, diff: result.verify.diff });
+                }
+                markProgItem(day.date, 'success', metaText);
+                await new Promise(r => setTimeout(r, 200));
+            } else {
+                markProgItem(day.date, 'failed', '提交失败：' + (_lastFailMsg.val || '未知错误'));
+                const remaining = queue.slice(i + 1);
+                remaining.forEach(d => markProgItem(d.date, 'pending', '已停止（未开始）'));
+                state.isSubmitting = false;
+                onFailStop(day, i, remaining);
+                return;
+            }
+        }
+
+        state.isSubmitting = false;
+        finishProgress(totalCount);
+        // 一致性核对警告
+        if (_verifyIssues.length > 0) {
+            setTimeout(() => {
+                toast('⚠ 共 ' + _verifyIssues.length + ' 天提交数据与 RDM 记录不一致，请手动核对', 'warn', 5000);
+            }, 1200);
+        }
+        renderCalendar();
+        updateSummary();
+    }
+
+    async function submitOneDay(day, _lastFailMsg) {
+        const task = state.tasks.find(t => t.task_id === state.selectedTaskId);
+        const payload = {
+            week_start: fmtDate(dateStrToMonday(day.date)),
+            task_id: state.selectedTaskId,
+            name: '',
+            day_index: dateStrToDayIndex(day.date),
+            date: day.date,
+            hour: day.hour,
+            completion_rate: day.rate,
+            plan_start: task ? (task.plan_start || '') : '',
+            plan_end: task ? (task.plan_end || '') : ''
+        };
+        const res = await apiCall('/api/submit-day', {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        });
+        if (res && res.success) {
+            return { ok: true, verify: res.verify || null };
+        }
+        _lastFailMsg.val = (res && res.message) || '未知错误';
+        return { ok: false };
+    }
+
+    // ===== 清空 =====
+    function clearAllInputs() {
+        if (!confirm('确定清空本月所有手动输入吗？（RDM 已有记录不受影响）')) return;
+
+        const newData = {};
+        for (const dateStr in state.monthData) {
+            const entry = state.monthData[dateStr];
+            if (entry.rdm) {
+                newData[dateStr] = { hour: entry.hour, rate: entry.rate || 0, rdm: true };
+            }
+        }
+        state.monthData = newData;
+        renderCalendar();
+        updateSummary();
+        toast('已清空手动输入', 'info');
+    }
+
+    // ===== 阶梯模式切换 =====
+    function onLadderToggle() {
+        const checked = document.getElementById('bulkLadder').checked;
+        const fixedRateRow = document.getElementById('fixedRateRow');
+        const targetRow = document.getElementById('ladderTargetRow');
+        const targetInput = document.getElementById('bulkLadderTarget');
+
+        if (checked) {
+            fixedRateRow.style.display = 'none';
+            targetRow.style.display = '';
+            if (!targetInput.value) targetInput.value = '100';
+            updateLadderHint();
+        } else {
+            fixedRateRow.style.display = '';
+            targetRow.style.display = 'none';
+        }
+    }
+
+    function updateLadderHint() {
+        const target = clampRate(document.getElementById('bulkLadderTarget').value) || 100;
+        const { first, last } = getMonthRange();
+        const maxRdm = getMaxRdmRate();
+        const icon = document.getElementById('ladderHelpIcon');
+        let hint = '阶梯比例：' + first + ' 为 2%，' + last + ' 为 ' + target + '%，中间线性递增';
+        if (maxRdm > 0) {
+            hint += '<br>注意：RDM 已有 max ' + maxRdm + '%，目标不可低于此值';
+        }
+        hint += ' ；小时数取批量填充的设定值';
+
+        // Bootstrap tooltip 缓存 title 在 init 时，动态更新需 dispose 后重建
+        const oldTip = bootstrap.Tooltip.getInstance(icon);
+        if (oldTip) oldTip.dispose();
+        icon.setAttribute('data-bs-title', hint);
+        new bootstrap.Tooltip(icon);
+    }
+
+    function getMaxRdmRate() {
+        const { first, last } = getMonthRange();
+        let maxRate = 0;
+        for (const dateStr in state.monthData) {
+            if (dateStr < first || dateStr > last) continue;
+            const entry = state.monthData[dateStr];
+            if (entry && entry.rdm && entry.rate > maxRate) {
+                maxRate = entry.rate;
+            }
+        }
+        return maxRate;
+    }
+
+    // ===== 批量填充 =====
+    function bulkFill(includeWeekend) {
+        if (!state.selectedTaskId) {
+            toast('请先选择任务', 'warn');
+            return;
+        }
+
+        const hour = clampHour(document.getElementById('bulkHour').value);
+        const rateRaw = document.getElementById('bulkRate').value;
+        const rate = rateRaw === '' ? null : clampRate(rateRaw);
+        const useLadder = document.getElementById('bulkLadder').checked;
+        const todayStr = fmtDate(new Date());
+        const { first, last } = getMonthRange();
+
+        // 阶梯模式：预计算当月每天百分比
+        let ladderMap = null;
+        let ladderTarget = 100;
+        if (useLadder) {
+            ladderTarget = clampRate(document.getElementById('bulkLadderTarget').value) || 100;
+            // 校验：目标百分比不能小于 RDM 已有完成率
+            const maxRdmRate = getMaxRdmRate();
+            if (ladderTarget < maxRdmRate) {
+                toast('目标百分比（' + ladderTarget + '%）不能小于 RDM 已有完成率（' + maxRdmRate + '%）', 'warn');
+                return;
+            }
+            // 校验：目标不能超过 100%
+            if (ladderTarget > 100) {
+                ladderTarget = 100;
+            }
+            // 校验：目标至少为 2（起始值）
+            if (ladderTarget < 2) {
+                ladderTarget = 2;
+            }
+            const firstD = new Date(first + 'T00:00:00');
+            const lastD = new Date(last + 'T00:00:00');
+            const totalDays = Math.round((lastD - firstD) / 86400000) + 1;
+            const step = (ladderTarget - 2) / Math.max(totalDays - 1, 1);
+            ladderMap = {};
+            let curD = new Date(firstD);
+            let dayN = 1;
+            let prevRate = 0;
+            while (curD <= lastD) {
+                const ds = fmtDate(curD);
+                // 线性阶梯值
+                let rate = Math.round(2 + (dayN - 1) * step);
+                // 不低于该日 RDM 已有百分比
+                const entry = state.monthData[ds];
+                if (entry && entry.rdm && entry.rate > rate) {
+                    rate = entry.rate;
+                }
+                // 不低于前一天（单调递增）
+                if (rate < prevRate) {
+                    rate = prevRate;
+                }
+                ladderMap[ds] = rate;
+                prevRate = rate;
+                curD.setDate(curD.getDate() + 1);
+                dayN++;
+            }
+        }
+
+        let fillCount = 0;
+        let clearCount = 0;
+        let skipOutOfRangeCount = 0;
+
+        // 任务计划日期范围
+        const task = state.tasks.find(t => t.task_id === state.selectedTaskId);
+        const planStart = task ? (task.plan_start || '') : '';
+        const planEnd = task ? (task.plan_end || '') : '';
+
+        let current = new Date(first + 'T00:00:00');
+        while (fmtDate(current) <= todayStr) {
+            const dateStr = fmtDate(current);
+            const workday = isWorkday(dateStr);
+
+            // 跳过非计划范围内的日期
+            if ((planStart && dateStr < planStart) || (planEnd && dateStr > planEnd)) {
+                current.setDate(current.getDate() + 1);
+                skipOutOfRangeCount++;
+                continue;
+            }
+
+            const dayRate = useLadder ? (ladderMap[dateStr] || 0) : (rate || 0);
+
+            if (!workday) {
+                // 休息日（含法定节假日）：不包含时清空非 RDM 数据
+                if (!includeWeekend) {
+                    const existing = state.monthData[dateStr];
+                    if (existing && !existing.rdm && existing.hour > 0) {
+                        delete state.monthData[dateStr];
+                        clearCount++;
+                    }
+                }
+                // 包含时休息日也填
+                if (includeWeekend) {
+                    const existing = state.monthData[dateStr];
+                    if (!existing || !existing.rdm) {
+                        state.monthData[dateStr] = { hour: hour, rate: dayRate, rdm: false };
+                        fillCount++;
+                    }
+                }
+            } else {
+                // 工作日：覆盖非 RDM 单元格（含空白和之前批量填充的）
+                const existing = state.monthData[dateStr];
+                if (!existing || !existing.rdm) {
+                    state.monthData[dateStr] = { hour: hour, rate: dayRate, rdm: false };
+                    fillCount++;
+                }
+            }
+
+            current.setDate(current.getDate() + 1);
+        }
+
+        renderCalendar();
+        updateSummary();
+
+        let msg = '已填充 ' + fillCount + ' 天（工作日） · ' + formatHour(hour) + 'h/天';
+        if (includeWeekend) {
+            msg = '已填充 ' + fillCount + ' 天（全月含周末） · ' + formatHour(hour) + 'h/天';
+        }
+        if (useLadder) {
+            msg += ' · 阶梯比例 2%~' + ladderTarget + '%';
+        }
+        if (clearCount > 0) {
+            msg += '，清空了 ' + clearCount + ' 天周末数据';
+        }
+        if (skipOutOfRangeCount > 0) {
+            msg += '，跳过了 ' + skipOutOfRangeCount + ' 天非计划范围日期';
+        }
+        toast(msg, 'success');
+    }
+
+    // ===== 进度面板 =====
+    let progressModalInst = null;
+
+    function openProgressModal(queue) {
+        const header = document.getElementById('progressHeader');
+        header.classList.remove('error');
+        header.querySelector('.modal-title').innerHTML =
+            '<i class="bi bi-cloud-upload"></i> 正在提交本月工时';
+
+        document.getElementById('progCount').textContent = '0 / ' + queue.length;
+        document.getElementById('progPercent').textContent = '0%';
+        document.getElementById('progBar').style.width = '0%';
+        document.getElementById('progNote').textContent =
+            '共 ' + queue.length + ' 天，逐天提交，遇到失败立即停止';
+
+        // 重置取消按钮状态
+        const btn = document.getElementById('cancelSubmitBtn');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-x-lg"></i> 取消';
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-danger');
+
+        const list = document.getElementById('progList');
+        list.innerHTML = queue.map(q => `
+            <div class="task-item pending" data-date="${q.date}">
+                <span class="status-icon"><i class="bi bi-hourglass"></i></span>
+                <div class="task-text">
+                    <strong>${q.date}</strong>
+                    <div class="meta">${formatHour(q.hour)}h ${q.rate ? '/ ' + q.rate + '%' : ''} · 排队中</div>
+                </div>
+            </div>
+        `).join('');
+
+        progressModalInst = new bootstrap.Modal(document.getElementById('progressModal'));
+        progressModalInst.show();
+    }
+
+    function cancelBatchSubmit() {
+        const btn = document.getElementById('cancelSubmitBtn');
+        // 如果按钮已变为"关闭"模式，直接关闭弹窗
+        if (btn.innerHTML.indexOf('关闭') >= 0) {
+            if (progressModalInst) progressModalInst.hide();
+            return;
+        }
+        state.cancelSubmit = true;
+        // 禁用取消按钮防止重复点击
+        btn.disabled = true;
+        btn.innerHTML = '<i class="bi bi-hourglass-split"></i> 取消中...';
+    }
+
+    function onCancelStop(doneCount, remaining) {
+        document.getElementById('progressHeader').classList.add('error');
+        document.getElementById('progressHeader').querySelector('.modal-title').innerHTML =
+            '<i class="bi bi-x-circle"></i> 提交已取消';
+        document.getElementById('progNote').textContent =
+            '已取消，已完成 ' + doneCount + ' 天，共 ' + (doneCount + remaining.length) + ' 天中剩余 ' + remaining.length + ' 天未提交';
+
+        if (progressModalInst) progressModalInst.hide();
+        toast('已取消提交，已完成 ' + doneCount + ' 天', 'warn', 3000);
+        renderCalendar();
+        updateSummary();
+    }
+
+    function markProgItem(date, status, metaText) {
+        const item = document.querySelector(`.task-item[data-date="${date}"]`);
+        if (!item) return;
+        item.classList.remove('pending', 'in-progress', 'success', 'failed');
+        item.classList.add(status);
+
+        const icons = {
+            'pending': '<i class="bi bi-hourglass"></i>',
+            'in-progress': '<i class="bi bi-arrow-repeat"></i>',
+            'success': '<i class="bi bi-check-circle-fill"></i>',
+            'failed': '<i class="bi bi-x-circle-fill"></i>'
+        };
+        item.querySelector('.status-icon').innerHTML = icons[status] || '';
+        const metaEl = item.querySelector('.meta');
+        if (metaEl) metaEl.textContent = metaText;
+    }
+
+    function updateProgress(done, total) {
+        document.getElementById('progCount').textContent = done + ' / ' + total;
+        const pct = Math.round(done / total * 100);
+        document.getElementById('progPercent').textContent = pct + '%';
+        document.getElementById('progBar').style.width = pct + '%';
+    }
+
+    function finishProgress(totalCount) {
+        updateProgress(totalCount, totalCount);
+        document.getElementById('progBar').style.width = '100%';
+        document.getElementById('progNote').textContent =
+            '共 ' + totalCount + ' 天全部提交完成，可手动关闭此窗口';
+        // 将取消按钮变为关闭按钮
+        const btn = document.getElementById('cancelSubmitBtn');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-x-lg"></i> 关闭';
+        btn.classList.remove('btn-danger');
+        btn.classList.add('btn-primary');
+        toast('已提交 ' + totalCount + ' 天工时', 'success', 4000);
+    }
+
+    function onFailStop(day, index, remaining) {
+        document.getElementById('progressHeader').classList.add('error');
+        document.getElementById('progressHeader').querySelector('.modal-title').innerHTML =
+            '<i class="bi bi-x-circle"></i> 提交失败，已停止';
+        document.getElementById('progNote').textContent =
+            '已在该日期失败处停下，未提交的天保留在表格中，处理后请手动重提';
+
+        document.getElementById('failDay').textContent = day.date;
+        document.getElementById('failReason').innerHTML =
+            '<strong>' + day.date + ' ' + formatHour(day.hour) + 'h</strong> 提交失败<br>' +
+            '<span class="text-muted">后续 ' + remaining.length + ' 天已停止，未提交。</span>';
+
+        document.getElementById('failPendingCount').textContent = remaining.length;
+        document.getElementById('failPendingList').innerHTML =
+            remaining.length === 0
+                ? '<li>（无后续日期）</li>'
+                : remaining.map(d => '<li>' + d.date + ' · ' + formatHour(d.hour) + 'h</li>').join('');
+
+        setTimeout(() => {
+            if (progressModalInst) progressModalInst.hide();
+            const failModal = new bootstrap.Modal(document.getElementById('failModal'));
+            failModal.show();
+        }, 800);
+    }
+
+    // ===== UI 状态 =====
+    function showMonthLoading() {
+        document.getElementById('monthLoading').style.display = 'block';
+        document.getElementById('monthError').style.display = 'none';
+        document.getElementById('monthCalendarWrap').style.display = 'none';
+    }
+
+    function hideMonthLoading() {
+        document.getElementById('monthLoading').style.display = 'none';
+        document.getElementById('monthCalendarWrap').style.display = '';
+    }
+
+    function showMonthError(msg) {
+        document.getElementById('monthLoading').style.display = 'none';
+        document.getElementById('monthError').style.display = 'block';
+        document.getElementById('monthCalendarWrap').style.display = 'none';
+        document.getElementById('monthErrorMsg').textContent = msg;
+    }
+
+    function hideMonthError() {
+        document.getElementById('monthError').style.display = 'none';
+    }
+
+    // ===== 汇总 =====
+    function updateSummary() {
+        let totalHour = 0, filledDays = 0;
+        const { first, last } = getMonthRange();
+        const todayStr = fmtDate(new Date());
+
+        // 当月工作日天数（全月，含调休）
+        let workdays = 0;
+        let cur = new Date(first + 'T00:00:00');
+        const lastD = new Date(last + 'T00:00:00');
+        while (cur <= lastD) {
+            if (isWorkday(fmtDate(cur))) workdays++;
+            cur.setDate(cur.getDate() + 1);
+        }
+
+        // 未填天数：工作日从月初到今天，尚未填写
+        let unfilledDays = 0;
+        cur = new Date(first + 'T00:00:00');
+        while (fmtDate(cur) <= todayStr) {
+            const ds = fmtDate(cur);
+            if (isWorkday(ds)) {
+                const entry = state.monthData[ds];
+                if (!entry || entry.hour <= 0) unfilledDays++;
+            }
+            cur.setDate(cur.getDate() + 1);
+        }
+
+        for (const dateStr in state.monthData) {
+            if (dateStr < first || dateStr > last) continue;
+            const d = state.monthData[dateStr];
+            if (d.hour > 0) {
+                totalHour += d.hour;
+                filledDays++;
+            }
+        }
+
+        document.getElementById('sumTotal').textContent = formatHour(totalHour) + ' h';
+        document.getElementById('sumFilledDays').textContent = filledDays + ' 天';
+        document.getElementById('sumUnfilledDays').textContent = unfilledDays + ' 天';
+        document.getElementById('sumWorkdays').textContent = workdays + ' 天';
+    }
+
+    // ===== 全员日报弹窗 =====
+    let teamLogsModalInst = null;
+
+    async function showTeamLogs() {
+        // Bug 2 fix: 未登录直接跳转，不弹 modal loading
+        const user = currentUser();
+        if (!user || user === '-') {
+            window.location.href = '/';
+            return;
+        }
+
+        if (!state.selectedTaskId) {
+            toast('请先选择任务', 'warn');
+            return;
+        }
+
+        // 显示弹窗
+        if (!teamLogsModalInst) {
+            teamLogsModalInst = new bootstrap.Modal(document.getElementById('teamLogsModal'));
+        }
+        teamLogsModalInst.show();
+
+        // 任务名
+        const task = state.tasks.find(t => t.task_id === state.selectedTaskId);
+        document.getElementById('teamLogsTaskName').textContent = task ? task.name : '';
+
+        // 重置 UI
+        document.getElementById('teamLogsLoading').style.display = 'block';
+        document.getElementById('teamLogsError').style.display = 'none';
+        document.getElementById('teamLogsTableWrap').style.display = 'none';
+
+        const resp = await apiCall('/api/task/' + state.selectedTaskId + '/team_logs');
+
+        document.getElementById('teamLogsLoading').style.display = 'none';
+
+        if (!resp || !resp.success) {
+            document.getElementById('teamLogsError').style.display = 'block';
+            document.getElementById('teamLogsErrorMsg').textContent =
+                (resp && resp.message) || '加载失败，请重试';
+            return;
+        }
+
+        const logs = resp.logs || [];
+        if (logs.length === 0) {
+            document.getElementById('teamLogsError').style.display = 'block';
+            document.getElementById('teamLogsErrorMsg').textContent = '该任务暂无日报记录';
+            return;
+        }
+
+        // 渲染表格：按日期降序、再按成员名排序
+        logs.sort((a, b) => {
+            const dc = (b.date || '').localeCompare(a.date || '');
+            if (dc !== 0) return dc;
+            return (a.member_name || '').localeCompare(b.member_name || '');
+        });
+
+        document.getElementById('teamLogsCount').textContent = logs.length;
+
+        const tbody = document.getElementById('teamLogsTbody');
+        tbody.innerHTML = logs.map(log => {
+            const rateStr = log.rate != null ? (log.rate + '%') : '-';
+            return '<tr>' +
+                '<td>' + escapeHtml(log.member_name || '-') + '</td>' +
+                '<td>' + (log.date || '-') + '</td>' +
+                '<td>' + formatHour(log.hour) + 'h</td>' +
+                '<td>' + rateStr + '</td>' +
+                '<td style="max-width:260px;white-space:normal;word-break:break-word;">'
+                    + escapeHtml(log.description || '-') + '</td>' +
+                '<td style="max-width:200px;white-space:normal;word-break:break-word;">'
+                    + escapeHtml(log.issue || '-') + '</td>' +
+                '</tr>';
+        }).join('');
+
+        document.getElementById('teamLogsTableWrap').style.display = 'block';
+    }
+
+    // ===== License 信息弹窗 =====
+    let licenseModalInst = null;
+
+    async function showLicenseInfo() {
+        if (!licenseModalInst) {
+            licenseModalInst = new bootstrap.Modal(document.getElementById('licenseInfoModal'));
+        }
+        licenseModalInst.show();
+
+        // 重置 UI
+        document.getElementById('licenseLoading').style.display = 'block';
+        document.getElementById('licenseError').style.display = 'none';
+        document.getElementById('licenseInfoTable').style.display = 'none';
+
+        try {
+            const r = await fetch('/api/license/info');
+            const data = await r.json();
+
+            document.getElementById('licenseLoading').style.display = 'none';
+
+            if (!data || !data.success) {
+                document.getElementById('licenseError').style.display = 'block';
+                document.getElementById('licenseErrorMsg').textContent =
+                    (data && data.message) || '无法获取 License 信息';
+                return;
+            }
+
+            // 激活状态
+            const statusEl = document.getElementById('licStatus');
+            if (data.activated) {
+                statusEl.innerHTML = '<span class="badge bg-success">已激活</span>';
+            } else {
+                // 检查是否已过期（有 exp 但 activated 为 false）
+                const isExpired = !data.activated && data.type && data.exp;
+                statusEl.innerHTML = isExpired
+                    ? '<span class="badge bg-danger">已过期</span>'
+                    : '<span class="badge bg-warning text-dark">未激活</span>';
+            }
+
+            // 授权类型
+            const typeMap = { '1年': '1年授权', '永久': '永久授权' };
+            document.getElementById('licType').textContent =
+                typeMap[data.type] || data.type || '-';
+
+            // 过期时间
+            const expRow = document.getElementById('licExpRow');
+            const expEl = document.getElementById('licExp');
+            if (data.exp) {
+                expRow.style.display = '';
+                const expDate = data.exp.slice(0, 10);
+                // 判断是否已过期
+                const now = new Date();
+                const expD = new Date(expDate + 'T23:59:59');
+                if (expD < now) {
+                    expEl.innerHTML = '<span class="text-danger">' + expDate +
+                        ' <span class="badge bg-danger">已过期</span></span>';
+                } else {
+                    expEl.textContent = expDate;
+                }
+            } else {
+                expRow.style.display = data.type === '永久' ? 'none' : '';
+                expEl.textContent = '永久有效';
+            }
+
+            // 激活时间
+            const atRow = document.getElementById('licActivatedRow');
+            const atEl = document.getElementById('licActivatedAt');
+            if (data.activated_at) {
+                atRow.style.display = '';
+                atEl.textContent = data.activated_at.slice(0, 19).replace('T', ' ');
+            } else {
+                atRow.style.display = 'none';
+            }
+
+            // SN 码
+            document.getElementById('licSn').textContent = data.sn || '-';
+
+            document.getElementById('licenseInfoTable').style.display = '';
+
+        } catch (e) {
+            document.getElementById('licenseLoading').style.display = 'none';
+            document.getElementById('licenseError').style.display = 'block';
+            document.getElementById('licenseErrorMsg').textContent = '网络异常，请稍后重试';
+        }
+    }
+
+    init();
+})();
+</script>
+</body>
+</html>

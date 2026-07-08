@@ -1,0 +1,30 @@
+# RDM 工时填报配置文件
+
+# 登录信息
+username: tianlin
+password: Adapter@202606
+
+# 默认工时配置
+default_hours_per_day: 8
+work_days:
+  - 1  # 周一
+  - 2  # 周二
+  - 3  # 周三
+  - 4  # 周四
+  - 5  # 周五
+
+# 任务模板（每月更新）
+tasks:
+  - name: "项目开发"
+    hours: [8, 8, 8, 8, 8, 0, 0]  # 周一到周五每天8小时
+    completion_rate: 100
+
+  - name: "需求分析"
+    hours: [4, 4, 0, 0, 0, 0, 0]  # 周一周二各4小时
+    completion_rate: 100
+
+# 高级设置
+settings:
+  auto_submit: false  # 是否自动提交，false则预览后手动确认
+  skip_weekend: true  # 自动跳过周末
+  save_history: true  # 保存历史记录

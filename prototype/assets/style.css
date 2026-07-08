@@ -1,0 +1,711 @@
+/* ============================================================
+ * RDM 工时填报系统 · 原型公共样式
+ * 与 templates/dashboard.html 既定视觉规范保持一致
+ * ============================================================ */
+
+* { box-sizing: border-box; }
+
+body {
+    background-color: #f5f7fa;
+    font-family: 'Microsoft YaHei', 'Segoe UI', sans-serif;
+    color: #333;
+    margin: 0;
+    padding: 0;
+}
+
+/* ----- 导航栏 ----- */
+.navbar {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+.navbar-brand {
+    font-weight: 600;
+    font-size: 20px;
+    color: #fff !important;
+}
+.navbar-text {
+    color: rgba(255,255,255,0.9) !important;
+}
+.navbar .btn-outline-light {
+    border-radius: 8px;
+}
+
+/* ----- 卡片 ----- */
+.card {
+    border: none;
+    border-radius: 15px;
+    box-shadow: 0 2px 15px rgba(0,0,0,0.05);
+    margin-bottom: 25px;
+}
+.card-header {
+    background: #fff;
+    border-bottom: 2px solid #f5f7fa;
+    padding: 18px 22px;
+    border-radius: 15px 15px 0 0;
+}
+.card-header h5 {
+    margin: 0;
+    font-weight: 600;
+    color: #333;
+}
+
+/* ----- 主容器 ----- */
+.main-container {
+    padding: 25px 0;
+}
+
+/* ----- 周信息条 ----- */
+.week-bar {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff;
+    padding: 22px 26px;
+    border-radius: 15px;
+    margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+.week-bar h2 {
+    font-size: 24px;
+    margin: 0;
+    font-weight: 600;
+}
+.week-bar .week-sub {
+    margin: 4px 0 0;
+    opacity: 0.9;
+    font-size: 13px;
+}
+.week-bar .badge-current {
+    background: rgba(255,255,255,0.25);
+    color: #fff;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    margin-left: 10px;
+    vertical-align: middle;
+}
+.week-bar .date-picker {
+    border: none;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 14px;
+    color: #333;
+}
+.week-bar .form-check {
+    color: #fff;
+}
+.week-bar .form-check-input {
+    cursor: pointer;
+}
+.week-bar .form-check-input:checked {
+    background-color: #fff;
+    border-color: #fff;
+}
+.week-bar .form-check-input:checked + .form-check-label {
+    font-weight: 600;
+}
+
+/* ----- 回填提示 ----- */
+.refill-banner {
+    background: #e7f3ff;
+    color: #0c5460;
+    border-left: 4px solid #0dcaf0;
+    padding: 10px 16px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* ============================================================
+ * 工时表格 · 核心
+ * ============================================================ */
+.timesheet-card {
+    overflow: hidden;
+}
+.timesheet-wrap {
+    overflow-x: auto;
+}
+.timesheet {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 13px;
+    table-layout: fixed;
+}
+
+.timesheet th, .timesheet td {
+    padding: 8px 6px;
+    text-align: center;
+    vertical-align: middle;
+    border-bottom: 1px solid #eef0f5;
+}
+
+.timesheet th {
+    background: #f8f9fa;
+    color: #555;
+    font-weight: 600;
+    padding-top: 12px;
+    padding-bottom: 12px;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.timesheet thead .day-weekday {
+    display: block;
+    font-size: 14px;
+    color: #333;
+}
+.timesheet thead .day-date {
+    display: block;
+    font-size: 12px;
+    color: #999;
+    margin-top: 2px;
+}
+
+.timesheet th.col-task {
+    text-align: left;
+    padding-left: 16px;
+    width: 220px;
+}
+.timesheet th.col-day {
+    width: 96px;
+}
+.timesheet th.col-total {
+    width: 76px;
+}
+
+.timesheet th.col-day.weekend {
+    background: #fff3cd;
+    color: #856404;
+}
+.timesheet th.col-day.today {
+    background: #d1ecf1;
+    color: #0c5460;
+}
+
+/* 任务行 */
+.timesheet td.cell-task {
+    text-align: left;
+    padding: 10px 16px;
+}
+.task-name {
+    font-weight: 600;
+    color: #333;
+    font-size: 14px;
+    line-height: 1.3;
+}
+.task-project {
+    font-size: 12px;
+    color: #999;
+    margin-top: 2px;
+    line-height: 1.2;
+}
+.task-source {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 7px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    vertical-align: middle;
+    line-height: 1.6;
+}
+.task-source.responsible {
+    background: #667eea;
+    color: #fff;
+}
+.task-source.participate {
+    background: #e7f3ff;
+    color: #0066cc;
+}
+.task-source.both {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff;
+}
+
+/* 单元格 (小时 + 完成率) */
+.cell-day {
+    padding: 6px 4px;
+}
+.cell-day.weekend {
+    background: #fbfbfc;
+}
+.cell-day.weekend-disabled {
+    background: #f3f4f6;
+    position: relative;
+}
+.cell-day.weekend-disabled::after {
+    content: "🔒";
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    font-size: 10px;
+    opacity: 0.4;
+}
+.cell-day .cell-input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: center;
+}
+.cell-day .input-line {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+}
+.cell-day .input-line .icon {
+    font-size: 11px;
+    color: #999;
+    width: 12px;
+    text-align: center;
+}
+.cell-day .input-hour {
+    width: 56px;
+    text-align: center;
+    border: 1px solid #dee2e6;
+    border-radius: 5px;
+    padding: 4px 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #333;
+}
+.cell-day .input-rate {
+    width: 48px;
+    text-align: center;
+    border: 1px solid #e7e9ee;
+    border-radius: 5px;
+    padding: 3px 5px;
+    font-size: 11px;
+    color: #666;
+}
+.cell-day .input-rate-suffix {
+    font-size: 10px;
+    color: #999;
+    margin-left: -2px;
+}
+.cell-day .input-hour:focus,
+.cell-day .input-rate:focus {
+    border-color: #667eea;
+    outline: none;
+    box-shadow: 0 0 0 0.15rem rgba(102, 126, 234, 0.25);
+}
+.cell-day .input-hour.invalid,
+.cell-day .input-rate.invalid {
+    border-color: #dc3545;
+    background: #fff5f6;
+}
+.cell-day.weekend-disabled .input-hour,
+.cell-day.weekend-disabled .input-rate {
+    opacity: 0.45;
+    pointer-events: none;
+    background: #f3f4f6;
+}
+
+/* 选中行高亮（U1 批量填充用） */
+.timesheet tbody tr.row-selected {
+    background: linear-gradient(90deg, rgba(102,126,234,0.08), rgba(118,75,162,0.06));
+    box-shadow: inset 3px 0 0 #667eea;
+}
+.timesheet tbody tr {
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.timesheet tbody tr:hover:not(.row-selected) {
+    background: #f8f9fc;
+}
+
+/* 行末合计 */
+.cell-total {
+    font-size: 16px;
+    font-weight: 700;
+    color: #5a4dc4;
+}
+
+/* 表尾合计行 */
+.timesheet tfoot td {
+    background: #eef0fb;
+    font-weight: 600;
+    font-size: 13px;
+    color: #333;
+    padding: 12px 6px;
+    border-top: 2px solid #d8dcef;
+    border-bottom: none;
+}
+.timesheet tfoot td.cell-task {
+    color: #5a4dc4;
+}
+.timesheet tfoot .col-warn {
+    color: #dc3545;
+}
+.timesheet tfoot .col-warn::after {
+    content: " ⚠";
+}
+
+/* 空态 */
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #999;
+}
+.empty-state .empty-icon {
+    font-size: 56px;
+    color: #dee2e6;
+    margin-bottom: 18px;
+}
+.empty-state h5 {
+    color: #555;
+    margin-bottom: 8px;
+}
+.empty-state p {
+    font-size: 13px;
+    margin-bottom: 18px;
+}
+
+/* ----- 操作面板 ----- */
+.action-panel .btn-action {
+    border-radius: 10px;
+    padding: 11px 18px;
+    font-weight: 600;
+    font-size: 14px;
+}
+.action-panel .btn-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+}
+.action-panel .btn-primary:hover {
+    background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 5px 12px rgba(102, 126, 234, 0.3);
+}
+.summary-block {
+    margin-top: 16px;
+    padding: 14px;
+    background: #f8f9fa;
+    border-radius: 10px;
+    font-size: 13px;
+    color: #555;
+}
+.summary-block .row {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+}
+.summary-block .row strong {
+    color: #5a4dc4;
+}
+
+/* ----- U1 批量填充块 ----- */
+.bulk-fill-block {
+    margin-top: 16px;
+    padding: 14px;
+    background: linear-gradient(135deg, rgba(102,126,234,0.06) 0%, rgba(118,75,162,0.06) 100%);
+    border: 1px dashed rgba(102,126,234,0.4);
+    border-radius: 10px;
+}
+.bulk-fill-block .bulk-title {
+    font-weight: 600;
+    color: #5a4dc4;
+    font-size: 13px;
+    margin-bottom: 4px;
+}
+.bulk-fill-block .bulk-hint {
+    font-size: 11px;
+    color: #888;
+    margin-bottom: 10px;
+}
+.bulk-fill-block select.form-select-sm {
+    margin-bottom: 8px;
+}
+.bulk-fill-block .bulk-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+    font-size: 12px;
+    color: #555;
+}
+.bulk-fill-block .bulk-row label {
+    flex: 0 0 70px;
+    margin: 0;
+}
+.bulk-fill-block .bulk-row input {
+    flex: 1;
+    height: 30px;
+}
+.bulk-fill-block .bulk-suffix {
+    font-size: 12px;
+    color: #888;
+}
+.bulk-fill-block .btn {
+    font-size: 12px;
+    padding: 5px 10px;
+    border-color: rgba(102,126,234,0.5);
+    color: #5a4dc4;
+}
+.bulk-fill-block .btn:hover {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff;
+    border-color: transparent;
+}
+
+/* ----- 进度面板 ----- */
+.progress-modal .modal-content {
+    border-radius: 15px;
+    border: none;
+}
+.progress-modal .modal-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff;
+    border-radius: 15px 15px 0 0;
+    border-bottom: none;
+}
+.progress-modal .modal-header.error {
+    background: linear-gradient(135deg, #dc3545 0%, #a71d2a 100%);
+}
+.progress-modal .progress {
+    height: 12px;
+    border-radius: 999px;
+    background: #eef0fb;
+}
+.progress-modal .progress-bar {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+.progress-modal .task-list {
+    margin-top: 18px;
+    max-height: 320px;
+    overflow-y: auto;
+}
+.progress-modal .task-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 13px;
+}
+.progress-modal .task-item .status-icon {
+    width: 22px;
+    text-align: center;
+    margin-right: 10px;
+    font-size: 16px;
+}
+.progress-modal .task-item .task-text {
+    flex: 1;
+}
+.progress-modal .task-item .task-text strong {
+    color: #333;
+}
+.progress-modal .task-item .task-text .meta {
+    font-size: 12px;
+    color: #999;
+    margin-top: 2px;
+}
+.progress-modal .task-item.success .status-icon { color: #28a745; }
+.progress-modal .task-item.pending .status-icon { color: #adb5bd; }
+.progress-modal .task-item.in-progress .status-icon { color: #667eea; }
+.progress-modal .task-item.retrying .status-icon { color: #ffc107; }
+.progress-modal .task-item.failed .status-icon { color: #dc3545; }
+.progress-modal .modal-footer-note {
+    font-size: 12px;
+    color: #999;
+    padding-top: 12px;
+    text-align: center;
+}
+
+/* 失败弹窗 */
+.fail-modal .modal-content {
+    border-radius: 15px;
+    border: 2px solid #dc3545;
+}
+.fail-modal .modal-header {
+    background: #fff5f6;
+    color: #a71d2a;
+    border-bottom: 1px solid #f5c2c7;
+    border-radius: 13px 13px 0 0;
+}
+.fail-modal .fail-icon {
+    color: #dc3545;
+    font-size: 18px;
+    margin-right: 6px;
+}
+.fail-modal .fail-detail {
+    background: #fff5f6;
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin: 12px 0;
+    font-size: 13px;
+    color: #842029;
+}
+.fail-modal .pending-list {
+    background: #fffbea;
+    border-left: 4px solid #ffc107;
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #856404;
+}
+.fail-modal .pending-list ul {
+    margin: 6px 0 0 0;
+    padding-left: 22px;
+}
+
+/* ----- toast ----- */
+.toast-stack {
+    position: fixed;
+    top: 76px;
+    right: 24px;
+    z-index: 1080;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.toast-item {
+    min-width: 280px;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+    padding: 12px 16px;
+    border-left: 4px solid #667eea;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    animation: toast-in 0.25s ease-out;
+}
+.toast-item.success { border-left-color: #28a745; }
+.toast-item.error { border-left-color: #dc3545; }
+.toast-item.warn { border-left-color: #ffc107; }
+.toast-item.info { border-left-color: #0dcaf0; }
+.toast-item .toast-icon { font-size: 18px; }
+.toast-item.success .toast-icon { color: #28a745; }
+.toast-item.error .toast-icon { color: #dc3545; }
+.toast-item.warn .toast-icon { color: #ffc107; }
+.toast-item.info .toast-icon { color: #0dcaf0; }
+@keyframes toast-in {
+    from { transform: translateX(20px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+/* ----- 登录页 ----- */
+.login-page {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.login-card {
+    background: #fff;
+    border-radius: 20px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.22);
+    padding: 44px 40px;
+    width: 100%;
+    max-width: 440px;
+}
+.login-card h1 {
+    color: #667eea;
+    font-size: 30px;
+    margin: 0 0 6px;
+    text-align: center;
+    font-weight: 700;
+}
+.login-card .login-sub {
+    color: #999;
+    font-size: 13px;
+    text-align: center;
+    margin-bottom: 28px;
+}
+.login-card .form-floating {
+    margin-bottom: 16px;
+}
+.login-card .form-control:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+}
+.login-card .remember-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin: 6px 2px 14px;
+    gap: 8px;
+}
+.login-card .remember-row .form-check-label {
+    font-size: 14px;
+    color: #333;
+    cursor: pointer;
+}
+.login-card .remember-hint {
+    font-size: 11px;
+    color: #d4a017;
+    margin: 4px 0 0 22px;
+    display: block;
+    line-height: 1.4;
+}
+.login-card .remember-hint .icon {
+    margin-right: 2px;
+}
+.login-card .clear-link {
+    background: none;
+    border: none;
+    color: #667eea;
+    font-size: 12px;
+    text-decoration: underline;
+    padding: 0;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.login-card .clear-link:hover {
+    color: #764ba2;
+}
+.login-card .btn-login {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    padding: 12px;
+    font-size: 16px;
+    font-weight: 600;
+    border-radius: 10px;
+    width: 100%;
+    color: #fff;
+    transition: transform 0.2s, box-shadow 0.2s;
+    margin-top: 6px;
+}
+.login-card .btn-login:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+    background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+}
+.login-card .login-footer {
+    text-align: center;
+    color: #aaa;
+    font-size: 12px;
+    margin-top: 22px;
+}
+.login-alert {
+    background: #fff5f6;
+    color: #842029;
+    border-left: 4px solid #dc3545;
+    padding: 10px 14px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    display: none;
+}
+
+/* ----- 原型横幅（醒目，提醒非正式系统） ----- */
+.proto-ribbon {
+    background: #fff3cd;
+    color: #856404;
+    text-align: center;
+    padding: 6px 10px;
+    font-size: 12px;
+    border-bottom: 1px solid #ffe69c;
+}
+.proto-ribbon strong {
+    color: #6e4f00;
+}

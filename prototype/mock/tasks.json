@@ -1,0 +1,68 @@
+{
+  "success": true,
+  "tasks": [
+    {
+      "task_id": "T-2026-0001",
+      "name": "工时系统前端重构",
+      "project": "RDM 效能工具",
+      "status": "进行中",
+      "source": "responsible"
+    },
+    {
+      "task_id": "T-2026-0002",
+      "name": "RDM API 对接联调",
+      "project": "RDM 效能工具",
+      "status": "进行中",
+      "source": "responsible"
+    },
+    {
+      "task_id": "T-2026-0003",
+      "name": "周例会与敏捷复盘",
+      "project": "团队管理",
+      "status": "进行中",
+      "source": "both"
+    },
+    {
+      "task_id": "T-2026-0004",
+      "name": "代码评审（前端组）",
+      "project": "前端基建",
+      "status": "进行中",
+      "source": "participate"
+    },
+    {
+      "task_id": "T-2026-0005",
+      "name": "线上故障排查",
+      "project": "运维支持",
+      "status": "未启动",
+      "source": "participate"
+    },
+    {
+      "task_id": "T-2026-0006",
+      "name": "UX 设计评审",
+      "project": "产品设计部",
+      "status": "进行中",
+      "source": "responsible"
+    },
+    {
+      "task_id": "T-2026-DONE-01",
+      "name": "老旧页面迁移（已关闭）",
+      "project": "遗留系统",
+      "status": "已关闭",
+      "source": "responsible"
+    },
+    {
+      "task_id": "T-2026-DONE-02",
+      "name": "用户手册编写（已完成）",
+      "project": "文档",
+      "status": "已完成",
+      "source": "participate"
+    },
+    {
+      "task_id": "T-FAIL-DEMO",
+      "name": "故障演示用任务（提交会失败）",
+      "project": "原型演示",
+      "status": "进行中",
+      "source": "responsible"
+    }
+  ]
+}

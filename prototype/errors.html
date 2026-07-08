@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>错误形态演示 · RDM 工时填报系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="assets/style.css" rel="stylesheet">
+</head>
+<body>
+
+<div class="proto-ribbon">
+    <strong>⚡ 原型专用 · 错误形态演示</strong>
+    点击各按钮查看三种错误反馈效果
+</div>
+
+<nav class="navbar navbar-expand-lg navbar-dark">
+    <div class="container">
+        <a class="navbar-brand" href="dashboard.html">
+            <i class="bi bi-clock-history"></i> RDM 工时系统
+        </a>
+        <div class="d-flex align-items-center">
+            <a href="dashboard.html" class="btn btn-outline-light btn-sm">
+                <i class="bi bi-arrow-left"></i> 返回主表
+            </a>
+        </div>
+    </div>
+</nav>
+
+<div class="container main-container">
+    <div class="card" style="max-width: 600px; margin: 40px auto;">
+        <div class="card-header">
+            <h5><i class="bi bi-exclamation-triangle text-warning"></i> 错误反馈演示</h5>
+        </div>
+        <div class="card-body">
+            <p class="text-muted mb-3" style="font-size: 14px;">
+                点击下方按钮模拟 3 种错误形态。实际效果与真实系统一致。
+            </p>
+
+            <div class="d-grid gap-3">
+                <!-- F1: 登录失败 -->
+                <button class="btn btn-outline-danger btn-lg text-start" id="demoLoginFail">
+                    <i class="bi bi-person-x"></i>
+                    <strong>F1 — 登录失败</strong>
+                    <br><small class="text-muted">用户名或密码错误 → 登录页红色提示条</small>
+                </button>
+
+                <!-- F4: 字段越界 -->
+                <button class="btn btn-outline-warning btn-lg text-start" id="demoFieldError">
+                    <i class="bi bi-input-cursor"></i>
+                    <strong>F4 — 字段非法</strong>
+                    <br><small class="text-muted">工时超 24h / 完成率超 100 → 输入框红边 + 提示</small>
+                </button>
+
+                <!-- F3: 网络错误 -->
+                <button class="btn btn-outline-secondary btn-lg text-start" id="demoNetworkError">
+                    <i class="bi bi-wifi-off"></i>
+                    <strong>F3 — 网络错误</strong>
+                    <br><small class="text-muted">网络异常 → toast 提示 + 不抛 Traceback</small>
+                </button>
+            </div>
+
+            <hr class="my-4">
+
+            <div class="text-center">
+                <a href="dashboard.html" class="btn btn-primary">
+                    <i class="bi bi-arrow-right"></i> 进入工时主表
+                </a>
+                <a href="index.html" class="btn btn-outline-primary ms-2">
+                    <i class="bi bi-box-arrow-in-right"></i> 进入登录页
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="assets/app.js"></script>
+<script>
+(function () {
+    // F1: 登录失败
+    document.getElementById('demoLoginFail').addEventListener('click', () => {
+        window.location.href = 'index.html?demo=fail';
+    });
+
+    // F4: 字段越界使用截图风格演示
+    document.getElementById('demoFieldError').addEventListener('click', () => {
+        // 创建一个内联演示区域
+        const existing = document.querySelector('.demo-field-box');
+        if (existing) { existing.remove(); return; }
+
+        const box = document.createElement('div');
+        box.className = 'demo-field-box card mt-4';
+        box.style.cssText = 'max-width:600px;margin:0 auto;';
+        box.innerHTML = `
+            <div class="card-header"><h5><i class="bi bi-input-cursor text-warning"></i> 字段越界即时拦截演示</h5></div>
+            <div class="card-body">
+                <p class="text-muted" style="font-size:14px;">输入超过范围的值回车查看效果：</p>
+                <div class="row g-3 mb-3">
+                    <div class="col">
+                        <label class="form-label">工时 (范围 0–24)</label>
+                        <input type="number" class="form-control" id="demoHour" value="18" step="0.5" min="0" max="24">
+                        <div class="form-text text-danger" id="demoHourMsg" style="display:none;">
+                            <i class="bi bi-exclamation-circle"></i> 单日不能超过 24 小时
+                        </div>
+                    </div>
+                    <div class="col">
+                        <label class="form-label">完成率 (范围 0–100)</label>
+                        <input type="number" class="form-control" id="demoRate" value="85" step="1" min="0" max="100">
+                        <div class="form-text text-danger" id="demoRateMsg" style="display:none;">
+                            <i class="bi bi-exclamation-circle"></i> 完成率应为 0–100 之间的整数
+                        </div>
+                    </div>
+                </div>
+                <div class="alert alert-success" id="demoPass" style="display:none;">
+                    <i class="bi bi-check-circle"></i> 值在合法范围内，未触发越界拦截
+                </div>
+                <p class="mt-2" style="font-size:13px;color:#666;">
+                    <i class="bi bi-info-circle"></i>
+                    输入 <strong>25</strong> 到小时框、<strong>150</strong> 到完成率框后按回车
+                </p>
+                <button class="btn btn-sm btn-outline-secondary" onclick="this.closest('.demo-field-box').remove()">
+                    关闭本演示
+                </button>
+            </div>
+        `;
+        document.querySelector('.main-container').appendChild(box);
+
+        // 绑定
+        const hIn = document.getElementById('demoHour');
+        const rIn = document.getElementById('demoRate');
+        const hMsg = document.getElementById('demoHourMsg');
+        const rMsg = document.getElementById('demoRateMsg');
+        const pass = document.getElementById('demoPass');
+
+        hIn.addEventListener('blur', () => {
+            const v = parseFloat(hIn.value);
+            if (v > 24) {
+                hMsg.style.display = 'block';
+                hIn.classList.add('is-invalid');
+                pass.style.display = 'none';
+            } else {
+                hMsg.style.display = 'none';
+                hIn.classList.remove('is-invalid');
+            }
+        });
+        hIn.addEventListener('input', () => {
+            const v = parseFloat(hIn.value);
+            if (v > 24) {
+                hMsg.style.display = 'block';
+                hIn.classList.add('is-invalid');
+                pass.style.display = 'none';
+            } else {
+                hMsg.style.display = 'none';
+                hIn.classList.remove('is-invalid');
+            }
+            if (v <= 24 && v >= 0 && rIn.value && parseInt(rIn.value) >= 0 && parseInt(rIn.value) <= 100) {
+                pass.style.display = 'block';
+            } else {
+                pass.style.display = 'none';
+            }
+        });
+        rIn.addEventListener('blur', () => {
+            const v = parseInt(rIn.value);
+            if (v > 100) {
+                rMsg.style.display = 'block';
+                rIn.classList.add('is-invalid');
+                pass.style.display = 'none';
+            } else {
+                rMsg.style.display = 'none';
+                rIn.classList.remove('is-invalid');
+            }
+        });
+        rIn.addEventListener('input', () => {
+            const v = parseInt(rIn.value);
+            if (v > 100 || v < 0) {
+                rMsg.style.display = 'block';
+                rIn.classList.add('is-invalid');
+                pass.style.display = 'none';
+            } else {
+                rMsg.style.display = 'none';
+                rIn.classList.remove('is-invalid');
+            }
+            if (hIn.value && parseFloat(hIn.value) >= 0 && parseFloat(hIn.value) <= 24
+                && v >= 0 && v <= 100) {
+                pass.style.display = 'block';
+            } else {
+                pass.style.display = 'none';
+            }
+        });
+    });
+
+    // F3: 网络错误 — 弹出 toast
+    document.getElementById('demoNetworkError').addEventListener('click', () => {
+        toast('网络异常，请稍后重试', 'error', 4000);
+    });
+})();
+</script>
+</body>
+</html>

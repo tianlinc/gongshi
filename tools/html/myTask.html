@@ -1,0 +1,530 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" 
+"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+	<meta http-equiv="X-UA-Compatible" content="IE=EmulateIE7" />
+	<title></title>
+	
+	<link rel="stylesheet" type="text/css" href="/styles/power.css?V=V808R08M07SP0802"/>
+	<link rel="stylesheet" type="text/css" href="/styles/utils/iMain.css?V=V808R08M07SP0802"/>
+	
+	<script type="text/javascript" src="/scripts/tool.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/date.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/cacheEx.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/utils/iMain.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/compatibleExplorer.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/virtualModalDialogAdapter.js?V=V808R08M07SP0802"></script>
+
+	<script type="text/javascript" src="/scripts/reference/jquery-1.4.4.min.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/reference/jquery.ui.core.min.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/reference/jquery.ui.widget.min.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/reference/jquery.ui.mouse.min.js?V=V808R08M07SP0802"></script>
+	
+	<script>
+		var powerPath = "/", lang = "zh";
+		var defaultCharLength =  "2";
+	</script>
+	<script type='text/javascript' src='/a4j.res/org.ajax4jsf.framework.ajax.AjaxScript.do'></script><script type="text/javascript" src="/scripts/entity/list.menubar.js?V=V808R08M07SP0802"></script>
+    <script type="text/javascript" src="/scripts/entity/list.base.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/entity/list.filter.js?V=V808R08M07SP0802"></script>
+	<link rel="stylesheet" href="/weixin/Font-Awesome-3.2.1/css/font-awesome.min.css?V=V808R08M07SP0802"/>
+	<style>
+		.head-th {
+			border-top: 0;
+		}
+		.menu-show { float: right; margin-top: -2px !important; margin-top: -16px\9 !important; margin-right: 12px !important; color: blue;display:none;}
+		.menu-more {background:url('../../../images/buttonmenu/menu_downarrow.png') no-repeat 12px 2px;display:block;cursor: pointer;display:none;width: 26px;height: 16px;float: right;margin: 2px 5px 0 -20px;margin: -14px 5px 0 -20px \9;cursor: pointer;background-position: 10px 2px\9;}
+		.menu-ul {position: absolute;border: 1px solid #999;border-top: 0;background-color: white;padding:0;width: 73px;z-index: 10;}
+		.menu-ul li {list-style-type: none;height: 18px;text-align: left;cursor:pointer;padding: 4px 2px 4px 5px;padding: 7px 2px 2px 5px\9; text-overflow:ellipsis;white-space:nowrap;overflow:hidden;}
+		
+		.menu-sub-ul {border-top: 1px solid #999;}
+		.menu-selected {color:white;background-color: #3973c3;}
+		#onlynode { float: right;margin-top: 1px;margin-top: -20px\9;}
+	</style>
+</head>
+
+<body style="background-color: #f5f5f5;" 
+   
+  
+  
+  onresize="tableMain.table('resize');" 
+ onkeydown="checkBK();"
+ onbeforeunload="top.resetFieldView(cate[0], cate[1], 'TSK', 'Y')"
+>
+<script>
+	if( !$.browser.msie ){ // For chrome, firefox onbeforeunload envent.
+		window.addEventListener('unload', function(){
+			$(document.body).attr("onbeforeunload").call();
+		}, false);
+	} else {
+		window.attachEvent('onunload', function(){
+			$(document.body).attr("onbeforeunload").call();
+			clearFrames();
+		});
+	}
+</script>
+<div id="operateHead" class="menuBarItem">
+		
+		
+		
+		<input type="button" class="button" onclick="buildPage('baseSearch', '/pages/task/baseSearch.jsf');" title='&#28789;&#27963;&#26597;&#35810;&#20219;&#21153;' value='&#26597;&#35810;&#20219;&#21153;'>
+		
+		<input type="button" class="button" onclick="iMenuBar.tskBatch();" title='&#25209;&#37327;&#23457;&#26680;' value='&#25209;&#37327;&#23457;&#26680;'>
+		
+		<div style="background-color: transparent;position: absolute;top: 3px;left: 40%;">
+			<input type="radio" name="chartType" id="myRecive" onclick="chooseType($(this), 0);" checked="checked" /><label for="myRecive" class="focus-link" title='&#25105;&#36127;&#36131;&#30340;&#20219;&#21153;'>&#25105;&#36127;&#36131;&#30340;&#20219;&#21153;</label>&nbsp;
+			
+			<input type="radio" name="chartType" id="myReciveActor" onclick="chooseType($(this), 22);" /><label for="myReciveActor" class="focus-link" title='&#25105;&#21442;&#19982;&#30340;&#20219;&#21153;'>&#25105;&#21442;&#19982;&#30340;&#20219;&#21153;</label>&nbsp;
+			
+			<input type="radio" name="chartType" id="myAssign" onclick="chooseType($(this), 1);"/><label for="myAssign" class="focus-link" title='&#25105;&#21019;&#24314;&#21644;&#20998;&#37197;&#30340;&#20219;&#21153;'>&#25105;&#20998;&#37197;&#30340;&#20219;&#21153;</label>&nbsp;
+			
+			<input type="radio" name="chartType" id="myAudit" onclick="chooseType($(this), 2);"/><label for="myAudit" class="focus-link" title='&#24453;&#25105;&#23457;&#26680;&#30340;&#20219;&#21153;'>&#25105;&#23457;&#26680;&#30340;&#20219;&#21153;</label>&nbsp;
+		</div>
+		
+   	    <input id="onlynode" type="checkbox" onclick="seachOnlyNodes($(this))" title="&#21482;&#26174;&#31034;&#25105;&#25509;&#25910;&#30340;&#33410;&#28857;"/>
+		<span class="menu-more" title='&#20219;&#21153;&#36807;&#28388;&#33539;&#22260;' onclick="toggleTaskDate($(this));event.cancelBubble = true;"></span>
+   	    <a href="#" class="menu-show" val="5" onclick="return false;"><font style="font-size:12px;">&#25152;&#26377;</font></a>
+   	    <ul id="taskMenu" class="menu-ul menu-sub-ul hide" loaded="N"></ul>
+	</div>
+
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<link rel="stylesheet" type="text/css" href="/styles/common/select.css?V=V808R08M07SP0802"/>
+<link rel="stylesheet" type="text/css" href="/styles/plugin/bronzesoft.ui.basetable.css?V=V808R08M07SP0802"/>
+<link rel="stylesheet" type="text/css" href="/styles/plugin/jquery.ui.autocomplete.css?V=V808R08M07SP0802"/>
+
+<script type="text/javascript" src="/scripts/reference/jquery.ui.position.min.js?V=V808R08M07SP0802"></script>
+<script type="text/javascript" src="/scripts/reference/jquery.ui.autocomplete.min.js?V=V808R08M07SP0802"></script>
+
+<script type='text/javascript' src="/scripts/utils/iCalendar.js?V=V808R08M07SP0802"></script>
+<script type="text/javascript" src="/scripts/plugin/bronzesoft.ui.basetable.js?V=V808R08M07SP0802"></script>
+
+<script type='text/javascript' src="/scripts/utils/listConfigHelper.js?V=V808R08M07SP0802"></script>
+<script type="text/javascript" src="/scripts/utils/selectHelper.js?V=V808R08M07SP0802"></script>
+
+<div id="taskInfo">
+	<div id="headPanel" class="head-div">
+	<table id="headTable" class="head-table">
+	<tr>
+		
+	</tr>
+
+	<tr>
+		
+	</tr>
+	</table>
+	</div><div id="taskPanel" class="body-div">
+	<table class="body-table">
+   		
+	</table>
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table class="page-table page-table-hide" size=''>
+	<tr>
+		<td align="left">
+			&#31532;<span id="page_section">1 - &#26465;</span>
+			,
+			&#20849;&#26465;
+		</td>
+		<td align="right">
+			<a class='img-cursor ' onclick="getByTargetPage('1');">&lt;&lt;</a>&nbsp;
+			<a id="pagination_prevPage" class='img-cursor ' onclick="getByTargetPage('-1');">&lt;</a>
+
+			
+
+			<a id="pagination_nextPage" class='img-cursor hide' onclick="getByTargetPage('1');">&gt;</a>&nbsp;
+			<a class='img-cursor hide' onclick="getByTargetPage('');">&gt;&gt;</a>
+		</td>
+	</tr>
+</table>
+<input type="hidden" id="targetPage" name="targetPage" value=''/>
+	</div>
+
+	
+</div>
+
+<div id="headMenu" class="menu" style="display: none;">
+	<div class="item" onclick="showListConfig('TSK', cate, refreshFull);"><img class="image vhide"/><div class="text">&#25554;&#20837;&#21015;</div></div>
+	<div class="item" onclick="hideColumn(cate, refreshFull);" id="hideColumnLink"><img class="image vhide"/><div class="text">&#38544;&#34255;&#21015;</div></div>
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<link rel="stylesheet" type="text/css" href="/styles/multilevelMenu.css?V=V808R08M07SP0802"/>
+<link rel="stylesheet" type="text/css" href="/styles/utils/messageTool.css" />
+
+<script type="text/javascript" src="/scripts/util.js?V=V808R08M07SP0802"></script>
+<script type="text/javascript" src="/scripts/tool.js?V=V808R08M07SP0802"></script>
+<script type='text/javascript' src="/scripts/json2.js?V=V808R08M07SP0802"></script>
+<script type="text/javascript" src="/scripts/engine.js?V=V808R08M07SP0802"></script>
+<script type="text/javascript" src="/scripts/multilevelMenu.js?V=V808R08M07SP0802"></script>
+<script type="text/javascript" src="/scripts/task/taskOperation.js?V=V808R08M07SP0802"></script>
+<script type='text/javascript' src="/dwr/interface/jtaskEntityBean.js?V=V808R08M07SP0802"></script>
+<script type='text/javascript' src="/dwr/interface/jviewConfigUtil.js?V=V808R08M07SP0802"></script>
+<script type="text/javascript" src="/scripts/utils/messageTool.js?V=V808R08M07SP0802"></script>      
+<div id="menu" class="menu">
+    <div id="STATIC_OP" class="item" onclick="iTaskOperation.process(0)"><img class="image" src='/images/icon202.gif'/><div class="text">&#25171;&#24320;</div></div>
+   	
+   	<div id="STATIC_CM" class="seperator"></div>
+    <div id="STATIC_CM" class="item"><img class="image vhide"/><div class="text">&#27807;&#36890;</div></div>
+    <div class="subMenu menu">
+		<div id="STATIC_WN" class="item" onclick="iTaskOperation.process(40)"><img class="image" src='/images/icon143.gif'/><div class="text">&#36890;&#30693;</div></div>
+		<div id="MENU_SR" class="item" onclick="iTaskOperation.process(41)"><img class="image vhide"/><div class="text">&#20849;&#20139;</div></div>
+		<div id="MENU_MO" class="item" onclick="iTaskOperation.process(42)"><img class="image vhide"/><div class="text">&#36801;&#31227;</div></div>
+	</div>
+	
+	<div class="seperator"></div>
+	<div class='item'><img class='image vhide'/><div class='text'>&#21457;&#36865;&#21040;...</div></div>
+	<div class='subMenu menu'>
+   		<div class='item' onclick="iTaskOperation.process(43)"><img class='image vhide'/><div class='text'>&#26631;&#31614;</div></div>
+    </div>
+	
+    
+    <div id="SEP_CO_PT" class="seperator"></div>
+    <div id="MENU_CO" class="item" onclick="iTaskOperation.process(60)"><img class="image" src='/images/icon052.gif'/><div class="text">&#22797;&#21046;</div></div>
+    <div id="MENU_PT" class="item" onclick="iTaskOperation.process(62)"><img class="image" src='/images/icon053.gif'/><div class="text">&#31896;&#36148;</div></div>
+    
+    
+    <div id="SEP_PS_TC" class="seperator"></div>
+    <div id="MENU_PS" class="item" onclick="iTaskOperation.process(9)"><img class="image" src='/images/icon144.gif'/><div class="text">&#21457;&#24067;</div></div>
+    
+    <div id="SEP_SU_RE_FS" class="seperator"></div>
+    <div id="MENU_SU" class="item" onclick="iTaskOperation.process(6)"><img class="image vhide"/><div class="text">&#26242;&#20572;</div></div>
+    <div id="MENU_RE" class="item" onclick="iTaskOperation.process(7)"><img class="image vhide"/><div class="text">&#24674;&#22797;</div></div>
+    <div id="MENU_FS" class="item" onclick="iTaskOperation.process(8)"><img class="image vhide"/><div class="text">&#24378;&#21046;&#32456;&#27490;</div></div>
+    
+    <div id="SEP_ED_CH" class="seperator"></div>
+    <div id="MENU_ED" class="item" onclick="iTaskOperation.process(10)"><img class="image" src='/images/icon050.gif'/><div class="text">&#32534;&#36753;</div></div>
+    <div id="MENU_CH" class="item" onclick="iTaskOperation.process(10)"><img class="image" src='/images/icon050.gif'/><div class="text">&#21464;&#26356;</div></div>
+    
+    <div id="SEP_AU" class="seperator"></div>
+    <div id="MENU_AU" class="item" onclick="iTaskOperation.process(5)"><img class="image vhide"/><div class="text">&#23457;&#26680;</div></div>
+    
+    <div id="SEP_DE" class="seperator"></div>
+    <div id="MENU_DE" class="item" onclick="iTaskOperation.process(63)"><img class="image" src='/images/icon043.gif'/><div class="text">&#21024;&#38500;</div></div>
+    
+    <div id="SEP_RS" class="seperator"></div>
+    <div id="MENU_RS" class="item" onclick="iTaskOperation.process(11)"><img class="image vhide"/><div class="text">&#37325;&#26032;&#24320;&#21551;</div></div>
+    
+</div>
+
+<div style="display:none">
+	<span id="op_msg1">&#30830;&#23450;&#35201;&#21024;&#38500;&#35813;&#35760;&#24405;&#21527;&#65311;</span>
+	<span id="op_msg2">&#19981;&#33021;&#21024;&#38500;&#24050;&#32463;&#22635;&#20889;&#36807;&#24037;&#20316;&#26085;&#25253;&#30340;&#20219;&#21153;</span>
+	<span id="op_msg3">&#20219;&#21153;&#25110;&#33410;&#28857;&#23384;&#22312;&#24517;&#22635;&#23383;&#27573;&#20026;&#31354;&#65292;&#19981;&#20801;&#35768;&#21457;&#24067;</span>
+	<span id="op_msg4">&#24517;&#22635;&#23383;&#27573;</span>
+    <span id="op_msg5">&#23384;&#22312;&#24517;&#22635;&#23383;&#27573;&#20026;&#31354;&#30340;&#20219;&#21153;&#25110;&#33410;&#28857;&#21457;&#24067;&#19981;&#25104;&#21151;</span>
+    
+    <span id="tip_sucess_label">&#21457;&#36865;&#26631;&#31614;&#25104;&#21151;</span>
+	<span id="tip_sucess_com">&#27807;&#36890;&#25104;&#21151;</span>
+	<span id="tip_sucess_tran">&#36716;&#21457;&#25104;&#21151;</span>
+	<span id="tip_sucess_share">&#20849;&#20139;&#25104;&#21151;</span>
+	<span id="tip_sucess_move">&#36801;&#31227;&#25104;&#21151;</span>
+	<span id="tip_sucess_cor">&#21457;&#24067;&#25104;&#21151;</span>
+</div>
+
+<script>
+	function afterSave(action) {
+	    refreshBody((action == 62 || action == 63) ? 1 : "");
+	}
+</script>
+
+
+<form id="operate" name="operate" method="post" action="/pages/task/list/myTask.jsf" enctype="application/x-www-form-urlencoded">
+<input type="hidden" name="operate" value="operate" />
+
+	<input type="hidden" id="_page" name="page">
+	<input type="hidden" id="_cate" name="cate" value="0">
+	<input type="hidden" id="_type" name="type" value="TSK">
+	<input type="hidden" id="_module" name="module" value="TSK">
+	<input type="hidden" id="_planId" name="planId" value="">
+	<input type="hidden" id="_refreshType" name="refreshType" value="1">
+	
+	<!-- For check is first enter page, then clear the filter. -->
+	<input type="hidden" id="_isInit" name="isInit" value="Y">
+	
+	<!-- For my node page -->
+	<input type="hidden" id="_nodeId" name="nodeId" value="value=&#034;"/>
+	
+	<!-- For advance search page -->
+	<input type="hidden" id="_projectIds" name="projectIds" value=""/>
+	<input type="hidden" id="_taskName" name="taskName" value=""/>
+	<input type="hidden" id="_emptySearch" name="emptySearch" value=""/>
+	<input type="hidden" id="_baseSearch" name="baseSearch" value=""/>
+	
+	<!-- For plan right -->
+	<input type="hidden" id="_hasPlanOwner" name="hasPlanOwner" value=""/>
+	
+	<!-- For Is show Force closed tasks -->
+	<input type="hidden" id="_showFCTask" name="showFCTask" value="N">
+	
+	<!-- For Drill Image in personal plate and project plate -->
+	<input type="hidden" id="_condition" name="condition">
+	<input type="hidden" id="_isOwner" name="isOwner" value="">
+	<input type="hidden" id="_light" name="light" value="">
+	<input type="hidden" id="_pjtTask" name="pjtTask" value="">
+	
+    <!-- department personal plate drill task. -->
+    <input type="hidden" name="userId" value="">
+    
+    <input type="hidden" name="objectId" value="">
+    
+	<a href="#" id="operate:refreshFull" name="operate:refreshFull" onclick="A4J.AJAX.Submit('j_id_jsp_329485893_0','operate',event,{'oncomplete':function(request,event,data){completeRefreshFull();},'parameters':{'operate:refreshFull':'operate:refreshFull'} ,'actionUrl':'/pages/task/list/myTask.jsf'} );return false;"></a><a href="#" id="operate:refreshBody" name="operate:refreshBody" onclick="A4J.AJAX.Submit('j_id_jsp_329485893_0','operate',event,{'oncomplete':function(request,event,data){completeRefreshBody();},'parameters':{'operate:refreshBody':'operate:refreshBody'} ,'actionUrl':'/pages/task/list/myTask.jsf'} );return false;"></a><a href="#" id="operate:reLoadBody" name="operate:reLoadBody" onclick="A4J.AJAX.Submit('j_id_jsp_329485893_0','operate',event,{'oncomplete':function(request,event,data){iList.reload(data);},'parameters':{'operate:reLoadBody':'operate:reLoadBody'} ,'actionUrl':'/pages/task/list/myTask.jsf'} );return false;"></a>
+	
+	
+
+	<!-- for export project task. -->	
+	<input type="hidden" id="_filterIds" name="filterIds" />
+	
+    <input id="operate:_path" type="hidden" name="operate:_path" /><input id="operate:_fileName" type="hidden" name="operate:_fileName" /><input id="operate:_fileContentType" type="hidden" name="operate:_fileContentType" /><a href="#" id="operate:export" name="operate:export" onclick="A4J.AJAX.Submit('j_id_jsp_329485893_0','operate',event,{'oncomplete':function(request,event,data){downloadTask();},'parameters':{'operate:export':'operate:export'} ,'actionUrl':'/pages/task/list/myTask.jsf'} );return false;"></a>
+<script type="text/javascript" language="Javascript">function dpf(f) {var adp = f.adp;if (adp != null) {for (var i = 0;i < adp.length;i++) {f.removeChild(adp[i]);}}};function apf(f, pvp) {var adp = new Array();f.adp = adp;var ps = pvp.split(',');for (var i = 0,ii = 0;i < ps.length;i++,ii++) {var p = document.createElement("input");p.type = "hidden";p.name = ps[i];p.value = ps[i + 1];f.appendChild(p);adp[ii] = p;i += 1;}};function jsfcljs(f, pvp, t) {apf(f, pvp);var ft = f.target;if (t) {f.target = t;}f.submit();f.target = ft;dpf(f);};</script>
+<a id="operate:download" href="#" onclick="if(typeof jsfcljs == 'function'){jsfcljs(document.forms['operate'],'operate:download,operate:download','');}return false"></a><input type="hidden" name="javax.faces.ViewState" id="javax.faces.ViewState" value="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" />
+</form>
+
+<script type="text/javascript">
+	var cate = [$("#_cate").val(), $("#_type").val()]; 
+	
+	var keep_operate = cate[0] == 1 ? "Y" : "N";
+	
+	initCondition();
+	
+	refreshFull();
+	
+	function initCondition() {
+		var t = cate[0] == 15  ? parent.conditionStr : parent.drillCondition;
+		
+		// for workflow log stat drill search.
+		if (cate[0] == 3 && !t)  t = parent.conditionStr; 
+		
+		if (t && t != "") $("#_condition").val(t);	
+	}
+
+	function getByTargetPage(page){
+		$("#_page").val(page); 
+		refreshBody();
+	}
+		
+	function refreshFull(){
+		if (typeof isInitQuery == "string" && isInitQuery == "Y") return;
+		
+		openLoader();
+		
+		$("#_refreshType").val(1);
+		$("#operate\\:refreshFull").click();
+	}
+		
+	function refreshBody(initPage){
+		openLoader();
+			
+		if ( initPage ) { 
+			$("#_page").val(1); 
+		}
+		$("#_refreshType").val(0);
+		
+		if($("#operate\\:refreshBody").size() == 0) {
+			closeLoader();
+		}
+		
+		$("#operate\\:refreshBody").click();
+	}
+
+	function selectTd(obj, event){
+		if(!$.browser.msie && $(event.target).hasClass('node-img')){
+			tableMain.table('selectRow', obj.closest('tr'))
+		} else {
+			tableMain.table('selectTd', obj);
+		}
+	}
+	
+	function openEntity(objectId, lcType) {
+		var url = powerPath + "pages/lifecycle/entity/entityTab.project.jsf?objectId=" + objectId + "&lcType=" + lcType;
+		buildPage("entityTab_", url);
+	}
+	
+	function downloadTask() {
+		closeLoader();
+		$("#operate\\:download").click();
+	}
+</script>
+	
+	<div style="display:none">
+		<span id="msg1">&#26085;</span>
+		<span id="msg2">&#21608;</span>
+		<span id="msg3">&#21452;&#21608;</span>
+		<span id="msg4">&#26376;</span>
+		<span id="msg5">&#25152;&#26377;</span>
+		<span id="msg6">&#23545;&#24050;&#32463;&#22635;&#20889;&#36807;&#25191;&#34892;&#26085;&#25253;&#30340;&#20219;&#21153;&#26410;&#21024;&#38500;&#25104;&#21151;</span>
+		<span id="hint1">&#35745;&#21010;&#24320;&#22987;&#26085;&#26399;&#22312;&#20170;&#22825;&#21450;&#20170;&#22825;&#20197;&#21069;&#30340;&#20219;&#21153;</span>
+		<span id="hint2">&#35745;&#21010;&#24320;&#22987;&#26085;&#26399;&#22312;&#26412;&#21608;&#26085;&#21450;&#26412;&#21608;&#26085;&#20197;&#21069;&#30340;&#20219;&#21153;</span>
+		<span id="hint3">&#35745;&#21010;&#24320;&#22987;&#26085;&#26399;&#22312;&#19979;&#21608;&#26085;&#21450;&#19979;&#21608;&#26085;&#20197;&#21069;&#30340;&#20219;&#21153;</span>
+		<span id="hint4">&#35745;&#21010;&#24320;&#22987;&#26085;&#26399;&#22312;&#26412;&#26376;&#26411;&#21450;&#26412;&#26376;&#26411;&#20197;&#21069;&#30340;&#20219;&#21153;</span>
+		<span id="hint5">&#25152;&#26377;&#20219;&#21153;</span>
+	</div>
+	
+	<script>
+		var _appIndex = '';
+		if (_appIndex == '1') {
+			$("#myAssign").attr("checked", true);
+		} else if (_appIndex == '2') {
+			$("#myAudit").attr("checked", true);
+		} else if (_appIndex == '22') {
+			$("#myReciveActor").attr("checked", true);
+		}
+	
+		var tableMain = $("#taskInfo").table({
+			height: iMain.getMH(window),
+			canSelect: false,
+			loaded: function() {
+				closeLoader();
+			},
+			stopChange: function(event, data){
+				dyn_updatePosition(cate, data[0].attr("name"), data[1].attr("name"));
+			},
+			stopFlex: function(event, data){
+				dyn_updateConfig(cate, data.attr("name"), "w", data.width());
+			}
+		});
+		
+		function chooseType($obj, c){
+			openLoader();
+			
+			$("font.red-text", $("#operateHead")).removeClass("red-text");
+			$("font", $obj).addClass("red-text");
+			cate[0] = c; $("#_cate").val(c);
+			keep_operate = cate[0] == 1 ? "Y" : "N";
+			$("#_page").val(1);
+			$obj.blur();
+			refreshFull();
+			initTaskDate();
+		}
+		
+		// for filter the tasks by date type ( day/week/double week/month/all)		
+		function toggleTaskDate($obj) {
+			var $op = $("#taskMenu");
+			var items= [{"n" : $("#msg1").html(), "v" : "1"}, {"n" : $("#msg2").html(), "v" : "2"}, {"n" : $("#msg3").html(), "v" : "3"}, {"n" : $("#msg4").html(), "v" : "4"}, {"n" : $("#msg5").html(), "v" : "5"}], t;			
+			if ($op.attr("loaded") == "N") {
+				for(var i = 0; i < items.length; i++) {
+					t = items[i]; 
+					$("<li>" + t.n + "</li>").css("padding-left", 18).hover(
+							function(){$(this).addClass("menu-selected");},
+							function(){$(this).removeClass("menu-selected");}
+						).bind("click", {item: t}, function(e){
+							var item = e.data.item;
+							$op.hide().prev().find("font").html(item.n);
+							if ($op.prev().attr("val") != item.v) {
+								$op.prev().attr("val", item.v);
+								dyn_updateConfig(cate, "_SPECIAL_F_", "dt", item.v, false);
+								$("#_page").val(1);
+								$("#operate\\:refreshBody").click();
+							}
+						}).bind("mouseover", {index : i + 1}, function(e) {
+							this.title = $("#hint" + e.data.index).html();
+						}).appendTo($op);
+				}
+			}
+		
+			var p = $obj.offset(); 
+			$op.attr("loaded", "Y").css({"max-height": getViewH(), "left": p.left - ($.browser.msie ? 91 : 49), "top": p.top + ($.browser.msie ? 18 : 7)}).show();
+			
+			
+		}
+		
+		initTaskDate();
+		function initTaskDate() {
+		     if(cate[0] == 0 || cate[0] == 22) { 
+		     	$("span.menu-more, a.menu-show").show();
+		     	if (cate[0] == 0) {
+		     		$("#onlynode").show();
+		     	} else {
+		     		$("#onlynode").hide();
+		     	}
+		     	 
+			    var dateType = dyn_getConfigItem(cate, "_SPECIAL_F_", "dt", false);
+				if(dateType) {
+				 	$("a.menu-show").attr("val", dateType).find("font").html($("#msg" + dateType).html());
+				}
+		     } else {
+		     	$("span.menu-more, a.menu-show, #onlynode").hide(); 
+		     }
+		}
+		
+		function seachOnlyNodes($obj) {
+			$("#_nodeId").val($obj.attr("checked") ? "Y" : "");
+			getByTargetPage(1);
+		}
+		
+		$(document.body).bind("click", function() {
+			$("#taskMenu").hide();
+		});
+		
+	</script>
+<script type="text/javascript" src="/platform/scripts/custom.js?V=V808R08M07SP0802"></script>
+</body>
+</html>

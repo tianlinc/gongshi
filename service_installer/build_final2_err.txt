@@ -1,0 +1,122 @@
+
+[notice] A new release of pip is available: 24.0 -> 26.1.2
+[notice] To update, run: python.exe -m pip install --upgrade pip
+219 INFO: PyInstaller: 6.21.0, contrib hooks: 2026.6
+219 INFO: Python: 3.11.9
+326 INFO: Platform: Windows-10-10.0.26200-SP0
+327 INFO: Python environment: C:\Users\tianl\AppData\Local\Programs\Python\Python311
+331 INFO: Module search paths (PYTHONPATH):
+['C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Scripts\\pyinstaller.exe',
+ 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\python311.zip',
+ 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\DLLs',
+ 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib',
+ 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311',
+ 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages',
+ 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\win32',
+ 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\win32\\lib',
+ 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\Pythonwin',
+ 'D:\\code\\gongshi\\service_installer',
+ 'D:\\code\\gongshi']
+1071 INFO: Appending 'datas' from .spec
+1097 INFO: checking Analysis
+1098 INFO: Building Analysis because Analysis-00.toc is non existent
+1098 INFO: Looking for Python shared library...
+1098 INFO: Using Python shared library: C:\Users\tianl\AppData\Local\Programs\Python\Python311\python311.dll
+1098 INFO: Running Analysis Analysis-00.toc
+1098 INFO: Target bytecode optimization level: 0
+1098 INFO: Initializing module dependency graph...
+1099 INFO: Initializing module graph hook caches...
+1113 INFO: Analyzing modules for base_library.zip ...
+3093 INFO: Processing standard module hook 'hook-heapq.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\PyInstaller\\hooks'
+3148 INFO: Processing standard module hook 'hook-encodings.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\PyInstaller\\hooks'
+4332 INFO: Processing standard module hook 'hook-math.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\PyInstaller\\hooks'
+4622 INFO: Processing standard module hook 'hook-pickle.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\PyInstaller\\hooks'
+5620 INFO: Caching module dependency graph...
+5650 INFO: Analyzing D:\code\gongshi\service_installer\service_launcher.py
+5671 INFO: Processing standard module hook 'hook-webbrowser.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\PyInstaller\\hooks'
+5697 INFO: Processing standard module hook 'hook-playwright.sync_api.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\playwright\\_impl\\__pyinstaller'
+6247 INFO: Processing standard module hook 'hook-multiprocessing.util.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\PyInstaller\\hooks'
+6352 INFO: Processing standard module hook 'hook-xml.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\PyInstaller\\hooks'
+6543 INFO: Processing standard module hook 'hook-_ctypes.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\PyInstaller\\hooks'
+6927 INFO: Processing standard module hook 'hook-platform.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\PyInstaller\\hooks'
+7381 INFO: Processing pre-safe-import-module hook 'hook-typing_extensions.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+7386 INFO: SetuptoolsInfo: initializing cached setuptools info...
+8535 INFO: Processing standard module hook 'hook-cryptography.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+10556 INFO: hook-cryptography: cryptography does not seem to be using dynamically linked OpenSSL.
+10734 INFO: Processing standard module hook 'hook-bcrypt.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+10774 INFO: Processing standard module hook 'hook-clr.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\pythonnet\\_pyinstaller'
+11386 INFO: Processing standard module hook 'hook-sysconfig.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\PyInstaller\\hooks'
+11636 INFO: Processing standard module hook 'hook-difflib.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\PyInstaller\\hooks'
+11762 INFO: Processing standard module hook 'hook-jinja2.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+12183 INFO: Processing pre-safe-import-module hook 'hook-importlib_metadata.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+12211 INFO: Processing standard module hook 'hook-Crypto.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+13253 INFO: Processing standard module hook 'hook-pycparser.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+13361 INFO: Processing standard module hook 'hook-setuptools.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\PyInstaller\\hooks'
+13366 INFO: Processing pre-safe-import-module hook 'hook-distutils.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+13366 INFO: Processing pre-find-module-path hook 'hook-distutils.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\PyInstaller\\hooks\\pre_find_module_path'
+14140 INFO: Processing standard module hook 'hook-distutils.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\PyInstaller\\hooks'
+14178 INFO: Processing standard module hook 'hook-distutils.util.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\PyInstaller\\hooks'
+14201 INFO: Processing standard module hook 'hook-_osx_support.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\PyInstaller\\hooks'
+14360 INFO: Processing standard module hook 'hook-pkg_resources.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\PyInstaller\\hooks'
+16249 INFO: Processing pre-safe-import-module hook 'hook-packaging.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+17132 INFO: Processing standard module hook 'hook-urllib3.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+17232 INFO: Processing pre-safe-import-module hook 'hook-backports.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+17570 INFO: Processing standard module hook 'hook-charset_normalizer.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+17711 INFO: Processing standard module hook 'hook-certifi.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+18092 INFO: Processing standard module hook 'hook-lxml.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+18729 INFO: Processing standard module hook 'hook-lxml.etree.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+18740 INFO: Processing module hooks (post-graph stage)...
+19068 INFO: Processing standard module hook 'hook-lxml.isoschematron.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+19109 WARNING: Hidden import "pycparser.lextab" not found!
+19110 WARNING: Hidden import "pycparser.yacctab" not found!
+19120 INFO: Processing pre-safe-import-module hook 'hook-win32com.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\pre_safe_import_module'
+19291 INFO: Processing standard module hook 'hook-win32com.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+19294 INFO: Processing standard module hook 'hook-pythoncom.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+19461 INFO: Processing standard module hook 'hook-pywintypes.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+20104 INFO: Processing standard module hook 'hook-setuptools._vendor.importlib_metadata.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\PyInstaller\\hooks'
+20220 INFO: Processing standard module hook 'hook-setuptools._vendor.jaraco.text.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\PyInstaller\\hooks'
+20808 INFO: Processing standard module hook 'hook-lxml.objectify.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+21021 INFO: Performing binary vs. data reclassification (1154 entries)
+21182 INFO: Looking for ctypes DLLs
+21265 INFO: Analyzing run-time hooks ...
+21271 INFO: Including run-time hook 'pyi_rth_pkgutil.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+21274 INFO: Including run-time hook 'pyi_rth_multiprocessing.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+21275 INFO: Including run-time hook 'pyi_rth_inspect.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+21277 INFO: Including run-time hook 'pyi_rth_cryptography_openssl.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\rthooks'
+21278 INFO: Including run-time hook 'pyi_rth_setuptools.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+21278 INFO: Including run-time hook 'pyi_rth_pkgres.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+21281 INFO: Including run-time hook 'pyi_rth_pywintypes.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\rthooks'
+21282 INFO: Including run-time hook 'pyi_rth_pythoncom.py' from 'C:\\Users\\tianl\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\rthooks'
+21315 INFO: Creating base_library.zip...
+21330 INFO: Looking for dynamic libraries
+22461 INFO: Extra DLL search directories (AddDllDirectory): []
+22463 INFO: Extra DLL search directories (PATH): []
+23589 INFO: Warnings written to D:\code\gongshi\service_installer\build\service\warn-service.txt
+23665 INFO: Graph cross-reference written to D:\code\gongshi\service_installer\build\service\xref-service.html
+23713 INFO: checking Tree
+23713 INFO: Building Tree because Tree-00.toc is non existent
+23715 INFO: Building Tree Tree-00.toc
+23745 INFO: checking PYZ
+23746 INFO: Building PYZ because PYZ-00.toc is non existent
+23746 INFO: Building PYZ (ZlibArchive) D:\code\gongshi\service_installer\build\service\PYZ-00.pyz
+24443 INFO: Building PYZ (ZlibArchive) D:\code\gongshi\service_installer\build\service\PYZ-00.pyz completed successfully.
+24508 INFO: checking PKG
+24509 INFO: Building PKG because PKG-00.toc is non existent
+24509 INFO: Building PKG (CArchive) IEI Timer Faster Service.pkg
+98718 INFO: Building PKG (CArchive) IEI Timer Faster Service.pkg completed successfully.
+98743 INFO: Bootloader C:\Users\tianl\AppData\Local\Programs\Python\Python311\Lib\site-packages\PyInstaller\bootloader\Windows-64bit-intel\runw.exe
+98743 INFO: checking EXE
+98744 INFO: Building EXE because EXE-00.toc is non existent
+98744 INFO: Building EXE from EXE-00.toc
+98744 INFO: Copying bootloader EXE to D:\code\gongshi\service_installer\dist\IEI Timer Faster Service.exe
+98825 INFO: Copying icon to EXE
+98892 INFO: Copying 0 resources to EXE
+98893 INFO: Embedding manifest in EXE
+98934 INFO: Appending PKG archive to EXE
+99183 INFO: Fixing EXE headers
+100650 INFO: Building EXE from EXE-00.toc completed successfully.
+100682 INFO: checking COLLECT
+100683 INFO: Building COLLECT because COLLECT-00.toc is non existent
+100683 INFO: Building COLLECT COLLECT-00.toc
+102196 INFO: Building COLLECT COLLECT-00.toc completed successfully.
+102217 INFO: Build complete! The results are available in: D:\code\gongshi\service_installer\dist

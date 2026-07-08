@@ -1,0 +1,639 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" 
+"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+	<meta http-equiv="X-UA-Compatible" content="IE=EmulateIE7" />
+	<title></title>
+	
+	<link rel="stylesheet" type="text/css" href="/styles/power.css?V=V808R08M07SP0802"/>
+	<link rel="stylesheet" type="text/css" href="/styles/utils/iMain.css?V=V808R08M07SP0802"/>
+	
+	<script type="text/javascript" src="/scripts/tool.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/date.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/cacheEx.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/utils/iMain.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/compatibleExplorer.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/virtualModalDialogAdapter.js?V=V808R08M07SP0802"></script>
+
+	<script type="text/javascript" src="/scripts/reference/jquery-1.4.4.min.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/reference/jquery.ui.core.min.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/reference/jquery.ui.widget.min.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/reference/jquery.ui.mouse.min.js?V=V808R08M07SP0802"></script>
+	
+	<script>
+		var powerPath = "/", lang = "zh";
+		var defaultCharLength =  "2";
+	</script>
+	<script type='text/javascript' src='/a4j.res/org.ajax4jsf.framework.ajax.AjaxScript.do'></script><link rel="stylesheet" type="text/css" href="/styles/table.css?V=V808R08M07SP0802"/>
+	<link rel="stylesheet" type="text/css" href="/styles/workLogView.css?V=V808R08M07SP0802"/>
+	<link rel="stylesheet" type="text/css" href="/styles/contextMenu.css?V=V808R08M07SP0802"/>
+	<link rel="stylesheet" type="text/css" href="/styles/multilevelMenu.css?V=V808R08M07SP0802"/>
+	<link rel="stylesheet" type="text/css" href="/styles/workflow/entity.css?V=V808R08M07SP0802"/>
+	<link rel="stylesheet" type="text/css" href="/styles/utils/messageTool.css?V=V808R08M07SP0802"/>
+	
+	<style>
+		#unplannedTab td div{ text-align: left; }
+		#unplannedTab td textarea{ border:0px;height: 18px;background-color: white !important;margin:0px;padding:0px; outline:none;width:90%;}
+		
+		.menu-selected {color:white;background-color: #3973c3;}
+		.menu-ul {margin: 1px 0 0 0;margin-top: 2px\9;padding: 0;position: absolute;border: 1px solid #999;border-top: 0;background-color: white;padding:0;z-index: 10;overflow-x: hidden;overflow-y: auto;max-height: 380px;}
+		.menu-ul li {list-style-type: none;height: 18px;text-align: left;cursor:pointer;padding: 4px 2px 4px 5px;padding: 7px 2px 2px 5px\9; text-overflow: ellipsis;white-space: nowrap;overflow: hidden;}
+		.menu-li-empty {color: #999!important;}
+		
+		.select-div {border: 1px solid #bbb;height: 20px;padding-bottom: 3px\9;height: 18px\9;width: 260px;float: left;background-color: #ffffff!important;color: black!important;}
+		.select-text {float: left;padding: 2px 0 0 5px;white-space: nowrap;text-overflow: ellipsis;overflow: hidden;max-width: 230px;}
+		.select-sign {background:url('/images/buttonmenu/menu_downarrow.png') no-repeat 18px 4px;display:block;width: 26px;height: 16px;float: right;margin: 2px 5px 0 -10px;margin: 4px -2px 0 -10px \9;cursor: pointer;background-position: 10px 2px\9;}
+		.change{padding: 0px 10px 10px 13px;}
+		th {border-bottom: 1px solid #ddd;}
+	</style>
+</head>
+
+<body style="background-color: #f5f5f5;" 
+   
+  
+  
+  
+ onkeydown="checkBK();"
+ onbeforeunload=""
+>
+<script>
+	if( !$.browser.msie ){ // For chrome, firefox onbeforeunload envent.
+		window.addEventListener('unload', function(){
+			$(document.body).attr("onbeforeunload").call();
+		}, false);
+	} else {
+		window.attachEvent('onunload', function(){
+			$(document.body).attr("onbeforeunload").call();
+			clearFrames();
+		});
+	}
+</script>
+<span id="buttonPanel"></span>
+<form id="operate" name="operate" method="post" action="/pages/myspace/log/workLogView.jsf" class="hide" enctype="application/x-www-form-urlencoded">
+<input type="hidden" name="operate" value="operate" />
+
+		<input type="hidden" id="_startDate" name="startDate" />
+		<input type="hidden" id="_isView" name="isView" value="" />
+		<input type="hidden" id="_userId" name="userId" value="" />
+		<input type="hidden" id="_isOwner" name="isOwner"  value="Y"/>
+
+		<a href="#" id="operate:refreshNote" name="operate:refreshNote" onclick="A4J.AJAX.Submit('j_id_jsp_358727265_0','operate',event,{'oncomplete':function(request,event,data){refreshNoteData();},'parameters':{'operate:refreshNote':'operate:refreshNote'} ,'actionUrl':'/pages/myspace/log/workLogView.jsf'} );return false;"></a><a href="#" id="operate:refreshData" name="operate:refreshData" onclick="A4J.AJAX.Submit('j_id_jsp_358727265_0','operate',event,{'oncomplete':function(request,event,data){refreshTaskData();},'parameters':{'operate:refreshData':'operate:refreshData'} ,'actionUrl':'/pages/myspace/log/workLogView.jsf'} );return false;"></a><a href="#" id="operate:refreshLog" name="operate:refreshLog" onclick="A4J.AJAX.Submit('j_id_jsp_358727265_0','operate',event,{'oncomplete':function(request,event,data){init($('#data').val());synLogInfo();},'parameters':{'operate:refreshLog':'operate:refreshLog'} ,'actionUrl':'/pages/myspace/log/workLogView.jsf'} );return false;"></a><a href="#" id="operate:reloadLog" name="operate:reloadLog" onclick="A4J.AJAX.Submit('j_id_jsp_358727265_0','operate',event,{'oncomplete':function(request,event,data){$('#isThisWeek').val('Y');init($('#data').val());synLogInfo();},'parameters':{'operate:reloadLog':'operate:reloadLog'} ,'actionUrl':'/pages/myspace/log/workLogView.jsf'} );return false;"></a><a href="#" id="operate:refreshDaily" name="operate:refreshDaily" onclick="A4J.AJAX.Submit('j_id_jsp_358727265_0','operate',event,{'oncomplete':function(request,event,data){updateForSaveLog(data);closeLoader();},'parameters':{'operate:refreshDaily':'operate:refreshDaily'} ,'actionUrl':'/pages/myspace/log/workLogView.jsf'} );return false;"></a><a href="#" id="operate:refreshDataForRole" name="operate:refreshDataForRole" onclick="A4J.AJAX.Submit('j_id_jsp_358727265_0','operate',event,{'oncomplete':function(request,event,data){refreshDoubleWeek(data);},'parameters':{'operate:refreshDataForRole':'operate:refreshDataForRole'} ,'actionUrl':'/pages/myspace/log/workLogView.jsf'} );return false;"></a>
+				
+		
+		
+		
+		
+	
+	
+		<input type="hidden" id="_summary" name="summary" />
+		<input type="hidden" id="_objectId" name="objectId" />
+		<input type="hidden" id="_workRemark" name="workRemark" />
+		<input type="hidden" id="_issueRemark" name="issueRemark" />
+		<input type="hidden" id="_rightUserId" name="rightUserId" />
+		<input type="hidden" id="_unplannedInfo" name="unplannedInfo" />
+		<input type="hidden" id="ueditor_image_urls" name="ueditor_image_urls" />
+		<input id="operate:operateMessage" type="hidden" name="operate:operateMessage" /><a href="#" id="operate:saveLog" name="operate:saveLog" onclick="A4J.AJAX.Submit('j_id_jsp_358727265_0','operate',event,{'oncomplete':function(request,event,data){init($('#data').val());finishSaveWorklogDetail();},'parameters':{'operate:saveLog':'operate:saveLog'} ,'actionUrl':'/pages/myspace/log/workLogView.jsf'} );return false;"></a><input type="hidden" name="javax.faces.ViewState" id="javax.faces.ViewState" value="H4sIAAAAAAAAAN2dC5AcR3mA+06npw3ID4QhtnO2ZZ9kVqOd96yelnSydfZJMjpJfmHk0e7c3Ui7O8PMrO7OBAqqkpAKRUhCqIRggnmFSgVXKkWlQpJKCEUo8iiSAopK5Q1UEvKAhKJIcKgUSffM9GzP7vyzvVxLHqEq/969/fvf6a//fv/d+/Fvoo29AN3y1Pwl+4otte3uknT64iWnGe3/2T9//APbw93tSYRWfYTQj4cBUpteRwp7XWnRbjqhZPt+223aket1pYXIjpyTdtdecoK5jt/eeTZwnFNey/nO4u/+wQv1hz51I7GzMovIv11esCTZl+xV7VK4KC0GdsdZ8YLL8Z+kI1icd52VM54XoVsvXXBbFy6F/gVVt0zFVAz9Qn01fCN6C5pcORAb200efTV9JPyAvtd1upG0HHXa0gksHrW7TvuhwOv56IaLvSjyuvFfqBEFm5hAd8VP5NvNZUfqrKW2emGE89tyr0iz7hW0NUmMX9Kkx3HSyZHff7oX+b3orLNanBtVqDVNqDWdhYTQPSOsPegFHbTZ850A+wJNehAn3ITuz5V4XM5ZMlLgx7xOx+625t3uZXRD4CwGTrh8yhNhZdaObNZhxrOyLbUy7y1RI/vHNrI1cNqe3WJsHBrbxo1Zdtz2GjUzO7aZmxkquLjOeO0M8QOJsRFlPNfFDnPCbbWcLnp5WtQnnTDE9Z4aaoz9VJtD+4rD4HmQq2IzzvvKAueVdbHmDLHmTNafxmrFtoVNDD7XiJFHunndj9QQmkOlLtacLNacItacKtac9oN7R+AuLUdD3vHqdT9S5v/7YnPjNBRbAsf3gmiuxeZqPBNbF922c8zrdaN12AgjO4hmmc7pwNg2trnh2WU3fMxxLrN903hGbgh7uPEL1ua6ix7bJYxn5ca4pM+FeMDVCoW6nyrWm1VNrLmsYd8bm+MYu23qdY96rTWW9c7xWLe9pbjrnbXXcqx3rjs3FjV3NDZ374h+84zjOzZgKteAz6z3ybS6WHOyWHOKWHOqWHOaWHO6UJ/TDLHmTKH1W7PEmhM7rNHFDmt0scMaXeywRhfbEehZrZB4W+6NLXbCQ5pIcz1NpJ7zfGvdGTLFmrPEmmuwHZ7Fg7vIjJHz+APrfSpDFppJQxnPHDNULjSX8/jD6346TWxmdTElmqsFR9f9VGJrgTFmLRhVorn2//h6n84U2/6bYtt/U2z7b4pt/02xEwFT7AqPKXaFxxQ7KjLFjopMsaMiS2ytsMTWCktsrbDE1gpLbK2wxNYKS2ytsMTWCktsrbDE1oqG2FrREFsrGmJrRUNsrWiIrRUNsbWiIbZWNLJaYY5rblPbWzrr+vn14rFWRbEBt0uWEfPPMI6NjS2fWd1tjJ1+M05/yu5k67LG2BamWsw+34lxIb4qKxNZVmVd1U35Qt1vKkINyqINKqINqqINaqIN6qINGqINmqINWqINNhiDc+MavK3IsevCLcrCLSrCLarCLWrCLerCLRrCLZrCLVrCLQqvM4rwOqMIrzOK8DqjCK8zivA6owivM4rwOqMIrzNKXGd6xCL5N1nwakv2amsYoJviiMFe5GLzdrh80vY3bv7rT39mxzNf2IAmH0TbSMTTg3Yz8oI5tDVaJkFHXru16h9+IDaxaWULMUm+IEI72WdfcS7avi8dO3fmzPFTZy+cnzv+2IUzp0+fJV/+zghNF+mePvno6VNEe252AT/bLf1nOxIE9tq8G0arb/viHe/9nP3+DWhiDk2F7rNOHNb4oZUpLL8UoY0ESj3KxQhGWTRb+rkJhRqln1tQ7FD6eQMKBsLjePJ3GT8AE95D/ypDETZUQYFiZqiCCkXBUAUNimuhCjoUqUIVcB6Z2BP6VyDHKrVL8lAcM0AVgMyrOlUgeUj299O/qMCzahZVMKCtQqoAFLROiatASeuUuApkXKfENSDjOiWjARnXKRkNm0q2x9I/GIBJkz6UAZg06UMZgCOZ9KEMwJFM+lAG4EgmLS4DKBzToApA4Zi0khhA4Zi0eA2gcExavAZQOBYtXhMgaVGSJkDSoiRNgKRFSZoASYuSNAGSFiVpAiQtStIESFoAQIsCNCEFCtAECDcygADhBgVoAYQbFKAFEG4A3BqUmwWQbwC4GhSXBVmmjhcXTbLcEjHLJlG6/BFlyxhRshxBk+nwAgNVMeAlA6piwosAVMWCp/VUpQFP1FMVUobQ1JuqyPBkmqoo8PSYqqjwhJeqaPAUlqroJZNSqmOUTDOpjlkycaQ6VslUkOo0SiZ32EWSbr5eMl/LlOSSKVimpJTMqjIltWSilClpJXOfTAmgrdRZJQC3IrNKAG9FYZUA4IrKKgHEFZa4DBBXWOIyQFxhicsAcYUlLgPEk2H2qg+cbMFj3Ak1G1zHx3GOel7bsbufnw7e+uXnvvcfk2jiSbTxit3u4fHrBJkBTGjI97HBbSfOnpy/cPTIwtyxCN2917eXnHBvZy308Uh5L26s9pIjNvPeEjlbI+HvxV+zvT9Onveadtt5y4s3PfNc/X++sQFtmkNblvG4vum1nHm0uUkibwM80Lg5Pim0lzza3oUocLtL++fRNjyrcLqh63XjB9o3j7YQhR5+hPT9prAZ4FYzfbf5ih24djd5u+r/H/4XocljpyKE8P+fXSZ/PxiL1TyMuW7kLDnBzV97/iPffdvbrUkylk9h0NzEeqd6nYtO8JMff88dN/zCV95BjzCFmFM2h9lI7Bux8Psvs4/PFUyAppgJEHn1jqG5zAT588/EH76LvI0nF5si9uzQKvk29PNUTOjx90ZJLum8Jo5m8AftxMZX2UxMFDzlxuzVhpHPO5l/3s3x92xNJysycGAp/VgBTiClH6vAkaL0Yw3PQ29c9IKmM9ea67ac1ZgFOwEdOJaWOtsLXzz/9X+9400P0TKdiEh0OTYQOK0+Fuw19xXPh+NzaifwTNQJFuwrTvDEn37i4Luf+/zJSTQ5j7Y223YYkh48ddRt5GBKK04ToR2J67ve3gUHu2/bfda+2Hb2k8psFX/ZeeKZx1d9PPkllSN+e9TttnBGjrRsP3KCfn7xI7PRPE57MDU5VbflnXd//+0/9cInyWG6ADcw8bcOq65se+tTX/nD7//cZKx2S6bW1/jwT/z0wref/OKBGOOKgu68501p83AUNzZS+lpq2t3jLTd6M1u3kvOBvo8L8AB8HpDN68DTpVkniOcyQavB3QURTWT54qy9dCYp5sCPm7udF70Av91z0cM1q7Nvur6/Ywd4RJb9QfZX9+PpfORG5OBAu9fpMhVnQ0HF2VxUcfy84sTrE59LGh3G4chnz5A2dYbJwCU79J2AkH849Aco2E988+/rt37yAClKknhxZRYdHd1q71IbNdPcPT1zz5si3Oo+NZO0LJKDi2nm6TfPxA/irNyPdhQrFJZk/ABnM0HLYjvr1WTlqKhFmohIixT/y3CgddGNjQ6jJf9bWTmOjnFA0uo13JkPUyLVuZRSqgBTOp8JPes1nh3Bhbz7sauH5CF0nAeJXMODxWEkuIo3nTYDpYZug1RgLI9nYv1YdozbzW6Lrb8s7VlwD8OeII1yJ0Ej9kRnxJzMjPInLKOik5LpF+CaMXDyMeqfYEy693dTUVyXyEHZPpxJOkrY7HSb0ZrvZP38wD88rVx2Ww5T0bYU4JMKRgJbSeJb0ofex9AhT/de9jn35mKrs64slAbObLKNcVyU6EXyIvahw2/FXxnbS8enySiLfpy+7yMmD0Iw79q9PzE3mKz/b+CTga+DPIobCXkKYuSX8578cRG5PGuHl1+aXN48kEvsp8TG+woziQczyWJqbZqsYRCJ60NtmlkWr033l6hr0/0137HR7HS7brRr566Ze8hXzeyWcK+6a/fu/eFaFz8jOR137WHd1IeVNg3ExHOQQ0x8duxcHyIZ7h8jTLM988TM7v1V4wH0RejFwb6IiCYzmE26EhX9aPG4kp4HLe5RSGIXTx+GKid2RPLZ+4cLI3mKCO0rHoifdKJlr9UffCXvS4bid+eH4oPpyVj8+Nr75rff9vxaMhZ/dTbIHtR94/yrbnjyXV/91mQ60FtauQvdkcdCih2/nnUinMXwzcn4KaaN4nH2IXicncvJ4FenOUtark+N7aj39nzshw7urRaS3m0Xccvd+5ttL8RvbdwBXF/++Fr0qjx4MmwibXKpH76moJNIRwRE41cgbyTinwae4esrd6LX5J8BDx8ezR4jX/Lk9b+TRumGFdxQkA7krH1x7GK8jT6318PzVdLkpOV4dUquvyaxVcz49mF0gmN8axi1ZHTLss0P07IhrjxYAQf0ise5EdpBPSGvT4w+3/cC3OGyrVASoAiOhTPusQF4VFzBBvoVFEc6+CV//uB4tWEnms4/ADH1WPI+aQ7BOnFrMjzJF8XYlUMGutxF/PdweSF9mjZ9mqvW3gmaCz6IZjnqiqnX1AYzFcQIQ69rt6Wu3XGKp4KDKuBUEL2HiurMkE+iR3ioGDVdHWpCaI3ohU5AVgYzOGDdyTRhRr9IRXUYnUVneBg18p4TroVSZ22B6OP/k9yTEcMZnGPWj/ah+/gSwMTeS4UAYj/4Oj5wbU4y6X8fFcwjPvwDLuILKtRTaJ6jUK16zdJAxyfls0Dme1lxaoON9rAqWJCT56iojus/guZ4KGkDjWbgkXxJF/E8sYu7B59df41HGCV6sKO/n4rq8OFrPi29psmwFzlJaMTo5jPThBl9gIrqMJpHD/MwsoabT9Jd4Exi95C8ZrPHOFG8LVOmCBP6IBXVIfQ6dJqHUKPMi3wvdMm0N+dJJrqHQxtm9WEqqsNqAb2Og1VDrenlnbGzanfcrhMwTtVA93Lpw7w+SsVL0RVvpVvUSXgpEKim0Jgu2Yr6t49FzC1iEXMbWMTe6hXlbueKBm7ZSnr6j1ExZk+/+ep5DN/wTa7LNROuXllWSY0J8y7DoQ93+s9TIcBlhK8v8HVvcl2tGTA5Ol8e2b2Vz6xjWh+iok9rcse6FxCEc+MbXMp1rYRbVh9HDy77qjC5D1Pxw0FOLyGXtV6jyfVVYXIfoYKDHF1svze/2N694gSRRL7nrNvBRRW/Z9bVyQ5ny1m0e+2IhKut4X97Tp7c02qR7/pbPwmadV66UjmNTnKVilFSKv1+JCsWHd01Uhcul49SUW2P5hv+ynWzzKOTbjc//C1ThKn9KhXVpsY3JJbrVlnPwwxPRg+Jc9owv49RIZSfoKHOo+gUDzXZrOlsoFSqHKNoJ7ODyGUDX+KKOkIXHhX/GhXX2yxCVvSabpROI9IkDCsL7eRRh3H9OhXVwfUYOseDS1XyuAZ9hcRCB2SlPLLDywyyA2gXbxIY2wtUCMC2jkDhLOIqdy8uPZAHnKNR6fEiBTjZpGbH74AjPBqd1qnAV2j0qI6qxRtFT8akkknbb1DBoLsUA4rQy/DoJbLJzHePb7fYKPFr0Q3MoYe4HM+oDW9PsPwzV9uLfqREC/SuDfdTUcVmny/MUVatmjo8w+3Yq8cXF/HEK7+3VawCA6pRIWIeGwaoPnyTaRBfXiqdmyMBAXEAhxfsJK/jKPQ44dTaH02ijfNoC0nwiEMq3iuS2HRylGPvghPtn0evyKJf4oQDOidtH+tsDbwVnP68HQdjk2MbIdHtv98W9nwnSOPf2aMf6Y/ErKaHFGiDcWPcYGwnL1cjNOEWLX1wLvS8jDYxSZMBHemlBw4V6EgvPXCoAEtFGj24pQBnGrXsqDJwplGjJw9V4EyjRk9sqvLqKrffEzG8Yz8UutDr+rhEuk7rLAl0L9mvJ464Qer7boTug2I9kwt0mRDPZBObnNOBy5tM4NzI6fTne1evLVCRzNMWkDDwpKt2s3p/G5oib6EQj9cW9kv7Cl2PAH2qUkOYJ9HjnFyslAsusKeUp6cPHZyuTx+eniF7DHvabvfyzPS+6ZmlwF5L3mX4DqPXjpFKAGWZUH66UpT3IYvX+xoyizmjeCfa1v+jAEgKgXThOoWkqFofklwESRYCSSWQ7OsVkmn1IalFkFQhkDQCqXmdQlJlxpPqRZDqQiARNBucSkHinENoas3U2CAGjCGedR4LcI/PxuxIJE4VUoJHyHUqqoPm9ehJLjR6TWN3U0lUYXg5zne6697sBQEeH7XsNSeeKDC0jqA9Y6WDASpUVAfg0+gpHoC6Wr4w0sV/7ccgDy6PHEXSeAnhRZLfpKI6CJ9Aj3EhNGpybkt/2e1GUhJ7mXhU4DQd94ojeSv5bf2DaDd3GpjcJ6ioDjm+6G9CTlFY71txLh7xfamzdmzZDpaAlm1YCWbzW1RUhw2vV5k1WZN5vCq+r21Mr6JpYHK/TUV1yHF2l5icUreKvOrIAKk96NWgDkzmd6ioDpnH0XkeMoZWtGkQr/7jNjqJnidugr3EC1rFLjUyDQzu96ioDjjO7QNT5tltWUi2OIu3D0YlgbH9PhUv7fbBBhpPndxjByzm63S1X28MLeZ/ioqhxXz8aoM2Iro6LrkNp0vWstaxcPnKOHO308wBex063anQgJVNne6WaMDKpk53SzRgZdOga6MasLJpZHcRAiubBl361IENGYOubOpAGRpZGQIcDJpNHeBg0Gzq1roXT+NGenBfhB66LF04ndqZ87UNndTTuiU+RD7v+9G2q9fyWMjgankaNVPs9Fg3iqbHukmAVWsO2EAmJyJNF7sYBTCyCKNqTfM4Q0gttWaO7r+i/GpC6QkgNoEAtA2CVnvJO7nSQ0OGzHZpUFG9ga9Z24m2p76pPz1918HpGWDhPW7NxkFpkEo8ZRR1s/61OcDE2bRZVo1ZHtWLqq0uwrcMshsxdYXbt2Kda1B1OTE1FBaTiP0IABNp2KYsPkxJTtJLDi4GXvdZJ/QW8VzTW3ECyW/b0aIXdJJbCps0qFQ63sXyEWctCzPloT32aYP8QFUH9ncNugGsl+zvDtVlWnaH0UGustPZ3lt7evogruhP9Dfmbkc3DX2GNl9Mbo8cuwDJXsnUvnwBMiccJvsF+IaY2LU60Mi5F9AwarJZvyauTjqaqWqdRTuHFjggKfVRHbmz6obRXBj22J58P+JNIQAuQTp1oOJduXlVunJDcFdO2E0dqnxXrtRzXblRVHENIb4Vz1L++DrtyhU515WL2BAGMMUTlQfG6cpJgl+6Ft0x9EMBdN1DN69ad6zI17Q7jqc0R6/X7liRB7rjq+euZjxj+ValumO+Ux6KYpRvn4ZDS8IGunu0MrwY/GkqqoOK7/oaRW3UZJndlkkvKvV8p1t6vWuqADP5DBXXHRMSbVavX4WLgdFnqagOE75YcEXLTjvnctxy2k4E3HM0qAJj+RwV1cHCdzJK0YyaygYBBa14Q5dGrLSdwXugmJNRoC4M6k+oqA4ovo1zRTNHgSKhUfHx2sjNETuE7udPBKP7Myqqg45vm1PRLB50Trc1AI7Z5hyVBMb2eSqqg423ajZKsTltKcgvrMNVs68Lg/oLKqoDiu+Cd0Wv50HFMYqBc6VjAyOAvAKM5AtUVAcJ38F0RddqCtvbEYXFtrciLbpOuyV1vdm868T3BZSrwpi+REV1MJ1AD3Jh0muKOrjuFS5Jbae7FC0Xh/QM6cBgvkxFdcBw9nYk2EktmYBkYcBS5EV2u7i3G50IRveXVFQHHV/oq6Jb5ehyB3yH8JWEvhYnhBH+FRXVQcg5/dUbBdUyt7g8iI2Z/sLKMKq/oeK6Q2XI+YY+OQIYe0h6G65EojWLUcHKMKq/o6I6qDiHCYZSUwp+9GT9k+J/oKI6SDgnxYZaiETI78Cgr1JRHSy8nqLWzKuyfPI1KqqDhC/6WTHwSIndIYwbjWRlRIpcvzikflgJRvOPVFQHDec8jdw2bw2iSZrWYkLMPA3UhUH9MxXVAcV345Ni4EFlo/RWWObSvKHD7QN6MKB/oaI6gPgueVOMwvsqhi7DFXFt7r9RUR1IfFcUKWa9ljvc0/KaEv6v1yE/7hI6zcBprrWdK7n+i7miqEwdxvUNKqqDi7PhNrPz/fnpa9eLur12u7jhHlaC0XyTiuqg4VwkMeV8nxY4HbfbkuJfiYwnWafyS9/MIgmkCmP6Tyqqg4nXg+SaVbRIIsyDvkVFddA8g97AhUbJd/2DU/a4e08O+s67HTeSnCDIHRU7juSx08Igv01FdUByTmNNraaUTvhXlr127ta5+FrDkdowq+9QIeL6pj4hMdQ4ly9NveB3jrCm242vdZzNV0xICWb0X1QIvQNMOC2+32xQzKJfhRI++vxvKqrNjO+ia8U0RzATNiD9LhXV5sa5gmA2CrhlvzBHeY35G3QxpxepEMpJUGt/EO1P6ZDea2+yqEh+mjA5J1yT9dw+XfprKAOhOjGVQg2YyveoqE7P12/Di1g0aha7bEvunMQvpHhW0vQ6nV6X/KqjU9zhlWjDiP6Xiuog6k+LCxApMnYXlYORtGIHrP8wYQOjksC0vk9FdWj1o1GLaCk1WR7aBHc7S1K4bAesHzFbmUM68I96o0xUhscsOlrCQx3gwexyEJ2Ol/v1d+bndYoVYTKTmagMmWPoSAkZs2aw1QpXDTdakxbdVaclhSSkxisGU6wIg5nKRGXAHEIHSsA0anJdG1hZIjOxOICmeDdkUAWmsSkTlaHR3yQqoKFqA83vcEhR0/PXipe1QV2Yz5ZMVIZPf1m7iI8+ko9vh5EzcLUVc/i5PAFMalsmKkOqPwMrIoXrla4ApNKdM793se2GbMQN89tUpfowpxszURlO/dWQAk4a6cJ1gBPdn4/WfEcKeyEeELM36cRXsXKngpm9PBOVYda/9KuImVrCLA18dJq4C2cX3ZjdgDJ1mNL2TFSGUn/zpIiSxutZi17QdMLIY7cr2fsMedLB3G7ORGW4HUD7SriZA228qECAiVszURkS/d3uIhJWSW+X84Se38rPW4Hw9+JEMLEdmagMsTPoUZiYLvPWObuHvcXtsovbD6DaOMlgardlojLUSv1MLxt15rI/dHCHx89GH+WZeE0mKkOsdNRALnSUDR5igRMfNBlz1NBPBTO7PROVYXYEHYaZkUjAesGOZuIe+BXDqI5uL1ODodyZicpAKa16JBawDi+YpNFJy3YoDd14zPgRRyoY2XQmKoOsH0pQhEwrRZZOUqSuN3RFL9NYjU4EA7s7E5UBVu5jOhewK66zEp8+4fKxolQwsp2ZqAyy/h0tRciMfCw8kPn4tpUiT5tF9XGTwvDuy0Rl4JWudZKAOnblod0k4ZV4JownK+HQuh6z1lmsCIPZlYnKgCnvARv50Kd8fptep7gHLFKDodyficpAOYoegKGQyEILhBIFueOEcYRAiR6MpZaJymAprUQkTK4BYhncXgIr0eg9JikTlQFT7i9Kmb8M7DCB/jJyg6meicpgKW1bTLW8bQn42pbynkjJxJhQ/h+65oiU59QAAA==" />
+</form>
+	
+	
+	
+	<div id="outerDiv" style="overflow: auto;">
+		<!-- base info -->
+		<ul class="page-ul" style="overflow: hidden;">
+			<li class="field-li">
+				<div class="field-div field-label">&#22995;&#21517;</div>
+				<div class="field-div field-content" id="wOwner"></div>
+			</li>
+			<li class="field-li">
+				<div class="field-div field-label">&#26085;&#26399;&#33539;&#22260;</div>
+				<div class="field-div field-content"  id="wScope"><span id="scopePanel">2026-06-08 ~ 14</span></div>
+			</li>
+			
+			<li class="field-li" style="clear: both;">
+				<div class="field-div field-label">&#25152;&#23646;&#37096;&#38376;</div>
+				<div class="field-div field-content"></div>
+			</li>
+			<li class="field-li">
+				<div class="field-div field-label">&#34892;&#25919;&#32844;&#20301;</div>
+				<div class="field-div field-content"></div>
+			</li>
+			
+			<li class="field-li" style="clear: both;">
+				<div id="rightUserLabel" class="field-div field-label">&#26377;&#26435;&#26597;&#30475;&#32773;</div>
+				<div class="field-div field-content content-whole">
+					<span id="rightPanel">
+						<div id="rightUserDiv" style="display: none;margin-left: -1px;">
+							<input id="_rightUserName" class="inputText img-cursor" style="width: 716px;" readonly="readonly" ondblclick="$(this).next().click();" onmouseover="this.title=this.value">
+							<img class="img-cursor" onclick="searchMulData($('#_rightUserId')[0], $('#_rightUserName')[0], '/pages/common/searchUserMul.jsf', null, function(s){if(s=='Y'){setPageInfoChanged(true);}});" src="/images/icon042.gif"/>							
+						</div>
+							
+						<div id="rightUserNames" onmouseover="this.title=this.innerText"></div>
+		
+						<input id="reportId" type="hidden" name="reportId" /><input id="fileCount" type="hidden" name="fileCount" value="0" /><input id="startDate" type="hidden" name="startDate" value="2026-06-08" /><input id="isThisWeek" type="hidden" name="isThisWeek" value="Y" /><input id="summaryInfo" type="hidden" name="summaryInfo" /><input id="rightUserIds" type="hidden" name="rightUserIds" /></span>
+				</div>
+			</li>
+		</ul>
+		
+		<!-- worklog note -->
+		<div id="logNote">
+			<div class="field-module-title" style="width: 842px;">
+			    <h3 onclick="toggleModule($(this));return false;">&#25209;&#27880;</h3>
+			</div>
+			
+			<div id="noteDiv" class="note-div tableNemLine" style="margin-bottom: 18px;"></div>
+		</div>
+		
+		<!-- task record -->
+		<div class="field-module-title" style="width: 842px;">
+		    <h3 onclick="toggleModule($(this));return false;">&#24037;&#20316;&#20219;&#21153;&#35760;&#24405;</h3>
+		</div>
+		
+		<div id="taskRecordDiv" class="container-pad"></div>
+		
+		<!-- unplan task -->
+		<div id="unHead" class="field-module-title" style="margin-top: 18px;width: 842px;">
+		    <h3 onclick="toggleModule($(this));return false;">&#35745;&#21010;&#22806;&#20219;&#21153;</h3>
+		</div>
+		
+		<div id="unBody" class="container-pad"><input id="logDailyDays" type="hidden" name="logDailyDays" value="6" />
+			
+	
+			<div id="unplanedDate" max='24' style="margin: -3px 4px 6px 10px;margin: -5px 4px 11px 10px\9;">
+				
+					<span day='0' onclick="chooseUnDate($(this));" class='user-link' style='margin-right: 10px;' status='1' title='2026-06-08' effort=''>&#21608;&#19968;</span>
+				
+					<span day='1' onclick="chooseUnDate($(this));" class='user-link' style='margin-right: 10px;' status='1' title='2026-06-09' effort=''>&#21608;&#20108;</span>
+				
+					<span day='2' onclick="chooseUnDate($(this));" class='user-link' style='margin-right: 10px;' status='1' title='2026-06-10' effort=''>&#21608;&#19977;</span>
+				
+					<span day='3' onclick="chooseUnDate($(this));" class='user-link' style='margin-right: 10px;' status='1' title='2026-06-11' effort=''>&#21608;&#22235;</span>
+				
+					<span day='4' onclick="chooseUnDate($(this));" class='user-link' style='margin-right: 10px;' status='0' title='2026-06-12' effort=''>&#21608;&#20116;</span>
+				
+					<span day='5' onclick="chooseUnDate($(this));" class='gray-link' style='margin-right: 10px;' status='-1' title='2026-06-13' effort=''>&#21608;&#20845;</span>
+				
+					<span day='6' onclick="chooseUnDate($(this));" class='gray-link' style='margin-right: 10px;' status='-1' title='2026-06-14' effort=''>&#21608;&#26085;</span>
+				
+				
+				<input type="button" onclick="addUnplanTask();" class="button" value="&#26032;&#24314;&#20219;&#21153;" />
+				
+				<span style="color: blue;margin-left: 30px;">&#24403;&#26085;&#25237;&#20837;&#24037;&#20316;&#37327;&nbsp;<span id="dayEffort"></span></span>
+			</div>
+			
+			<table id='unplannedTab' class="tableLayout" style="width: auto\9;"></table>
+		</div>
+		
+		<!-- next double week task -->
+		<div class="field-module-title" style="margin-top: 18px;width: 842px;">
+		    <h3 onclick="toggleModule($(this));return false;">&#19979;&#21452;&#21608;&#24037;&#20316;&#35745;&#21010;</h3>
+		</div>
+		<div  class="change">
+			<input type="radio" name="roleType" id="TaskforOwner" checked="checked" onclick="doubleWeekTask('Y')" /><label for="TaskforOwner" class="focus-link" title='&#25105;&#36127;&#36131;&#30340;&#20219;&#21153;'>&#25105;&#36127;&#36131;</label>&nbsp;&nbsp;&nbsp;
+			<input type="radio" name="roleType" id="TaskforActor" onclick="doubleWeekTask('N')" /><label for="TaskforActor" class="focus-link" title='&#25105;&#21442;&#19982;&#30340;&#20219;&#21153;'>&#25105;&#21442;&#19982;</label>
+		</div>
+		
+		<div id="weekTaskDiv" class="container-pad"></div>
+		
+		<!-- week finish task -->
+		<div class="field-module-title" style="margin-top: 18px;width: 842px;">
+		    <h3 onclick="toggleModule($(this));return false;">&#26412;&#21608;&#23436;&#25104;&#20219;&#21153;&#35760;&#24405;</h3>
+		</div>
+		
+		<div id="finishDiv" class="container-pad"></div>
+		
+		<!-- daily detail -->
+		<div class="field-module-title" style="margin-top: 18px;width: 842px;">
+		    <h3 onclick="toggleModule($(this));return false;">&#24037;&#20316;&#24773;&#20917;&#24635;&#32467;</h3>
+		</div>
+		
+		<div id="daily" class="container-pad">
+			<table id="detailTab" class="tableLayout" style="width: auto;">
+				
+					<tr class="even">
+						<td class="commonCell log-detail-day" style="width: 90px;text-align: center;" rowSpan="2">
+							&#21608;&#19968;<br>2026-06-08
+						</td>
+						
+						<td class="commonCell log-detail-title" style="width: 80px;text-align: center;">
+							&#24037;&#20316;&#24773;&#20917;
+						</td>
+						 
+						<td class="commonCell" style="width: 672px;height: 80px;" valign="top">
+							
+							
+							<div id="log-remark" style="width: 99%" class="remark">
+								
+							</div>
+							
+							
+								<textarea style="display:none;border:0px;" class="inputTextarea log-detail-area" onkeyup="setPageInfoChanged(true);setDivData($(this));checkDetailArea($(this));"></textarea>
+							
+						</td>
+					</tr>
+					
+					<tr class="even">
+						<td class="commonCell log-detail-title" style="text-align: center;">
+							&#23384;&#22312;&#38382;&#39064;
+						</td>
+						
+						<td class="commonCell" style="height: 80px;" valign="top">
+							
+							
+							<div style="width: 99%" class="remark">
+								
+							</div>
+							
+							
+								<textarea style="display:none;border:0px;" class="inputTextarea log-detail-area" onkeyup="setPageInfoChanged(true);setDivData($(this));checkDetailArea($(this));"></textarea>
+							
+						</td>
+					</tr>
+				
+					<tr class="even">
+						<td class="commonCell log-detail-day" style="width: 90px;text-align: center;" rowSpan="2">
+							&#21608;&#20108;<br>2026-06-09
+						</td>
+						
+						<td class="commonCell log-detail-title" style="width: 80px;text-align: center;">
+							&#24037;&#20316;&#24773;&#20917;
+						</td>
+						 
+						<td class="commonCell" style="width: 672px;height: 80px;" valign="top">
+							
+							
+							<div id="log-remark" style="width: 99%" class="remark">
+								
+							</div>
+							
+							
+								<textarea style="display:none;border:0px;" class="inputTextarea log-detail-area" onkeyup="setPageInfoChanged(true);setDivData($(this));checkDetailArea($(this));"></textarea>
+							
+						</td>
+					</tr>
+					
+					<tr class="even">
+						<td class="commonCell log-detail-title" style="text-align: center;">
+							&#23384;&#22312;&#38382;&#39064;
+						</td>
+						
+						<td class="commonCell" style="height: 80px;" valign="top">
+							
+							
+							<div style="width: 99%" class="remark">
+								
+							</div>
+							
+							
+								<textarea style="display:none;border:0px;" class="inputTextarea log-detail-area" onkeyup="setPageInfoChanged(true);setDivData($(this));checkDetailArea($(this));"></textarea>
+							
+						</td>
+					</tr>
+				
+					<tr class="even">
+						<td class="commonCell log-detail-day" style="width: 90px;text-align: center;" rowSpan="2">
+							&#21608;&#19977;<br>2026-06-10
+						</td>
+						
+						<td class="commonCell log-detail-title" style="width: 80px;text-align: center;">
+							&#24037;&#20316;&#24773;&#20917;
+						</td>
+						 
+						<td class="commonCell" style="width: 672px;height: 80px;" valign="top">
+							
+							
+							<div id="log-remark" style="width: 99%" class="remark">
+								
+							</div>
+							
+							
+								<textarea style="display:none;border:0px;" class="inputTextarea log-detail-area" onkeyup="setPageInfoChanged(true);setDivData($(this));checkDetailArea($(this));"></textarea>
+							
+						</td>
+					</tr>
+					
+					<tr class="even">
+						<td class="commonCell log-detail-title" style="text-align: center;">
+							&#23384;&#22312;&#38382;&#39064;
+						</td>
+						
+						<td class="commonCell" style="height: 80px;" valign="top">
+							
+							
+							<div style="width: 99%" class="remark">
+								
+							</div>
+							
+							
+								<textarea style="display:none;border:0px;" class="inputTextarea log-detail-area" onkeyup="setPageInfoChanged(true);setDivData($(this));checkDetailArea($(this));"></textarea>
+							
+						</td>
+					</tr>
+				
+					<tr class="even">
+						<td class="commonCell log-detail-day" style="width: 90px;text-align: center;" rowSpan="2">
+							&#21608;&#22235;<br>2026-06-11
+						</td>
+						
+						<td class="commonCell log-detail-title" style="width: 80px;text-align: center;">
+							&#24037;&#20316;&#24773;&#20917;
+						</td>
+						 
+						<td class="commonCell" style="width: 672px;height: 80px;" valign="top">
+							
+							
+							<div id="log-remark" style="width: 99%" class="remark">
+								
+							</div>
+							
+							
+								<textarea style="display:none;border:0px;" class="inputTextarea log-detail-area" onkeyup="setPageInfoChanged(true);setDivData($(this));checkDetailArea($(this));"></textarea>
+							
+						</td>
+					</tr>
+					
+					<tr class="even">
+						<td class="commonCell log-detail-title" style="text-align: center;">
+							&#23384;&#22312;&#38382;&#39064;
+						</td>
+						
+						<td class="commonCell" style="height: 80px;" valign="top">
+							
+							
+							<div style="width: 99%" class="remark">
+								
+							</div>
+							
+							
+								<textarea style="display:none;border:0px;" class="inputTextarea log-detail-area" onkeyup="setPageInfoChanged(true);setDivData($(this));checkDetailArea($(this));"></textarea>
+							
+						</td>
+					</tr>
+				
+					<tr class="even">
+						<td class="commonCell log-detail-day" style="width: 90px;text-align: center;" rowSpan="2">
+							&#21608;&#20116;<br>2026-06-12
+						</td>
+						
+						<td class="commonCell log-detail-title" style="width: 80px;text-align: center;">
+							&#24037;&#20316;&#24773;&#20917;
+						</td>
+						 
+						<td class="commonCell" style="width: 672px;height: 80px;" valign="top">
+							
+							
+							<div id="log-remark" style="width: 99%" class="remark">
+								
+							</div>
+							
+							
+								<textarea style="display:none;border:0px;" class="inputTextarea log-detail-area" onkeyup="setPageInfoChanged(true);setDivData($(this));checkDetailArea($(this));"></textarea>
+							
+						</td>
+					</tr>
+					
+					<tr class="even">
+						<td class="commonCell log-detail-title" style="text-align: center;">
+							&#23384;&#22312;&#38382;&#39064;
+						</td>
+						
+						<td class="commonCell" style="height: 80px;" valign="top">
+							
+							
+							<div style="width: 99%" class="remark">
+								
+							</div>
+							
+							
+								<textarea style="display:none;border:0px;" class="inputTextarea log-detail-area" onkeyup="setPageInfoChanged(true);setDivData($(this));checkDetailArea($(this));"></textarea>
+							
+						</td>
+					</tr>
+				
+			</table>
+		</div>
+		
+		<!-- worklog summary -->
+		<div class="field-module-title" style="margin-top: 18px;width: 842px;">
+		    <h3 onclick="toggleModule($(this));return false;">&#21608;&#24635;&#32467;</h3>
+		</div>
+		
+		<div style="margin-bottom: 10px;" class="container-pad">
+			<div id="summaryDiv" class="summary-div" style="height: auto!important;word-wrap:break-word"></div>
+			
+			<iframe id="FormatArea_Summary" name="FormatArea_Summary" style="width: 870px;height: 343px;" frameborder="0" scrolling="no" 
+				src="/pages/common/ueditor/ueditor.jsf?areaid=Summary&fieldname=Summary&height=280&width=98&blur=Y" ></iframe>
+		</div>
+	</div>
+	
+	<div id="unplanOperate" style="display: none;position: absolute;">
+		<ul class="menu-ul" style="border-top: 1px solid #999;width: 80px;">
+			<li onclick="iTaskOperation.process(-2, $unRow[0].id);" style="padding-left: 13px;border-bottom: 1px dotted #ccc;">&#25171;&#24320;</li>
+			<li onclick="editUnplanTask($unRow);" style="padding-left: 13px;border-bottom: 1px dotted #ccc;">&#32534;&#36753;</li>
+			<li onclick="deleteUnplanTask($unRow);" style="padding-left: 13px;">&#21024;&#38500;</li>
+		</ul>
+	</div>
+	
+	<table id="tipTab" cellspacing="0" cellpadding="0">
+		<tr><td><div class="tip-td-div">&#20219;&#21153;&#21517;&#31216;</div></td><td id="tipName" style="padding: 0 5px;"></td></tr>
+		<tr><td><div class="tip-td-div">&#35745;&#21010;&#24320;&#22987;&#26085;&#26399;</div></td><td id="tipStart" style="padding: 0 5px;"></td></tr>
+		<tr><td><div class="tip-td-div">&#35745;&#21010;&#23436;&#25104;&#26085;&#26399;</div></td><td id="tipEnd" style="padding: 0 5px;"></td></tr>
+		<tr><td><div class="tip-td-div">&#23436;&#25104;&#29575;</div></td><td id="tipRate" style="padding: 0 5px;"></td></tr>
+		<tr><td><div class="tip-td-div">&#36131;&#20219;&#20154;</div></td><td id="tipOwner" style="padding: 0 5px;"></td></tr>
+	</table>
+	
+	<div class="hide">
+		<span id="noneTxt">&#26080;</span>
+		<span id="lengthTxt">&#38271;&#24230;&#19981;&#33021;&#36229;&#36807;2048</span>
+		
+		<span id="totalTip1">&#23567;&#35745; (&#35745;&#21010;&#20869;&#20219;&#21153;)</span>
+		<span id="totalTip2">&#23567;&#35745; (&#35745;&#21010;&#22806;&#20219;&#21153;)</span>
+		<span id="totalTip3">&#21512;&#35745;</span>
+		
+		<span id="editTip">&#28857;&#20987;&#25805;&#20316;</span>
+		<span id="editTip1">&#32534;&#36753;</span>
+		<span id="editTip2">&#21462;&#28040;&#32534;&#36753;</span>
+		
+		<span id="delUnplanTask">&#30830;&#23450;&#35201;&#21024;&#38500;&#25152;&#36873;&#20219;&#21153;&#21527;&#65311;</span>
+		<span id="delUnplanTask2">&#35813;&#35745;&#21010;&#22806;&#20219;&#21153;&#24050;&#22635;&#20889;&#24037;&#20316;&#36827;&#23637;&#65292;&#19981;&#33021;&#21024;&#38500;</span>
+		<span id="defaultDepartId"></span>
+		<span id="defaultDepartName"></span>
+		
+		<span id="taskBaseItem">&#23494;&#32423;&#19981;&#33021;&#20026;&#31354;</span>
+		<span id="taskNameEmpty">&#20219;&#21153;&#21517;&#31216;&#19981;&#33021;&#20026;&#31354;</span>
+		<span id="effortLimitMsg">&#24403;&#26085;&#22635;&#20889;&#30340;&#24037;&#20316;&#37327;&#24050;&#36229;&#36807;&#19978;&#38480;</span>
+
+		<span id="logTip">&#30340;&#24037;&#20316;&#26085;&#24535;</span><input id="loginUser" type="hidden" name="loginUser" value="699123a3-bff7-4d38-aeb5-987956dd216a" /><input id="dptId" type="hidden" name="dptId" /><input id="dptName" type="hidden" name="dptName" /><input id="data" type="hidden" name="data" value="{&quot;note&quot;:[],&quot;logHead&quot;:[{&quot;w&quot;:39,&quot;c&quot;:&quot;&lt;span cate='4'&gt;&#24207;&#21495;&lt;\/span&gt;&quot;},{&quot;w&quot;:39,&quot;c&quot;:&quot;&lt;span cate='4'&gt;&#25351;&#31034;&#28783;&lt;\/span&gt;&quot;},{&quot;w&quot;:325,&quot;c&quot;:&quot;&lt;span cate='4'&gt;&#20219;&#21153;&#21517;&#31216;&lt;\/span&gt;&quot;},{&quot;w&quot;:104,&quot;c&quot;:&quot;&lt;span&gt;&#20219;&#21153;&#24402;&#23646;&lt;\/span&gt;&quot;},{&quot;w&quot;:65,&quot;c&quot;:&quot;&lt;span cate='0' base=''&gt;&#29366;&#24577;&lt;\/span&gt;&quot;},{&quot;w&quot;:78,&quot;c&quot;:&quot;&lt;span cate='6'&gt;&#23436;&#25104;&#29575;&lt;\/span&gt;&quot;},{&quot;w&quot;:78,&quot;c&quot;:&quot;&lt;span cate='6'&gt;&#20272;&#35745;&#24037;&#20316;&#37327;&lt;\/span&gt;&quot;},{&quot;w&quot;:78,&quot;c&quot;:&quot;&lt;span cate='6'&gt;&#23454;&#38469;&#24037;&#20316;&#37327;&lt;\/span&gt;&quot;},{&quot;w&quot;:40,&quot;c&quot;:&quot;&#19968;&quot;},{&quot;w&quot;:40,&quot;c&quot;:&quot;&#20108;&quot;},{&quot;w&quot;:40,&quot;c&quot;:&quot;&#19977;&quot;},{&quot;w&quot;:40,&quot;c&quot;:&quot;&#22235;&quot;},{&quot;w&quot;:40,&quot;c&quot;:&quot;&#20116;&quot;},{&quot;w&quot;:40,&quot;c&quot;:&quot;&#20845;&quot;},{&quot;w&quot;:40,&quot;c&quot;:&quot;&#26085;&quot;},{&quot;w&quot;:40,&quot;c&quot;:&quot;&#21512;&#35745;&quot;}],&quot;logBody&quot;:[],&quot;workingDay&quot;:[1,1,1,1,2,0,0],&quot;unHead&quot;:[{&quot;m&quot;:&quot;N&quot;,&quot;w&quot;:39,&quot;t&quot;:&quot;&#24207;&#21495;&quot;,&quot;n&quot;:&quot;sn&quot;,&quot;c&quot;:&quot;&lt;span cate='4'&gt;&#24207;&#21495;&lt;\/span&gt;&quot;},{&quot;m&quot;:&quot;N&quot;,&quot;w&quot;:39,&quot;n&quot;:&quot;_operate&quot;,&quot;c&quot;:&quot;&lt;span&gt;&#25805;&#20316;&lt;\/span&gt;&quot;},{&quot;m&quot;:&quot;N&quot;,&quot;w&quot;:325,&quot;t&quot;:&quot;&#20219;&#21153;&#21517;&#31216;&quot;,&quot;n&quot;:&quot;Name&quot;,&quot;c&quot;:&quot;&lt;span cate='4'&gt;&#20219;&#21153;&#21517;&#31216;&lt;\/span&gt;&quot;},{&quot;m&quot;:&quot;N&quot;,&quot;w&quot;:104,&quot;n&quot;:&quot;ObjectID&quot;,&quot;c&quot;:&quot;&lt;span&gt;&#20219;&#21153;&#24402;&#23646;&lt;\/span&gt;&quot;},{&quot;m&quot;:&quot;N&quot;,&quot;w&quot;:104,&quot;t&quot;:&quot;&#20219;&#21153;&#31867;&#22411;&quot;,&quot;n&quot;:&quot;TypeID&quot;,&quot;c&quot;:&quot;&lt;span cate='0' base='32672dd5-0d4d-4cd8-9ca2-8d663c1e1451'&gt;&#20219;&#21153;&#31867;&#22411;&lt;\/span&gt;&quot;},{&quot;m&quot;:&quot;N&quot;,&quot;w&quot;:65,&quot;n&quot;:&quot;_rate&quot;,&quot;c&quot;:&quot;&lt;span&gt;&#23436;&#25104;&#29575;(%)&lt;\/span&gt;&quot;},{&quot;m&quot;:&quot;N&quot;,&quot;w&quot;:65,&quot;n&quot;:&quot;_effort&quot;,&quot;c&quot;:&quot;&lt;span&gt;&#24037;&#20316;&#37327;(h)&lt;\/span&gt;&quot;},{&quot;m&quot;:&quot;N&quot;,&quot;w&quot;:130,&quot;n&quot;:&quot;_remark&quot;,&quot;c&quot;:&quot;&lt;span&gt;&#24037;&#20316;&#24773;&#20917;&lt;\/span&gt;&quot;},{&quot;m&quot;:&quot;N&quot;,&quot;w&quot;:130,&quot;n&quot;:&quot;_issue&quot;,&quot;c&quot;:&quot;&lt;span&gt;&#23384;&#22312;&#38382;&#39064;&lt;\/span&gt;&quot;}],&quot;unBody&quot;:[],&quot;weekHead&quot;:[{&quot;w&quot;:39,&quot;c&quot;:&quot;&lt;span cate='4'&gt;&#24207;&#21495;&lt;\/span&gt;&quot;},{&quot;w&quot;:325,&quot;c&quot;:&quot;&lt;span cate='4'&gt;&#20219;&#21153;&#21517;&#31216;&lt;\/span&gt;&quot;},{&quot;w&quot;:104,&quot;c&quot;:&quot;&lt;span&gt;&#20219;&#21153;&#24402;&#23646;&lt;\/span&gt;&quot;},{&quot;w&quot;:40,&quot;c&quot;:&quot;&#19968;&quot;},{&quot;w&quot;:40,&quot;c&quot;:&quot;&#20108;&quot;},{&quot;w&quot;:40,&quot;c&quot;:&quot;&#19977;&quot;},{&quot;w&quot;:40,&quot;c&quot;:&quot;&#22235;&quot;},{&quot;w&quot;:40,&quot;c&quot;:&quot;&#20116;&quot;},{&quot;w&quot;:40,&quot;c&quot;:&quot;&#20845;&quot;},{&quot;w&quot;:40,&quot;c&quot;:&quot;&#26085;&quot;},{&quot;w&quot;:40,&quot;c&quot;:&quot;&#19968;&quot;},{&quot;w&quot;:40,&quot;c&quot;:&quot;&#20108;&quot;},{&quot;w&quot;:40,&quot;c&quot;:&quot;&#19977;&quot;},{&quot;w&quot;:40,&quot;c&quot;:&quot;&#22235;&quot;},{&quot;w&quot;:40,&quot;c&quot;:&quot;&#20116;&quot;},{&quot;w&quot;:40,&quot;c&quot;:&quot;&#20845;&quot;},{&quot;w&quot;:40,&quot;c&quot;:&quot;&#26085;&quot;}],&quot;weekBody&quot;:[],&quot;finishHead&quot;:[{&quot;w&quot;:39,&quot;c&quot;:&quot;&lt;span cate='4'&gt;&#24207;&#21495;&lt;\/span&gt;&quot;},{&quot;w&quot;:325,&quot;c&quot;:&quot;&lt;span cate='4'&gt;&#20219;&#21153;&#21517;&#31216;&lt;\/span&gt;&quot;},{&quot;w&quot;:104,&quot;c&quot;:&quot;&lt;span&gt;&#20219;&#21153;&#24402;&#23646;&lt;\/span&gt;&quot;},{&quot;w&quot;:104,&quot;c&quot;:&quot;&lt;span cate='5'&gt;&#35745;&#21010;&#24320;&#22987;&#26085;&#26399;&lt;\/span&gt;&quot;},{&quot;w&quot;:104,&quot;c&quot;:&quot;&lt;span cate='5'&gt;&#23454;&#38469;&#24320;&#22987;&#26085;&#26399;&lt;\/span&gt;&quot;},{&quot;w&quot;:104,&quot;c&quot;:&quot;&lt;span cate='5'&gt;&#35745;&#21010;&#23436;&#25104;&#26085;&#26399;&lt;\/span&gt;&quot;},{&quot;w&quot;:104,&quot;c&quot;:&quot;&lt;span cate='5'&gt;&#23454;&#38469;&#23436;&#25104;&#26085;&#26399;&lt;\/span&gt;&quot;},{&quot;w&quot;:78,&quot;c&quot;:&quot;&lt;span cate='6'&gt;&#20272;&#35745;&#24037;&#20316;&#37327;&lt;\/span&gt;&quot;},{&quot;w&quot;:78,&quot;c&quot;:&quot;&lt;span cate='6'&gt;&#23454;&#38469;&#24037;&#20316;&#37327;&lt;\/span&gt;&quot;},{&quot;w&quot;:78,&quot;c&quot;:&quot;&lt;span cate='6'&gt;&#20559;&#24046;&#29575;&lt;\/span&gt;&quot;}],&quot;finishBody&quot;:[]}" />	
+		
+		
+		
+		
+		
+	</div>
+	
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<link rel="stylesheet" type="text/css" href="/styles/multilevelMenu.css?V=V808R08M07SP0802"/>
+<link rel="stylesheet" type="text/css" href="/styles/utils/messageTool.css" />
+
+<script type="text/javascript" src="/scripts/util.js?V=V808R08M07SP0802"></script>
+<script type="text/javascript" src="/scripts/tool.js?V=V808R08M07SP0802"></script>
+<script type='text/javascript' src="/scripts/json2.js?V=V808R08M07SP0802"></script>
+<script type="text/javascript" src="/scripts/engine.js?V=V808R08M07SP0802"></script>
+<script type="text/javascript" src="/scripts/multilevelMenu.js?V=V808R08M07SP0802"></script>
+<script type="text/javascript" src="/scripts/task/taskOperation.js?V=V808R08M07SP0802"></script>
+<script type='text/javascript' src="/dwr/interface/jtaskEntityBean.js?V=V808R08M07SP0802"></script>
+<script type='text/javascript' src="/dwr/interface/jviewConfigUtil.js?V=V808R08M07SP0802"></script>
+<script type="text/javascript" src="/scripts/utils/messageTool.js?V=V808R08M07SP0802"></script>      
+<div id="menu" class="menu">
+    <div id="STATIC_OP" class="item" onclick="iTaskOperation.process(0)"><img class="image" src='/images/icon202.gif'/><div class="text">&#25171;&#24320;</div></div>
+   	
+   	<div id="STATIC_CM" class="seperator"></div>
+    <div id="STATIC_CM" class="item"><img class="image vhide"/><div class="text">&#27807;&#36890;</div></div>
+    <div class="subMenu menu">
+		<div id="STATIC_WN" class="item" onclick="iTaskOperation.process(40)"><img class="image" src='/images/icon143.gif'/><div class="text">&#36890;&#30693;</div></div>
+		<div id="MENU_SR" class="item" onclick="iTaskOperation.process(41)"><img class="image vhide"/><div class="text">&#20849;&#20139;</div></div>
+		<div id="MENU_MO" class="item" onclick="iTaskOperation.process(42)"><img class="image vhide"/><div class="text">&#36801;&#31227;</div></div>
+	</div>
+	
+	<div class="seperator"></div>
+	<div class='item'><img class='image vhide'/><div class='text'>&#21457;&#36865;&#21040;...</div></div>
+	<div class='subMenu menu'>
+   		<div class='item' onclick="iTaskOperation.process(43)"><img class='image vhide'/><div class='text'>&#26631;&#31614;</div></div>
+    </div>
+	
+    
+    <div id="SEP_CO_PT" class="seperator"></div>
+    <div id="MENU_CO" class="item" onclick="iTaskOperation.process(60)"><img class="image" src='/images/icon052.gif'/><div class="text">&#22797;&#21046;</div></div>
+    <div id="MENU_PT" class="item" onclick="iTaskOperation.process(62)"><img class="image" src='/images/icon053.gif'/><div class="text">&#31896;&#36148;</div></div>
+    
+    
+    <div id="SEP_PS_TC" class="seperator"></div>
+    <div id="MENU_PS" class="item" onclick="iTaskOperation.process(9)"><img class="image" src='/images/icon144.gif'/><div class="text">&#21457;&#24067;</div></div>
+    
+    <div id="SEP_SU_RE_FS" class="seperator"></div>
+    <div id="MENU_SU" class="item" onclick="iTaskOperation.process(6)"><img class="image vhide"/><div class="text">&#26242;&#20572;</div></div>
+    <div id="MENU_RE" class="item" onclick="iTaskOperation.process(7)"><img class="image vhide"/><div class="text">&#24674;&#22797;</div></div>
+    <div id="MENU_FS" class="item" onclick="iTaskOperation.process(8)"><img class="image vhide"/><div class="text">&#24378;&#21046;&#32456;&#27490;</div></div>
+    
+    <div id="SEP_ED_CH" class="seperator"></div>
+    <div id="MENU_ED" class="item" onclick="iTaskOperation.process(10)"><img class="image" src='/images/icon050.gif'/><div class="text">&#32534;&#36753;</div></div>
+    <div id="MENU_CH" class="item" onclick="iTaskOperation.process(10)"><img class="image" src='/images/icon050.gif'/><div class="text">&#21464;&#26356;</div></div>
+    
+    <div id="SEP_AU" class="seperator"></div>
+    <div id="MENU_AU" class="item" onclick="iTaskOperation.process(5)"><img class="image vhide"/><div class="text">&#23457;&#26680;</div></div>
+    
+    <div id="SEP_DE" class="seperator"></div>
+    <div id="MENU_DE" class="item" onclick="iTaskOperation.process(63)"><img class="image" src='/images/icon043.gif'/><div class="text">&#21024;&#38500;</div></div>
+    
+    <div id="SEP_RS" class="seperator"></div>
+    <div id="MENU_RS" class="item" onclick="iTaskOperation.process(11)"><img class="image vhide"/><div class="text">&#37325;&#26032;&#24320;&#21551;</div></div>
+    
+</div>
+
+<div style="display:none">
+	<span id="op_msg1">&#30830;&#23450;&#35201;&#21024;&#38500;&#35813;&#35760;&#24405;&#21527;&#65311;</span>
+	<span id="op_msg2">&#19981;&#33021;&#21024;&#38500;&#24050;&#32463;&#22635;&#20889;&#36807;&#24037;&#20316;&#26085;&#25253;&#30340;&#20219;&#21153;</span>
+	<span id="op_msg3">&#20219;&#21153;&#25110;&#33410;&#28857;&#23384;&#22312;&#24517;&#22635;&#23383;&#27573;&#20026;&#31354;&#65292;&#19981;&#20801;&#35768;&#21457;&#24067;</span>
+	<span id="op_msg4">&#24517;&#22635;&#23383;&#27573;</span>
+    <span id="op_msg5">&#23384;&#22312;&#24517;&#22635;&#23383;&#27573;&#20026;&#31354;&#30340;&#20219;&#21153;&#25110;&#33410;&#28857;&#21457;&#24067;&#19981;&#25104;&#21151;</span>
+    
+    <span id="tip_sucess_label">&#21457;&#36865;&#26631;&#31614;&#25104;&#21151;</span>
+	<span id="tip_sucess_com">&#27807;&#36890;&#25104;&#21151;</span>
+	<span id="tip_sucess_tran">&#36716;&#21457;&#25104;&#21151;</span>
+	<span id="tip_sucess_share">&#20849;&#20139;&#25104;&#21151;</span>
+	<span id="tip_sucess_move">&#36801;&#31227;&#25104;&#21151;</span>
+	<span id="tip_sucess_cor">&#21457;&#24067;&#25104;&#21151;</span>
+</div>
+
+<script>
+	function afterSave(action) {
+	    refreshBody((action == 62 || action == 63) ? 1 : "");
+	}
+</script>
+	
+	<script type="text/javascript" src="/scripts/taglib.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/contextMenu.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/multilevelMenu.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/utils/iCalendar.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/utils/iSelectbox.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/task/taskOperation.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/utils/messageTool.js?V=V808R08M07SP0802"></script>
+	
+	<script type="text/javascript" src="/scripts/util.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/engine.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/dwr/interface/jBaseInfoUtil.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/dwr/interface/jlistFieldBean.js?V=V808R08M07SP0802"></script>
+	
+	<script type="text/javascript" src="/scripts/myspace/workLogView.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/myspace/unplannedTask.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript">
+		// check if has external Task
+		if ("Y" == "Y") {
+			notExternalTask = true;
+		}
+	
+		init($("#data").val());
+		
+		synLogInfo("");
+		
+		setHeight();
+		
+		function initEdit(){
+			location.href=powerPath + "pages/myspace/log/workLogView.jsf?isView=&userId=&reportId=" + parent.reportId + "&startDate=" + parent.startDate + "&isEdit=Y";
+		}
+		$("#unplannedTab tr").each(function() {
+			$(this).removeClass();
+			$(this).css("background-color","#FFF");
+	});
+	
+	function doubleWeekTask(isOwner) {
+		$('#_isOwner').val(isOwner);
+		$('#operate\\:refreshDataForRole').click();
+	}
+	
+	function refreshDoubleWeek(pageData) {
+		var data = eval("(" + pageData + ")");
+		initDoubleWeekTask(data.weekHead, data.weekBody);
+	}
+
+
+	
+	</script>
+<script type="text/javascript" src="/platform/scripts/custom.js?V=V808R08M07SP0802"></script>
+</body>
+</html>

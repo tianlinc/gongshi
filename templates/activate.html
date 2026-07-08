@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RDM 工时填报系统 · License 激活</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/app.css') }}" rel="stylesheet">
+    <style>
+        /* 激活页额外样式 */
+        .sn-group {
+            background: #f8f9fa;
+            border: 1px dashed #dee2e6;
+            border-radius: 10px;
+            padding: 14px 16px;
+            margin-bottom: 20px;
+        }
+        .sn-group .sn-code {
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            color: #495057;
+            word-break: break-all;
+            background: #fff;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            padding: 8px 12px;
+            margin: 6px 0;
+        }
+        .sn-group .sn-hint {
+            font-size: 12px;
+            color: #6c757d;
+        }
+        .activate-btn {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            border: none;
+            padding: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            border-radius: 10px;
+            width: 100%;
+            color: #fff;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .activate-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(40, 167, 69, 0.4);
+            background: linear-gradient(135deg, #20c997 0%, #28a745 100%);
+        }
+        .activate-btn:disabled {
+            opacity: 0.65;
+            transform: none;
+            box-shadow: none;
+        }
+    </style>
+</head>
+<body>
+<div class="login-page">
+    <div class="login-card">
+        <h1>RDM 工时系统</h1>
+        <p class="login-sub">License 激活</p>
+
+        <!-- 提示条 -->
+        <div class="login-alert" id="alertBox"></div>
+
+        <!-- SN 码区域 -->
+        <div class="sn-group">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <label class="form-label mb-0 fw-bold" style="font-size:14px;">
+                    <i class="bi bi-upc-scan"></i> 我的 SN 码
+                </label>
+                <button class="btn btn-sm btn-outline-secondary" type="button" id="copyBtn"
+                        title="复制 SN 码">
+                    <i class="bi bi-clipboard"></i> 复制
+                </button>
+            </div>
+            <div class="sn-code" id="snCode">加载中...</div>
+            <div class="sn-hint">
+                <i class="bi bi-info-circle"></i> 请将此 SN 码发送给管理员，以获取对应的 License 激活码
+            </div>
+        </div>
+
+        <!-- License 输入区域 -->
+        <div class="mb-3">
+            <label for="licenseInput" class="form-label fw-bold" style="font-size:14px;">
+                <i class="bi bi-key"></i> License 激活码
+            </label>
+            <textarea class="form-control" id="licenseInput" rows="3"
+                      placeholder="请输入管理员提供的 License 字符串"
+                      style="font-size:13px; resize: vertical; min-height: 80px;"></textarea>
+        </div>
+
+        <button class="activate-btn" id="activateBtn">
+            <span class="btn-text"><i class="bi bi-check-circle"></i> 激活</span>
+            <span class="spinner-border spinner-border-sm" style="display:none;"></span>
+        </button>
+
+        <div class="login-footer">
+            <a href="/api/logout" style="color: #aaa; text-decoration: none;"
+               onclick="event.preventDefault(); fetch('/api/logout',{method:'POST'}).then(()=>location.href='/')">
+                退出登录
+            </a>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+<script>
+(function () {
+
+    // ===== 加载 SN 码 =====
+    async function loadSn() {
+        const snEl = document.getElementById('snCode');
+        try {
+            const r = await fetch('/api/license/sn');
+            const data = await r.json();
+            if (data.success) {
+                snEl.textContent = data.sn;
+            } else {
+                snEl.textContent = '获取失败：' + (data.message || '未知错误');
+                snEl.style.color = '#dc3545';
+            }
+        } catch (e) {
+            snEl.textContent = '网络异常，无法获取 SN 码';
+            snEl.style.color = '#dc3545';
+        }
+    }
+
+    // ===== 复制 SN 码 =====
+    document.getElementById('copyBtn').addEventListener('click', async () => {
+        const sn = document.getElementById('snCode').textContent.trim();
+        if (!sn || sn.includes('失败') || sn.includes('异常')) {
+            showAlert('warning', 'SN 码尚未加载或加载失败');
+            return;
+        }
+        try {
+            await navigator.clipboard.writeText(sn);
+            showAlert('success', 'SN 码已复制到剪贴板');
+        } catch (e) {
+            // 降级方案：旧浏览器不支持 clipboard API
+            const ta = document.createElement('textarea');
+            ta.value = sn;
+            ta.style.position = 'fixed';
+            ta.style.left = '-9999px';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            showAlert('success', 'SN 码已复制到剪贴板');
+        }
+    });
+
+    // ===== 激活 =====
+    document.getElementById('activateBtn').addEventListener('click', async () => {
+        const license = document.getElementById('licenseInput').value.trim();
+        if (!license) {
+            showAlert('danger', '请输入 License 激活码');
+            return;
+        }
+
+        const btn = document.getElementById('activateBtn');
+        btn.querySelector('.btn-text').style.display = 'none';
+        btn.querySelector('.spinner-border').style.display = 'inline-block';
+        btn.disabled = true;
+
+        try {
+            const r = await fetch('/api/license/activate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ license: license })
+            });
+            const data = await r.json();
+
+            if (data.success) {
+                showAlert('success', '激活成功！' +
+                    (data.type ? (' 授权类型：' + data.type) : '') +
+                    '，正在跳转...');
+                // 短暂停留让用户看到成功提示，然后跳转
+                setTimeout(() => { window.location.href = '/dashboard'; }, 1500);
+            } else {
+                showAlert('danger', data.message || '激活失败，请检查 License 是否正确');
+                btn.querySelector('.btn-text').style.display = '';
+                btn.querySelector('.spinner-border').style.display = 'none';
+                btn.disabled = false;
+            }
+        } catch (e) {
+            showAlert('danger', '网络错误，请检查网络连接后重试');
+            btn.querySelector('.btn-text').style.display = '';
+            btn.querySelector('.spinner-border').style.display = 'none';
+            btn.disabled = false;
+        }
+    });
+
+    // ===== 提示框 =====
+    function showAlert(type, msg) {
+        const box = document.getElementById('alertBox');
+        // map bootstrap alert classes
+        const typeMap = { danger: 'danger', success: 'success', warning: 'warning', info: 'info' };
+        const cls = typeMap[type] || 'info';
+        box.className = 'login-alert alert alert-' + cls;
+        box.textContent = msg;
+        box.style.display = 'block';
+
+        // 成功消息 5 秒后自动隐藏
+        if (type === 'success') {
+            setTimeout(() => { box.style.display = 'none'; }, 5000);
+        }
+    }
+
+    // ===== 初始化 =====
+    loadSn();
+
+    // 回车键触发激活
+    document.getElementById('licenseInput').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            document.getElementById('activateBtn').click();
+        }
+    });
+
+})();
+</script>
+</body>
+</html>

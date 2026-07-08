@@ -1,0 +1,40 @@
+[DBG] %LOCALAPPDATA%=C:\Users\tianl\AppData\Local
+[DBG] ISCC pre-detect: [C:\Users\tianl\AppData\Local\Programs\Inno Setup 6\ISCC.exe]
+[DBG] cd before: [D:\code\gongshi\service_installer]
+============================================
+  IEI Timer Faster 服务版 一键构建
+  INSPUR-66 - Inno Setup + NSSM 服务注册
+============================================
+
+[1/9] 检查 Python...
+[OK] Python 3.11.9
+[2/9] 安装 PyInstaller...
+[OK] PyInstaller 已就绪
+[3/9] 检查 Playwright...
+[OK] Playwright 已安装
+[4/9] 检查 Playwright driver...
+OK
+
+[5/9] 准备预打包 Chromium 浏览器...
+[OK] 预打包 Chromium 已就绪
+
+[6/9] NSSM 已存在，跳过下载
+[7/9] 清理构建缓存...
+[OK] 已清理缓存
+[8/9] 构建中，约 2-5 分钟...
+
+[OK] ���ռ�Ԥ��� Chromium: playwright-browsers-prebuilt
+[OK] ���ռ� Playwright driver: C:\Users\tianl\AppData\Local\Programs\Python\Python311\Lib\site-packages\playwright\driver
+
+============================================
+  PyInstaller 构建完成
+  产物: dist\IEI Timer Faster Service\
+============================================
+
+[9/9] 编译 Inno Setup 安装包...
+  dist\IEI_Timer_Faster_Service_Setup.exe                    -- (X) 未生成
+
+  如需生成安装包，请安装 Inno Setup 6:
+    https://jrsoftware.org/isdl.php
+  安装完成后重新运行 build.bat
+============================================

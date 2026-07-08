@@ -1,0 +1,938 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<html>
+<head>
+	<title>RDM研发管理平台</title>
+	
+	<link rel="icon" type="image/x-icon" href="/images/rdm.ico"/>
+	<link rel="shortcut icon" type="image/x-icon" href="/images/rdm.ico"/>
+	
+	<link rel="stylesheet" type="text/css" href="/styles/default.css?V=V808R08M07SP0802"/>
+	<link rel="stylesheet" type="text/css" href="/styles/utils/iMain.css?V=V808R08M07SP0802"/>
+	<link rel="stylesheet" type="text/css" href="/styles/utils/iHomeMenu.css?V=V808R08M07SP0802"/>
+	<link rel="stylesheet" type="text/css" href="/styles/plugin/bronzesoft.ui.dialog.css?V=V808R08M07SP0802"/>
+	<link rel="stylesheet" type="text/css" href="/styles/plugin/bronzesoft.ui.window.css?V=V808R08M07SP0802"/>
+	<link rel="stylesheet" type="text/css" href="/styles/plugin/bronzesoft.ui.imgpreview.css?V=V808R08M07SP0802"/>
+   	<link rel="stylesheet" type="text/css" href="/styles/utils/iDropdownMenu.css?V=V808R08M07SP0802"/>
+   	<link rel="stylesheet" type="text/css" href="/weixin/Font-Awesome-3.2.1/css/font-awesome.css?V=V808R08M07SP0802"/>
+	
+	<script type="text/javascript">
+		var powerPath = "/";
+		var language = "zh";
+		var isAdmin = false, isSimulate = 'null';
+		var readAllRemindTxt = "全部标记已读";
+		var clearAllRemind = "一键清空";
+		var sureAllRead = "确定标记已读？";
+		var sureDelete = "确定要删除吗？";
+		var notWaitApproval = "没有待处理的单据";
+		var systemRemind = "系统提醒";
+		var interactiveRemind = "沟通提醒";
+		var REMIND_PAGE = 1;
+		var REMIND_TOTALCNT = 0;
+		var theme; // theme config.
+		var curmenu; // current click menu.
+		var defpage = ""; // default page while enter system.
+	</script>
+	<style type="text/css">
+		.language_ul{
+			position:absolute;
+			top:400px;
+			right:107px;
+			width:80px;
+			color:black;
+			background-color:white;    
+			margin:0;
+    		list-style:none;
+    		padding:0;
+    		background-color:white;
+    		border: 1px solid #bbb;
+    		box-shadow: 3px 3px 5px rgba(0, 0, 0, 0.5);
+    		display:none;
+    	}
+		.language_ul li{text-align:left;height:25px;line-height:25px;padding-left:5px;}
+		.language_ul_li, .cur{
+			background-color:#3C78B5;
+			color:#fff!important;
+			cursor: pointer;
+		}
+		.icon-okay{
+			margin-right:5px;
+			float:right;
+		}
+		.fl{
+			float:left;
+		}
+		.clear{clear:both;}
+		.rdm-language{border:0px;background-color:#fff;border-radius: 4px;-webkit-border-radius:4px;padding:3px;font-family:italic;font-size:12px;padding-bottom:1px !important \9;padding-top:1px !important \9;}
+		.rdm_right{max-width:370px !important \9;min-width:270px !important \9;}
+		.rdm-user{max-width:150px !important;}
+		.rdm-message-tip{vertical-align:middle;max-width: 16px;}
+		.rdm-side-bar{width:330px;background:#F2F2F2;position:absolute;right:-330px;
+		-moz-box-shadow:1px 1px 50px rgba(0, 0, 0, .5); -webkit-box-shadow:1px 1px 50px rgba(0, 0, 0, .5); box-shadow:1px 1px 50px rgba(0, 0, 0, .5);border-radius: 4px;-webkit-border-radius: 4px;-moz-border-radius: 4px;
+		}
+		.btn-box{width: 300px;height: 45px;box-shadow: 1px 1px 50px rgba(0, 0, 0, .5);}
+		.msgTipsScroll{overflow-y: scroll;width:100%;overflow-x: hidden;}
+		@keyframes showTipMessage{from{right:-330px;}to{right:0px;}}
+		@-webkit-keyframes showTipMessage{from{right:-330px;}to{right:0px;}}
+		@keyframes hideTipMessage{from{right:0px;}to{right:-330px;}}
+		@-webkit-keyframes hideTipMessage{from{right:0px;}to{right:-330px;}}
+		@-moz-keyframes showTipMessage{from{right:-330px;}to{right:0px;}}
+		@-moz-keyframes hideTipMessage{from{right:0px;}to{right:-330px;}}
+		.message-list-item{border-bottom:1px solid #e8e8e8;}
+		.remind-title{margin-bottom: 5px;font-size: 12px;width:50%;white-space:nowrap; text-overflow: ellipsis;overflow: hidden;display: inline-block;cursor: auto !important;}
+		.remind-content{width:70%;white-space:nowrap; text-overflow: ellipsis;overflow: hidden;display: inline-block;color:rgba(0,0,0,.65); font-size:14px;text-overflow:ellipsis;}
+		.remind-time{color:rgba(0,0,0,.45); font-size:12px;float: right;margin-right: 7px;}
+		.message-btn-clear{border-right: 1px solid #e8e8e8;cursor: pointer;position: absolute;bottom: -40px;left: 0px;background: white;border-top: 1px solid #e8e8e8;line-height:45px;color:#777;font-size:13px;text-align: center;width:165px;height:45px;}
+		.message-btn-readAll{cursor: pointer;position: absolute;bottom: -40px;left: 165px;background: white;border-top: 1px solid #e8e8e8;line-height:45px;color:#777;font-size:13px;text-align: center;width:165px;height:45px;}
+		.email-img{width:32px;height:32px;float:left;margin:5px 5px;}
+		.message-list-center{width:280px;margin:0 auto;padding-top:10px;}
+		.message-delete-img{float: right;cursor: pointer;visibility:hidden;}
+		.notWaitApproval{text-align: center;font-size: 14px;color: rgb(220,220,229);margin-top: 20px;}
+		.remind-url{ font: 12px/ 1.22 arial, helvetica, clean, sans-serif;text-decoration: none; color: red;cursor: pointer;}
+		.remind-url:hover{text-decoration: underline;}
+		.layui-tab-title{font-size:12px;white-space:nowrap; text-overflow: ellipsis;overflow: hidden;float: left;width: 50%;text-align: center;color: rgba(0,0,0,.45);cursor: pointer;}
+		.layui-tab-title-active{color: #009688; border-bottom: 2px solid #009688;}
+		.layui-tab{height: 40px;line-height: 40px;border-bottom: 1px solid #e6e6e6;}
+		.layui-ul{list-style: none;padding:0px;margin:0px;}
+		.icon-remove {vertical-align: middle;}
+		.message-not-valid{color: rgba(0,0,0,.45);font-size: 12px;cursor: pointer;}
+		.tip-content:before{position: absolute;content: '';width:0;height: 0;border:6px solid transparent;border-bottom-color:#1E2021;top:-12px;}
+		.tip-content:after{width:100%;height:40px;content:'';position: absolute;top:0px;left:20px;}
+		.tip-content{display: none;text-align: left;background-color: #1E2021;padding: 10px;position: absolute;border-radius: 3px;box-shadow: 1px 1px 1px rgba(0, 0, 0, 0.2);color: #FFF;line-height: 1.4;font:12px/ 1.22 arial, helvetica, clean, sans-serif;z-index:1000;}
+		.message-list-item:hover .icon-remove{visibility:visible;}
+		.pad{padding: 10px 0px 20px 0px;}
+		.danger{color:f30303;}
+		.num-More{transform: scale(0.9);position: absolute;top: -8px;left: 11px;box-sizing:border-box;min-width:16px;height:16px;padding:0 3px;border-radius:8px;line-height: 16px;font-size:12px;text-align: center;color:#fff;background-color: #FA5A57;}
+		.remind-message-sign{display:inline-block;position:relative;margin-right:21px;cursor: pointer}
+	</style>
+</head>
+	
+<body onselectstart="return false;" onresize="initHeight();">
+	<div id="versionFeature" style="display: none;"></div>
+	<input type="hidden" id="notShowNext_val" value="Y"/>
+	<div id="usbstatus" class="tip-message error hide">运行异常，请检查是否已启动rdmlsnserver</div>
+	<table class="rdm-top" cellpadding="0" cellspacing="0">
+	<tr >	
+		<td class="rdm-top-left" align="left">
+			<span>青铜器RDM</span>
+		</td>
+		<td class="rdm-top-right rdm_right" align="right">
+			<span class="remind-message-sign" onclick="showTipMessage();">
+				<img class="rdm-message-tip" src="/images/tips.png"/>
+				<div class="num-More tip-num hide" id="tip-num-txt"></div>
+				<span id="msgTotalNum" class="hide"></span>
+				<span id="leftTotalNum" class="hide"></span>
+				<span id="rightTotalNum" class="hide"></span>
+			</span>
+			<span class="rdm-search">
+				<input type="button" class="dropdown-menu-button dropdown-menu-trigger rdm-search-button" ftype="TSK" title="任务" value="任务"/>
+				<ul class="dropdown-menu-hide" id="rdm-search-dropdown-ul"></ul>
+				<input type="text" class="rdm-search-input">
+			</span>
+			
+			<a href="#" class="rdm-user" onclick="openUser('zh_CN_');" id='699123a3-bff7-4d38-aeb5-987956dd216a'>田琳</a>
+			
+			<div id="rdmMore" class="rdm-more">
+				<span class="rdm-item-more dropdown-menu-trigger"></span> 		
+				<ul class="dropdown-menu-hide" id="dropdown-menu-ul">
+					
+					<li id="simulateAdmin" class="dropdown-menu-splitter" val="模拟登录"  onclick="simulate_prepare('zh_CN_')"></li>
+					<li id="exitSimulate" class="dropdown-menu-splitter" val="退出模拟"  onclick="simulate_start('33ba99dc-dc20-4b4b-b398-9c5e78e5735f', simulate_process, 'zh_CN_')"></li>
+					
+					<li class="dropdown-menu-splitter" val="委托" onclick="openAgent();"></li>
+					<li val="锁定" onclick="openLock();"></li>
+					<li val="常用联系人" onclick="setFrequentUser('699123a3-bff7-4d38-aeb5-987956dd216a');"></li>
+					<li class="dropdown-menu-splitter" val="设置" onclick="configUser();"></li>
+					
+   					    <li class="dropdown-menu-splitter" val="关于" onclick="openAbout();"></li>
+			       	
+					<li val="快速导航" onclick="setEavigate();"></li>
+					<li val="主题设置" onclick="setTheme();"></li>
+					<li class="dropdown-menu-splitter language" val="Language" onmouseover="showLanguage($(this));" onclick="$('#language-ul').hide();"></li>
+					<li val="退出" onclick="location.href='/logout.jsp?isRedirect=Y'"></li>
+				</ul>
+			</div>
+			<ul class="language_ul language" id="language-ul" onmouseover="showLanguage();" onmouseout="hideLanguage($(this));" style="display:none;">
+				
+					
+						
+							<li val="中文" class="language_li language_ul_li cur" onclick="changeLanguge('zh_CN_')" ><span class="fl">中文</span><span class="icon-okay">√</span></li>	
+						
+						
+					
+				
+					
+						
+						
+							<li val="English" onclick="changeLanguge('en__')" >English</li>
+						
+					
+					
+			</ul>
+		</td>
+	</tr>
+	<tr><td class="rdm-top-middle" valign="top" colspan="2"></td></tr>
+	</table>
+	
+	<div class="rdm-side-bar">
+		<div class="layui-tab">
+			<ul class="layui-ul">
+				<li id="systemRemindLi" onclick="getSystemEventRemind('1');" class="layui-tab-title layui-tab-title-active"></li>
+				<li id="interactiveRemindLi" onclick="getSystemEventRemind('2');" class="layui-tab-title"></li>
+			</ul>
+		</div>
+		<div class="msgTipsScroll">
+			<ul id="msgTips" style="list-style: none;padding:0px;margin:0px;">
+			</ul>
+		</div>
+		<div class='btn-box'>
+			<div class="message-btn-readAll" onclick="readAllRemind();"></div>
+			<div class="message-btn-clear" onclick="removeAllRemind();"></div>
+		</div>
+	</div>
+	
+	<div class="rdm-nav">
+		<div id="rdmHome">
+		    <img class="rdm-home" src="/images/icon1127.png">
+
+			<div class="rdm-home-main" style="width:678px \9;">
+				
+				<div id="1390d4ec-040b-4014-9407-26ab1d7fcaee" val="首页" page="/pages/common/dyn/customTab.jsf?tmpfile=echarts/totalBoards.ftl&execlass=com.bronzesoft.inspur.firstPage.TotalBoards" mtype="EP">
+					
+					  <span id="34065172-daa4-49f9-b2df-af0eb46f5450" val="看板" page="/pages/common/dyn/customTab.jsf?&tmpfile=echarts/totalBoards.ftl&execlass=com.bronzesoft.inspur.firstPage.TotalBoards" mtype="EP" onmouseover="showCommonTip($(this));" onmouseout="removeCommonTip();"></span>
+					
+					  <span id="e6ea441c-a7ae-4f97-a368-85bb736c787b" val="指标看板" page="/pages/common/dyn/customTab.jsf?&amp;tmpfile=echarts2/totalBoards.ftl&amp;execlass=com.bronzesoft.inspur.firstPage2.TotalBoards" mtype="EP" onmouseover="showCommonTip($(this));" onmouseout="removeCommonTip();"></span>
+					
+					  <span id="52dfb508-e452-494f-bbeb-e74e43083918" val="个人导航" page="/pages/common/dyn/customTab.jsf?&tmpfile=personalEcharts/navigation.ftl&execlass=com.bronzesoft.inspur.personalFirstPage.Navigation" mtype="EP" onmouseover="showCommonTip($(this));" onmouseout="removeCommonTip();"></span>
+					
+				</div>
+				
+				<div id="0103bc74-3828-43a2-b34f-21f68424b386" val="项目集管理" page="null" mtype="EP">
+					
+					  <span id="4bf409ed-ad2d-4b68-b538-6bd7a0bce254" val="外购部件管理" page="/pages/common/dyn/customTab.jsf?&tmpfile=pgManager/wgm/wgmFirstPage.ftl&execlass=com.bronzesoft.inspur.projectGroup.module.wgm.WGMFirstPage" mtype="EP" onmouseover="showCommonTip($(this));" onmouseout="removeCommonTip();"></span>
+					
+				</div>
+				
+				<div id="295a9eda-6800-499c-a57c-262b21a847da" val="人力管道预测" page="null" mtype="EP">
+					
+					  <span id="e2de1175-7db3-4bdb-8270-87d4381b0e10" val="人力管道预测流程" page="/pages/rdextend/dashboardTab.jsf?menuId=e2de1175-7db3-4bdb-8270-87d4381b0e10" mtype="CP" onmouseover="showCommonTip($(this));" onmouseout="removeCommonTip();"></span>
+					
+				</div>
+				
+				<div id="d0b605bf-888b-42e7-a03b-1e66cdd905a9" val="报表管理" page="null" mtype="EP">
+					
+					  <span id="893a138b-4833-4ced-a5fd-5e5205162740" val="工时管理报表" page="/pages/common/dyn/customTab.jsf?&tmpfile=timeManage/reportOfWorkingHours.ftl&execlass=com.bronzesoft.inspur.report.timeManage.ReportOfWorkingHours" mtype="EP" onmouseover="showCommonTip($(this));" onmouseout="removeCommonTip();"></span>
+					
+					  <span id="3f91930b-9f70-4190-bf00-772f2748292b" val="岗位工时任务" page="/pages/common/dyn/customTab.jsf?&tmpfile=jobHourModel/jobHourModel.ftl&execlass=com.bronzesoft.inspur.report.jobHourModel.JobHourModel" mtype="EP" onmouseover="showCommonTip($(this));" onmouseout="removeCommonTip();"></span>
+					
+				</div>
+				
+				<div id="e6c82f4f-010d-4b20-9291-e060271bea4c" val="个人空间" page="#*" mtype="">
+					
+					  <span id="3b8cc05e-597e-4500-84e5-310a8b54d75b" val="我的任务" page="/pages/task/list/myTask.jsf" mtype="Tsk" onmouseover="showCommonTip($(this));" onmouseout="removeCommonTip();"></span>
+					
+					  <span id="137621bf-b92a-4f71-a1b8-bb23e71dfbbb" val="工作日志" page="/pages/myspace/log/workLogList.jsf" mtype="Tsk" onmouseover="showCommonTip($(this));" onmouseout="removeCommonTip();"></span>
+					
+					  <span id="e6c82f4f-010d-4b20-9291-e061111bea4c" val="我的流程" page="/pages/workflow/myBill.jsf?" mtype="" onmouseover="showCommonTip($(this));" onmouseout="removeCommonTip();"></span>
+					
+					  <span id="9dd0572a-fd97-4b18-b546-940243a94fdf" val="个人仪表盘" page="/pages/myspace/myMeterTray.jsf" mtype="Tsk" onmouseover="showCommonTip($(this));" onmouseout="removeCommonTip();"></span>
+					
+					  <span id="507621bf-b92a-4f71-a1b8-bb23e71dfaaa" val="我的日历" page="/pages/myspace/myCalendar.jsf" mtype="Tsk" onmouseover="showCommonTip($(this));" onmouseout="removeCommonTip();"></span>
+					
+					  <span id="b00df805-73bf-aaaa-96d1-ee0603c8e1aa" val="我的地盘" page="/pages/rdextend/dashboardTab.jsf?menuId=b00df805-73bf-aaaa-96d1-ee0603c8e1aa&isMyscope=Y" mtype="" onmouseover="showCommonTip($(this));" onmouseout="removeCommonTip();"></span>
+					
+				</div>
+				
+				<div id="32f5b357-295e-4af7-ba6d-4d676d38a719" val="项目管理" page="#*" mtype="">
+					
+					  <span id="2c4d70cd-2671-46e7-a9b6-9d057e1082bf" val="项目管理" page="/pages/lifecycle/entity/list.jsf?type=PJT" mtype="PJT" onmouseover="showCommonTip($(this));" onmouseout="removeCommonTip();"></span>
+					
+					  <span id="76d41b6d-8518-4241-b6df-b7fdd39ce7cc" val="风险管理" page="/pages/entity/list.jsf?type=RSK" mtype="RSK" onmouseover="showCommonTip($(this));" onmouseout="removeCommonTip();"></span>
+					
+					  <span id="e63740c9-c118-44dd-a806-0ba069788991" val="风险库" page="/pages/rdextend/dashboardTab.jsf?menuId=e63740c9-c118-44dd-a806-0ba069788991" mtype="CP" onmouseover="showCommonTip($(this));" onmouseout="removeCommonTip();"></span>
+					
+					  <span id="d3515290-eb2f-4e50-a11e-81c4ac0d043b" val="风险入库申请" page="/pages/rdextend/dashboardTab.jsf?menuId=d3515290-eb2f-4e50-a11e-81c4ac0d043b" mtype="CP" onmouseover="showCommonTip($(this));" onmouseout="removeCommonTip();"></span>
+					
+					  <span id="76d41b6d-8518-4241-b6df-b7fdd39ce79c" val="问题管理" page="/pages/entity/list.jsf?type=ISU" mtype="ISU" onmouseover="showCommonTip($(this));" onmouseout="removeCommonTip();"></span>
+					
+				</div>
+				
+				<div id="7e542d57-d445-4dfa-b777-9deae9f78e15" val="项目事务管理" page="/pages/rdextend/dashboardTab.jsf?menuId=7e542d57-d445-4dfa-b777-9deae9f78e15" mtype="CP">
+					
+					  <span id="dc9a6627-6c2f-477e-9018-09cbf99baf65" val="会议纪要管理" page="/pages/rdextend/dashboardTab.jsf?menuId=dc9a6627-6c2f-477e-9018-09cbf99baf65" mtype="CP" onmouseover="showCommonTip($(this));" onmouseout="removeCommonTip();"></span>
+					
+					  <span id="92ad359e-0d78-4868-bd48-d85f8f3405a0" val="问题事务跟踪" page="/pages/rdextend/dashboardTab.jsf?menuId=92ad359e-0d78-4868-bd48-d85f8f3405a0" mtype="CP" onmouseover="showCommonTip($(this));" onmouseout="removeCommonTip();"></span>
+					
+				</div>
+				
+				<div id="32f5b357-295e-4af7-ba6d-4d676d334519" val="合同管理" page="#*" mtype="PCT">
+					
+					  <span id="32f5b357-295e-4af7-ba6d-4d676d334521" val="合同管理" page="/pages/lifecycle/entity/list.jsf?type=PAT" mtype="PAT" onmouseover="showCommonTip($(this));" onmouseout="removeCommonTip();"></span>
+					
+					  <span id="93d2ce4f-6041-4be6-a7ac-e797cdca1d83" val="新建合同" page="/pages/rdextend/dashboardTab.jsf?menuId=93d2ce4f-6041-4be6-a7ac-e797cdca1d83" mtype="CP" onmouseover="showCommonTip($(this));" onmouseout="removeCommonTip();"></span>
+					
+					  <span id="49bb3537-d542-4836-8662-146382aef89e" val="合同变更" page="/pages/rdextend/dashboardTab.jsf?menuId=49bb3537-d542-4836-8662-146382aef89e" mtype="CP" onmouseover="showCommonTip($(this));" onmouseout="removeCommonTip();"></span>
+					
+					  <span id="675ba7e3-bc2b-48ec-9105-dea4999cf2d6" val="合同评估" page="/pages/rdextend/dashboardTab.jsf?menuId=675ba7e3-bc2b-48ec-9105-dea4999cf2d6" mtype="CP" onmouseover="showCommonTip($(this));" onmouseout="removeCommonTip();"></span>
+					
+				</div>
+				
+			</div>
+		</div>
+		
+		<div class="rdm-path"></div>
+		<img class="rdm-back" src="/images/icon1128.png">
+	</div>
+	
+	<div class="rdm-main">
+		<iframe id="main" align="top" scrolling="no" frameborder="0"></iframe>
+	</div>
+	
+	<div class="rdm-loading"><img src="/images/icon227.gif"></div>
+	<div style="display:none;">
+    <span id="exitMsg">确定要退出吗？</span>
+    <span id="exitPageMsg">信息未保存，确认要离开吗？</span>
+    <span id="exitPageMsg1">第</span>
+    <span id="exitPageMsg2">行</span>
+    <span id="showMenuTip">显示菜单</span>
+    <span id="hideMenuTip">隐藏菜单</span>
+    <span id="dialogBtnOK">确定</span>
+	<span id="dialogBtnCancel">取消</span>
+	<span id="dialogTitle">提示</span>
+	<span id="hintTitle">详细信息</span>
+	<span id="workflowTest">自检</span>
+	
+	<span id="wfGraphHint1">移动</span>
+	<span id="wfGraphHint2">新建操作</span>
+	<span id="wfGraphHint3">新建步骤</span>
+	<span id="wfGraphHint4">新建决策</span>
+	<span id="wfGraphHint5">增加断点</span>
+	<span id="wfGraphHint6">删除断点</span>
+	<span id="wfGraphHint7">增加跳转至自身操作</span>
+	<span id="wfGraphHint8">增加派生操作</span>
+	<span id="wfGraphHint9">删除</span>
+	<span id="wfGraphHint10">保存</span>
+	
+	<span id="wfGraphNode">步骤</span>
+	<span id="wfGraphOperate">操作</span>
+	<span id="wfGraphDecide">决策</span>
+	<span id="wfGraphDerive">派生</span>
+	<span id="wfGraphPart">分支</span>
+	
+	<span id="wfGraphTip4">派生操作</span>
+	<span id="wfGraphTip5">跳转至自身操作</span>
+	
+	<span id="tskHint1">名称</span>
+	<span id="tskHint2">节点名称</span>
+	<span id="tskHint3">计划开始日期</span>
+	<span id="tskHint4">计划完成日期</span>
+	<span id="tskHint5">完成率</span>
+	<span id="tskHint6">工期</span>
+	<span id="tskHint7">责任人</span>
+	<span id="tskHint8">里程碑</span>
+	<span id="tskHint9">链接</span>
+	<span id="tskHint10">From</span>
+	<span id="tskHint11">To</span>
+	<span id="tskHint12">序号</span>
+	<span id="tskHint13">名称</span>
+	<span id="tskHint14">无法在某些任务之间创建关联, 这样将产生循环任务关联!</span>
+	<span id="tskHint15">是否删除任务 XXX 的关联关系?</span>
+	<span id="tskHint16">后置任务的状态不能为关闭、强制终止、待审核、审核通过!</span>
+	<span id="tskHint17">是</span>
+	
+	<span id="tskHint31">不能移动跨级任务和节点</span>
+	<span id="tskHint32">操作会导致里程碑任务的计划完成日期变化</span>
+	<span id="tskHint33">里程碑</span>
+	<span id="tskHint34">变更次数</span>
+	<span id="tskHint35">待审核</span>
+	<span id="tskHint36">里程碑任务</span>
+	<span id="tskHint37">该任务被锁定</span>
+	<span id="tskHint38">该节点被锁定</span>
+	<span id="tskHint39">周期任务</span>
+	<span id="tskHint40">该任务被共享</span>
+	
+	<span id="tskHint61">任务保存成功</span>
+	<span id="tskHint62">关闭</span>
+	<span id="tskHint63">上一个</span>
+	<span id="tskHint64">下一个</span>
+	
+	<span id="tskHint71">只能输入正整数</span>
+	<span id="tskHint72">输入序号对应的任务不存在</span>
+	<span id="tskHint73">不能将一个节点变成前置任务</span>
+	<span id="tskHint74">不能将一个任务变成本身的前置任务</span>
+	<span id="tskHint75">无法创建链接，这样将产生循环任务关联</span>
+
+	<span id="tskHint76">必填字段</span>
+	<span id="tskHint77">任务或节点存在必填字段为空，不允许发布</span>
+	
+	<span id="tskHint78">搜索到</span>
+	<span id="tskHint79">条任务信息</span>
+	<span id="tskHint80">条节点信息</span>
+	<span id="tskHint81">更新成功</span>
+
+	<span id="notShowNext">下次登陆不再显示</span>
+	<span id="download_label">下载</span>
+	<span id="image_load_error">图片加载失败</span>
+	
+	<span id="selectHint">请选择</span>
+	<span id="norecordHint">无</span>
+	<span id="nomorerecordHint">已无更多数据</span>
+	<span id="noMatch">没有匹配内容</span>
+	
+	<span id="chooseFileHint">选择文件</span>
+	<span id="pageCountHint">页</span>
+</div>
+	
+	<script type="text/javascript" src="/scripts/compatibleExplorer.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/reference/jquery-1.4.4.min.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/reference/jquery.ui.core.min.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/reference/jquery.ui.widget.min.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/reference/jquery.ui.mouse.min.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/dwr/interface/jSystemFilterBean.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/utils/iMain.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/utils/iHomeMenu.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/plugin/bronzesoft.ui.dialog.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/plugin/bronzesoft.ui.window.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/utils/iDropdownMenu.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/default.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/base64.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/dwr/interface/jeventRemindHandler.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/engine.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/dwr/interface/jSystemFilterBean.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/dwr/interface/jcompanyManageBean.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/plugin/bronzesoft.ui.imgpreview.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/dwr/interface/jreferenceBean.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/platform/scripts/custom.js?V=V808R08M07SP0802"></script>
+	<script type='text/javascript' src="/dwr/interface/jviewConfigUtil.js?V=V808R08M07SP0802"></script>
+	
+	<script type="text/javascript">
+		initPage();
+		$(window).resize(function() {
+			if($('.rdm-top-middle').width() < 500) {
+				$('.rdm-top-left').width(200);
+				$('.rdm-top-right').width(300);
+			}
+		});
+		
+		
+		
+			$("#rdmMore").dropdownMenu({width: 100});
+			$("#rdm-search-dropdown-ul").css("width", "160px");
+		
+		
+		var adminId = "699123a3-bff7-4d38-aeb5-987956dd216a";
+		var isShowSideBar = false;
+		
+		window.setTimeout(function(){
+			jcompanyManageBean.dynCheckRunning({callback: function(data) {
+				if (data == "N") $("#usbstatus").css({"position": "absolute", "margin": 0, "font-size": "12px", "height": $("table.rdm-top").height() - 16}).show();
+			}});
+		}, 10000);
+		
+		window.setInterval(function(){
+			jeventRemindHandler.dynRefreshMsgRemindNum({callback: function(data) {
+				data = parseInt(data);
+				msgIsLoad = 'N';
+				if(!data){
+					$("#tip-num-txt").text(data);
+					$(".tip-num").hide();
+				} else {
+					if(data>99){data="99+";} 
+					$("#tip-num-txt").text(data);
+					$(".tip-num").show();
+				}
+			}});
+		}, 30000);
+		
+		function changeLanguge(languageCode){
+			$('.language_ul').hide();
+			if(languageCode != "zh_CN_"){
+				changeLangeuage_start("699123a3-bff7-4d38-aeb5-987956dd216a",simulate_changeLanguage,languageCode);
+			}
+		}
+		
+		function showLanguage($obj) {
+			var $ul = $('.language_ul');
+			if($obj && $obj.length) {
+				$ul.css('top', $obj.offset().top + 3).show();
+			}else {
+				$ul.show();
+			}
+		}
+		
+		function hideLanguage($obj) {
+			$('.language_ul').hide();
+		}
+		
+		function showTipMessage($obj){
+			if(isShowSideBar){
+				hideSideBarEvent($(".rdm-side-bar"));
+				return;
+			}
+			isShowSideBar = true;
+			var iev = checkIE();
+			if(msgIsLoad == 'N'){
+				var userId = '699123a3-bff7-4d38-aeb5-987956dd216a';
+				DWREngine.setAsync(false);
+				jeventRemindHandler.getCacheData(userId, '1', '1', {
+			    	callback: function(data) { 
+			    		$("#systemRemindLi").addClass("layui-tab-title-active");
+						$("#interactiveRemindLi").removeClass("layui-tab-title-active");
+			    		buildMsgHtml(data);
+			    		msgIsLoad = 'Y';
+				    }
+			    });
+			    DWREngine.setAsync(true);
+			}
+			
+			if((iev >= 6 && iev <= 10) || iev == 3){
+				$(".rdm-side-bar").show();
+				$(".rdm-side-bar").css("right", "0px");
+			} else {
+				$(".rdm-side-bar").css("opacity", "1");
+				$(".rdm-side-bar").css("animation","showTipMessage 0.6s ease forwards");	
+			}
+			_initSideBarHideEvent($(".rdm-side-bar"));
+		}
+		
+
+		function removeRemind($obj){
+			rdmConfirm(sureDelete, function() {
+				openLoader();
+					var $li = $obj.closest("li");
+					if(!$li){
+						return;
+					}
+					var id = $li.attr("id");
+					if(id){
+						jeventRemindHandler.removeRemindById(id, {
+						    callback: function(data) { 
+						    	refreshMsgLi(false, true, $obj, currentType);
+						    	closeLoader();
+							   }
+						   });
+					}
+			});		
+		}
+		
+		function refreshMsgLi(isAll, isRemove, $obj, type){
+			var totalNum = $("span#msgTotalNum").text();
+			if(totalNum){
+				totalNum = parseInt(totalNum);
+			}
+			var currentNum = ('1' == type ? $("#leftTotalNum").text() : $("#rightTotalNum").text());
+			if(currentNum){
+				currentNum = parseInt(currentNum);
+			}
+			if(isAll){
+				totalNum =  totalNum - currentNum;
+				currentNum = 0;
+				if(isRemove){
+					$("#msgTips").html("<div class='notWaitApproval'>" + notWaitApproval + "</div>");
+				} else {
+					$("#msgTips li").attr("isValid", 'N');
+					$("#msgTips li").css("color", "rgba(0,0,0,.45)");
+					$("#msgTips li .remind-url").css("color", "rgba(0,0,0,.45)");
+				}
+			} else {
+				if('Y' == $obj.closest("li").attr("isValid")){
+					totalNum = totalNum?(totalNum - 1):0;
+					currentNum = currentNum?(currentNum-1):0;
+				}
+				if(isRemove){
+					$obj.closest("li").remove();
+				} else {
+					$obj.closest("li").attr("isValid", 'N');
+					$obj.closest("li").css("color", "rgba(0,0,0,.45)");
+					$obj.closest("li .remind-url").css("color", "rgba(0,0,0,.45)");
+				}
+			}
+	
+			if(!totalNum){
+				$(".tip-num").hide();
+			} else {
+				$("span#msgTotalNum").text(totalNum);
+				$("#tip-num-txt").text(totalNum > 99 ? '99+' : totalNum);
+			}
+
+			if('1' == type){
+				$("#leftTotalNum").text(currentNum);
+				$("#systemRemindNum").text("("+(currentNum > 99 ? '99+' : currentNum)+")");
+				
+			} else {
+				$("#rightTotalNum").text(currentNum);
+				$("#interactiveRemindNum").text("("+(currentNum > 99 ? '99+': currentNum)+")");
+			}
+			if($("#msgTips li").length == 0){
+				$("#msgTips").html("<div class='notWaitApproval'>" + notWaitApproval + "</div>");
+				$(".msgTipsScroll").css("overflow-y", "auto");
+				$(".btn-box").hide();
+			}
+			
+		}
+				
+		function removeAllRemind(){
+			rdmConfirm(sureDelete, function() {
+				if($("#systemRemindLi").hasClass('layui-tab-title-active')){
+					currentType = "1";
+				} else {
+					currentType = "2";
+				}
+				var $lis = $("#msgTips li");
+				if(!$lis || $lis.length == 0){
+					return;
+				}
+				openLoader();
+				jeventRemindHandler.removeAllRemind(currentType, {
+					callback: function(data) {
+						refreshMsgLi(true, true, null, currentType);
+						closeLoader();
+					}
+				});
+			});		
+		}
+		
+		function readAllRemind(){
+			rdmConfirm(sureAllRead, function() {
+				if($("#systemRemindLi").hasClass('layui-tab-title-active')){
+					currentType = "1";
+				} else {
+					currentType = "2";
+				}
+				var $lis = $("#msgTips li");
+				if(!$lis || $lis.length == 0){
+					return;
+				}
+				openLoader();
+				jeventRemindHandler.readAllEventRemind(currentType, {
+					callback: function(data) {
+						refreshMsgLi(true, false, null, currentType);
+						closeLoader();
+					}
+				});
+			});		
+		}
+		
+		function getSystemEventRemind(type){
+			openLoader();
+			currentType = type;
+			if(type == "1"){
+			 	$("#systemRemindLi").addClass("layui-tab-title-active");
+			 	$("#interactiveRemindLi").removeClass("layui-tab-title-active");
+			} else {
+				$("#systemRemindLi").removeClass("layui-tab-title-active");
+				$("#interactiveRemindLi").addClass("layui-tab-title-active");
+			}
+			$(".layui-tab-title-active").css({"color": theme.topColor, "border-bottom-color": theme.topColor});
+			$(".remind-url").css("color", theme.topColor);
+			
+			var userId = '699123a3-bff7-4d38-aeb5-987956dd216a';
+			jeventRemindHandler.getCacheData(userId, type, '1',  {
+		    	callback: function(data) { 
+		    		buildMsgHtml(data);
+		    		closeLoader();
+			    }
+		    });
+		}
+		
+		function appendMsgHtml(data){
+			if(!data){
+				return;
+			}
+			var html = "";
+			data = eval("("+data+")");
+			data = data.d;
+			for(var i in data){
+				html+="<li class='message-list-item' id='"+data[i].id+"' isValid='"+data[i].isValid+"'>";
+				html+="<div class='message-list-center'>";
+				
+				html+="<i class='icon-envelope-alt remind-title";
+				if(data[i].isValid == 'N'){
+					html +=" message-not-valid";
+				}
+				html+= "' title='"+data[i].title+"' >&nbsp;&nbsp;"+data[i].title;	
+				html+="</i>";	
+				html+="<img src='" + powerPath + "images/icon1047.gif' class='icon-remove icon1 message-delete-img' onclick='removeRemind($(this));'/>";
+				html+="<span class='remind-time'>"+data[i].time+"</span>";
+				html+="<div class='pad'>";
+				html+="<a ";
+				if(data[i].isValid == 'N'){
+					html +=" class='message-not-valid' ";
+				}
+				html+="onclick='openEventRemind(&quot;"+data[i].objectId+"&quot;,&quot;"+data[i].objectType+"&quot;,&quot;"+data[i].wfName+"&quot;,&quot;"+data[i].id+"&quot;,$(this))' class='remind-url'  title='"+data[i].content+"'>"+data[i].content+"</a>";
+				html+="</div>";
+				html+="</div>";
+				html+="</li>";
+			}
+			$("#msgTips").append(html);
+			bindevenFun();
+		}
+				
+		function buildMsgHtml(data){
+			$(".layui-tab-title-active").css({"color": theme.topColor, "border-bottom-color": theme.topColor});
+			$(".remind-url").css("color", theme.topColor);
+			$("div.remind-message-sign").attr("isLoad" ,'Y');
+			if(!data){
+				return;
+			}
+			$(".msgTipsScroll").css("overflow-y", "scroll");
+			$(".btn-box").show();
+			data = eval("("+data+")");
+			var num = data.l;
+			REMIND_TOTALCNT = data.totalcnt;
+			$("span#leftTotalNum").text((data.systemNum?data.systemNum:0));
+			$("span#rightTotalNum").text((data.commonuicateNum?data.commonuicateNum:0));
+			if(data.systemNum > 99){
+				data.systemNum = "99+";
+			}
+			if(data.commonuicateNum > 99){
+				data.commonuicateNum = "99+";
+			}
+			$("#systemRemindLi").html(systemRemind + "&nbsp;&nbsp;<span class='danger' id='systemRemindNum'>("+(data.systemNum?data.systemNum:0)+")</span>");
+			$("#systemRemindLi").attr("title", systemRemind);
+			$("#interactiveRemindLi").html(interactiveRemind + "&nbsp;&nbsp;<span class='danger' id='interactiveRemindNum'>("+(data.commonuicateNum?data.commonuicateNum:0)+")</span>");
+			$("#interactiveRemindLi").attr("title", interactiveRemind);
+			data = data.d;
+			var html = "";
+			if(!num){
+				$("#tip-num-txt").text(num);
+				$(".tip-num").hide();
+			} else {
+				$("span#msgTotalNum").text(num);
+				if(num>99){num="99+";}
+				$("#tip-num-txt").text(num);
+				$(".tip-num").show();
+			}
+			if(!data){
+				$("#msgTips").html("<div class='notWaitApproval'>" + notWaitApproval + "</div>");
+				$(".msgTipsScroll").css("overflow-y", "auto");
+				$(".btn-box").hide();
+				return;	
+			}
+			for(var i in data){
+				html+="<li class='message-list-item' id='"+data[i].id+"' isValid='"+data[i].isValid+"'>";
+				html+="<div class='message-list-center'>";
+				
+				html+="<i class='icon-envelope-alt remind-title";
+				if(data[i].isValid == 'N'){
+					html +=" message-not-valid";
+				}
+				html+= "' title='"+data[i].title+"' >&nbsp;&nbsp;"+data[i].title;	
+				html+="</i>";	
+				html+="<img src='" + powerPath + "images/icon1047.gif' class='icon-remove icon1 message-delete-img' onclick='removeRemind($(this));'/>";
+				html+="<span class='remind-time'>"+data[i].time+"</span>";
+				html+="<div class='pad'>";
+				html+="<a ";
+				if(data[i].isValid == 'N'){
+					html +=" class='message-not-valid' ";
+				}
+				html+="onclick='openEventRemind(&quot;"+data[i].objectId+"&quot;,&quot;"+data[i].objectType+"&quot;,&quot;"+data[i].wfName+"&quot;,&quot;"+data[i].id+"&quot;,$(this))' class='remind-url'  title='"+data[i].content+"'>"+data[i].content+"</a>";
+				html+="</div>";
+				html+="</div>";
+				html+="</li>";
+			}
+			if(html){
+				$("#msgTips").html(html);
+			}
+		}
+
+		function hideSideBarEvent($obj){
+			isShowSideBar = false;
+			var iev = checkIE();
+			if((iev >=6 && iev <= 10) || iev == 3){
+				$obj.hide();
+				$obj.css("right", "-300px");
+			} else {
+				$obj.css("animation","hideTipMessage 0.5s ease forwards");
+				$obj.css("opacity", "0");
+			}
+			
+		}
+				
+		function _initSideBarHideEvent($obj){
+			$(".rdm-home-link").one("mouseup", function() {
+				hideSideBarEvent($obj);
+			});
+			$(".rdm-home").one("mouseup", function() {
+				hideSideBarEvent($obj);
+			});
+			$(".rdm-nav").one("mouseup", function() {
+				hideSideBarEvent($obj);
+			});
+			$(".rdm-item-more").one("mouseup", function() {
+				hideSideBarEvent($obj);
+			});
+			$(".rdm-top").one("mouseup", function(event) {
+				if($(event.target).attr("class") == "rdm-message-tip" || $(event.target).attr("class") == "tip-num"){
+					return;
+				}
+				hideSideBarEvent($obj);
+			});
+			window.setTimeout(function() {
+			var iframes = _getIframes([], $(document.body));
+
+			for (var i = 0; i < iframes.length; i++) {
+				iframes[i].one("mouseup", function() {
+				hideSideBarEvent($obj);
+			});
+			}
+		}, 50);
+		}
+		
+		function openEventRemind(id, type, name,lid, obj) {
+			var url = "";
+			var id_ = "";
+		    if (checkIsLifecycle(type)) {
+		    	id_ = "entityTab_";
+				url = powerPath + "pages/lifecycle/entity/entityTab";
+				if (type == "PJT") {
+					url += ".project";
+				} else if (type == "PRD") {
+					url += ".product"
+				} else if (type == "DPT") {
+					url += "department";
+				}
+				url += ".jsf?lcType=" + type + "&objectId=" + id;
+			} else if("TSK" == type){
+				id_ = "taskPage";
+				url =  powerPath + "pages/task/" 
+				    + "entityTab.jsf?workflowType=" + type + "&taskId=" + id;
+			} 
+			else {
+				id_ = "workflowFrame";
+			    url =  powerPath + "pages/workflow/" 
+				    + "entityTab.jsf?workflowType=" + type + "&objectId=" + id;
+			}
+			jeventRemindHandler.readEventRemindById(lid, {
+				callback: function(data) {
+					if(obj && !obj.hasClass('message-not-valid')){
+						refreshMsgLi(false, false, obj, currentType);
+					} 
+					hideSideBarEvent($(".rdm-side-bar"));
+					var win = $("iframe#main")[0].contentWindow, src = "", txt = "";
+					var t = $(".rdm-home-link:first");
+					var $obj;
+					if (t.size() > 0) {
+						$(".rdm-path").html("");
+						$obj = $("#" + t.attr("mid"));
+						if($obj){
+							src = $obj.attr("page"); txt = $obj.attr("val");
+						}
+						iPath.clear();
+						iPath.init(src, txt);
+					}
+					win.buildPage(id_, url);
+					closeLoader();
+			}
+			});
+		}
+				
+		function _getIframes(iframes, $body) {
+			var $iframes = $body.find("iframe");
+			if ($iframes.size() == 0)
+				return [];
+					
+			$iframes.each(function(){
+				var $b = $($(this)[0].contentWindow.document.body);
+				iframes.push($b);
+				_getIframes(iframes, $b);
+			});
+			return iframes;
+		};
+		
+		
+		function bindevenFun(){
+			if ($.browser.mozilla) 
+				$(".msgTipsScroll").bind("DOMMouseScroll", function() {
+					initScrollEvent($(this));
+				});
+			
+			$(".msgTipsScroll").bind("scroll", function() {
+				initScrollEvent($(this));
+			});
+		}
+		
+		function initScrollEvent($obj) {			
+			var st = $obj.scrollTop();
+			var oh = $obj.height();
+			var ih = $obj.get(0).scrollHeight;
+			var cp = 0;
+			if(REMIND_TOTALCNT > 50) {
+				if(REMIND_TOTALCNT % 50 == 0){
+					cp = parseInt(REMIND_TOTALCNT / 50);
+				} else if(REMIND_TOTALCNT % 50 > 0) {
+					cp = parseInt(REMIND_TOTALCNT / 50) + 1;
+				}
+			}
+			if ((ih - oh - st) <= 5 && REMIND_PAGE < cp) {
+				openLoader();
+				REMIND_PAGE++;
+				if ($.browser.mozilla) 
+					$(".msgTipsScroll").unbind("DOMMouseScroll");
+				
+				$(".msgTipsScroll").unbind("scroll");
+				//search	
+				var userId = '699123a3-bff7-4d38-aeb5-987956dd216a';
+				jeventRemindHandler.getCacheData(userId, '1', REMIND_PAGE, {
+			    	callback: function(data) {
+			    		closeLoader(); 
+			    		appendMsgHtml(data);
+				    }
+			    });	
+			}
+		}
+		
+		$(function() {
+			var currentType = "1";
+			$(".message-btn-clear").text(clearAllRemind);
+			$(".message-btn-readAll").text(readAllRemindTxt);
+			$(".rdm-side-bar").height(iMain.getH() - 26 - 53);
+			$(".msgTipsScroll").height(iMain.getH() - 26 - 53 - 46);
+			getSystemEventRemind(currentType);
+			msgIsLoad = 'Y';
+			bindevenFun();
+			$('#dropdown-menu-ul li').mouseover(function() {
+				if(!$(this).hasClass('language')) {
+					$('.language_ul').hide();
+				}
+			});
+			
+			$('#language-ul li').mouseover(function() {
+				$(this).addClass('language_ul_li');
+			}).mouseout(function() {
+				$(this).removeClass('language_ul_li');
+			});
+			
+			if(getChromeVersion() <= 38 || checkIE() == 3){
+				$("#rdm-search-dropdown-ul li").css("margin-left", "15px");
+			}
+			
+			if(getChromeVersion()>=77){
+				$(".rdm-path").css({"margin": "5px 0 0 6px"});					
+			}
+			
+		});
+	</script>
+</body>
+</html>

@@ -1,0 +1,364 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" 
+"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+	<meta http-equiv="X-UA-Compatible" content="IE=EmulateIE7" />
+	<title></title>
+	
+	<link rel="stylesheet" type="text/css" href="/styles/power.css?V=V808R08M07SP0802"/>
+	<link rel="stylesheet" type="text/css" href="/styles/utils/iMain.css?V=V808R08M07SP0802"/>
+	
+	<script type="text/javascript" src="/scripts/tool.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/date.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/cacheEx.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/utils/iMain.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/compatibleExplorer.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/virtualModalDialogAdapter.js?V=V808R08M07SP0802"></script>
+
+	<script type="text/javascript" src="/scripts/reference/jquery-1.4.4.min.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/reference/jquery.ui.core.min.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/reference/jquery.ui.widget.min.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/reference/jquery.ui.mouse.min.js?V=V808R08M07SP0802"></script>
+	
+	<script>
+		var powerPath = "/", lang = "zh";
+		var defaultCharLength =  "2";
+	</script>
+	<script type='text/javascript' src='/a4j.res/org.ajax4jsf.framework.ajax.AjaxScript.do'></script><link rel="stylesheet" type="text/css" href="/styles/contextMenu.css?V=V808R08M07SP0802"/>
+	<link rel="stylesheet" type="text/css" href="/styles/plugin/bronzesoft.ui.table.css?V=V808R08M07SP0802"/>
+	<link rel="stylesheet" type="text/css" href="/styles/plugin/jquery.ui.autocomplete.css?V=V808R08M07SP0802"/>
+
+	<script type="text/javascript" src="/scripts/reference/jquery.ui.position.min.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/reference/jquery.ui.autocomplete.min.js?V=V808R08M07SP0802"></script>
+
+	<script type="text/javascript" src="/scripts/utils/selectHelper.js?V=V808R08M07SP0802"></script>	
+	<script type="text/javascript" src="/scripts/plugin/bronzesoft.ui.table.js?V=V808R08M07SP0802"></script>
+	
+	<script type="text/javascript" src="/scripts/contextMenu.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/map.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/tool.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/myspace/workLogList.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/utils/dateHelper.js?V=V808R08M07SP0802"></script>
+	
+	<script type="text/javascript" src="/scripts/util.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/engine.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/dwr/interface/jtaskEntityBean.js?V=V808R08M07SP0802"></script>
+	
+	<style>
+		.col1 {
+			width: 40px;
+		}
+		
+		.col2 {
+			width: 457px;
+			width: 444px\9;
+		}
+		@-moz-document url-prefix()
+		{.col2{ width : 443px;}}
+		
+		.col3 {
+			width: 200px;
+		}
+		.col4 {
+			width: 140px;
+		}
+		.col5 {
+			width: 35px;
+		}
+		.col6 {
+			width: 35px;
+		}
+		
+		.head-th {
+			border-top: 0;
+		}
+		
+		.week-menu-a{
+			float: right;
+			margin-top: 2px;
+			margin-top: 4px\9;
+		}
+		.week-span{
+			cursor: pointer;
+		}
+	</style>
+</head>
+
+<body style="background-color: #f5f5f5;" 
+   
+  
+  
+  onresize="tableMain.table('resize');" 
+ onkeydown="checkBK();"
+ onbeforeunload=""
+>
+<script>
+	if( !$.browser.msie ){ // For chrome, firefox onbeforeunload envent.
+		window.addEventListener('unload', function(){
+			$(document.body).attr("onbeforeunload").call();
+		}, false);
+	} else {
+		window.attachEvent('onunload', function(){
+			$(document.body).attr("onbeforeunload").call();
+			clearFrames();
+		});
+	}
+</script>
+<div id="linkHeader" class="menuBarItem" ondblclick="try{parent.restore($('#_type').val())}catch(e){}" style="height:auto;margin-bottom:30px;">
+		<div style="float: left;width: 40%;min-width: 460px">
+		<input type="button" class="button" onclick="buildPage('searchFrame', logSearchUrl + '?type=log');" title='&#28789;&#27963;&#26597;&#35810;&#24037;&#20316;&#26085;&#24535;' value='&#26597;&#35810;&#26085;&#24535;'>
+	
+		
+		<input type="button" class="button" onclick="buildPage('searchFrame', logSearchUrl + '?type=task');" title='&#26597;&#35810;&#27599;&#26085;&#24037;&#20316;&#36827;&#23637;' value='&#26597;&#35810;&#24037;&#20316;&#36827;&#23637;'>
+		
+		<input type="button" class="button" onclick="buildPage('searchFrame', logSearchUrl + '?type=report');" title='&#26085;&#24535;&#25253;&#21578;&#29983;&#25104;' value='&#26085;&#24535;&#25253;&#21578;&#29983;&#25104;'>
+		
+
+		
+		
+		<!--  -->
+		<input type="button" class="button" onclick="buildPage('wfDataStatFrame', tskStatUrl + '?workflowType=TSK&searchType=3');" onfocus="this.blur();" value='&#32479;&#35745;'>
+		<!--  -->
+		
+		<input type="button" class="button" onclick="exportLog();return false;" value='&#23548;&#20986;'>
+		</div>
+		<div id="logFilter" style="background-color: transparent;float: left;top: 3px;">
+			<input type="radio" name="chartType" id="worklogAll" onclick="changeLogView($(this), 'all');"  /><label for="worklogAll" class="focus-link" title='&#26377;&#26435;&#26597;&#30475;&#30340;&#25152;&#26377;&#24037;&#20316;&#26085;&#24535;'>&#25152;&#26377;&#26085;&#24535;</label>&nbsp;
+			<input type="radio" name="chartType" id="worklogFav" onclick="changeLogView($(this), 'focus');" checked="checked"/><label for="worklogFav" class="focus-link" title='&#37325;&#28857;&#20851;&#27880;&#30340;&#24037;&#20316;&#26085;&#24535;'>&#37325;&#28857;&#20851;&#27880;</label>&nbsp;
+			
+			
+			<input type="radio" name="chartType" id="worklogUdr" onclick="changeLogView($(this), 'below');"/><label for="worklogUdr" class="focus-link" title='&#19979;&#23646;&#30340;&#24037;&#20316;&#26085;&#24535;'>&#19979;&#23646;&#26085;&#24535;</label>&nbsp;
+			
+		</div>
+		
+		<a href="#" class="week-menu-a" onclick="changeWeek(-1);return false;">&#19979;&#21608;</a>
+		<a href="#" class="week-menu-a" onclick="changeWeek(0);return false;">&#26412;&#21608;</a>
+		<a href="#" class="week-menu-a" onclick="changeWeek(1);return false;">&#19978;&#21608;</a>		
+	</div>
+	
+	<div id="logInfo">
+		<div class="head-div">
+		<table id="headTable" class="head-table">
+			<tr>
+				<th class="head-th col1"/>
+				<th class="head-th col1"/>
+				<th class="head-th col2">
+					<input id="matchName" class="inputText" onkeydown="if(event.keyCode=='13'){refreshBody();}">
+				</th>
+				<th class="head-th col5">
+				</th>
+				<th id="dateHead" class="head-th col5">
+				</th>
+				<th class="head-th col5">
+				</th>
+				<th class="head-th col5">
+				</th>
+				<th class="head-th col5">
+				</th>
+				<th class="head-th col5">
+				</th>	
+				<th class="head-th col6">
+				</th>
+				<th class="head-th col3">
+					<input id="deptNames" class="inputText" ondblclick="$(this).next().click();" readonly="readonly"><input class="inputText search-text" value="..." onclick="searchMulData($('#deptIds')[0], $('#deptNames')[0], '/pages/common/searchDepartmentMul.jsf', null, refreshBody);">
+				</th>
+				<th class="head-th col4"/>
+			</tr>
+			
+			<tr>
+				<th>
+					<span>&#24207;&#21495;</span>
+				</th>
+				
+				<th title='&#20851;&#27880;'>
+					<span>&#20851;&#27880;</span>
+				</th>
+				
+				<th name="e.trueName">
+					<span style="cursor: pointer;" onclick="sorterByField($(this).parent());">
+						&#21517;&#31216;
+						<img class="sort-img" src="/images/icon082.gif">
+					</span>
+				</th>
+				<th>
+					<span class="week-span" onmouseover="showWeekDate($(this), 0)">&#19968;</span>
+				</th>
+				<th>
+					<span class="week-span" onmouseover="showWeekDate($(this), 1)">&#20108;</span>
+				</th>
+				<th>
+					<span class="week-span" onmouseover="showWeekDate($(this), 2)">&#19977;</span>
+				</th>
+				<th>
+					<span class="week-span" onmouseover="showWeekDate($(this), 3)">&#22235;</span>
+				</th>
+				<th>
+					<span class="week-span" onmouseover="showWeekDate($(this), 4)">&#20116;</span>
+				</th>
+				<th>
+					<span class="week-span" onmouseover="showWeekDate($(this), 5)">&#20845;</span>
+				</th>	
+				<th>
+					<span class="week-span" onmouseover="showWeekDate($(this), 6)">&#26085;</span>
+				</th>
+				<th name="department">
+					<span style="cursor: pointer;" onclick="sorterByField($(this).parent());">
+						&#25152;&#23646;&#37096;&#38376;
+					</span>
+				</th>
+				
+				<th name="r.modifyTime">
+					<span style="cursor: pointer;" onclick="sorterByField($(this).parent());">
+						&#26368;&#36817;&#26356;&#26032;&#26102;&#38388;
+					</span>
+				</th>
+			</tr>	
+		</table>
+		</div>
+	
+		<div id="tableBody" class="body-div">
+		<table class="body-table">
+			
+		</table>
+		
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table class="page-table page-table-hide" size=''>
+	<tr>
+		<td align="left">
+			&#31532;<span id="page_section">1 - &#26465;</span>
+			,
+			&#20849;&#26465;
+		</td>
+		<td align="right">
+			<a class='img-cursor ' onclick="getByTargetPage('1');">&lt;&lt;</a>&nbsp;
+			<a id="pagination_prevPage" class='img-cursor ' onclick="getByTargetPage('-1');">&lt;</a>
+
+			
+
+			<a id="pagination_nextPage" class='img-cursor hide' onclick="getByTargetPage('1');">&gt;</a>&nbsp;
+			<a class='img-cursor hide' onclick="getByTargetPage('');">&gt;&gt;</a>
+		</td>
+	</tr>
+</table>
+<input type="hidden" id="targetPage" name="targetPage" value=''/>
+		</div>
+	</div>
+
+	<span class="shadow" id="shadow" style="visibility: hidden"></span>
+	<div class="contextmenu" id="contextmenu" style="visibility: hidden">
+		<div class="menuItem" style="cursor: pointer; width: 100%" onclick="hidecontextMenu('shadow','contextMenu');openWorkLog('N', tableMain.table('getRows', true));">
+			<a href="#"> 
+				<img class="menuImage" src="/images/icon202.gif" /> 
+				<span class="menuImageText">&#25171;&#24320;</span>
+			</a>
+		</div>
+	</div>
+	
+	<div class="hide">
+		<input id="deptIds"> 
+		<span id="addFocus">&#21152;&#20837;&#20851;&#27880;</span>
+		<span id="clearFocus">&#21435;&#25481;&#20851;&#27880;</span>
+	</div>
+
+	
+<form id="logForm" name="logForm" method="post" action="/pages/myspace/log/workLogList.jsf" enctype="application/x-www-form-urlencoded">
+<input type="hidden" name="logForm" value="logForm" />
+
+		
+		<input type="hidden" id="_name" name="name">
+		<input type="hidden" id="_deptIds" name="deptIds">
+		<input type="hidden" id="_orderBy" name="orderBy">
+		<input type="hidden" id="_orderType" name="orderType">
+		<input type="hidden" id="_type" name="type" value="focus">
+		<input type="hidden" id="_curPage" name="curPage" value="1">
+		<input type="hidden" id="_currentDate" name="currentDate" value="">
+		<a href="#" id="logForm:search" name="logForm:search" onclick="A4J.AJAX.Submit('j_id_jsp_517639226_0','logForm',event,{'oncomplete':function(request,event,data){finishSearchLog();},'parameters':{'logForm:search':'logForm:search'} ,'actionUrl':'/pages/myspace/log/workLogList.jsf'} );return false;"></a>
+		
+		
+		<input type="hidden" id="_focus" name="focus">
+		<input type="hidden" id="_userId" name="userId">
+		<a href="#" id="logForm:focus" name="logForm:focus" onclick="A4J.AJAX.Submit('j_id_jsp_517639226_0','logForm',event,{'parameters':{'logForm:focus':'logForm:focus'} ,'actionUrl':'/pages/myspace/log/workLogList.jsf'} );return false;"></a>
+<script type="text/javascript" language="Javascript">function dpf(f) {var adp = f.adp;if (adp != null) {for (var i = 0;i < adp.length;i++) {f.removeChild(adp[i]);}}};function apf(f, pvp) {var adp = new Array();f.adp = adp;var ps = pvp.split(',');for (var i = 0,ii = 0;i < ps.length;i++,ii++) {var p = document.createElement("input");p.type = "hidden";p.name = ps[i];p.value = ps[i + 1];f.appendChild(p);adp[ii] = p;i += 1;}};function jsfcljs(f, pvp, t) {apf(f, pvp);var ft = f.target;if (t) {f.target = t;}f.submit();f.target = ft;dpf(f);};</script>
+<a id="logForm:export" href="#" onclick="if(typeof jsfcljs == 'function'){jsfcljs(document.forms['logForm'],'logForm:export,logForm:export','');}return false"></a><input type="hidden" name="javax.faces.ViewState" id="javax.faces.ViewState" value="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" />
+</form>
+	
+	<script type="text/javascript">
+		var light_status = '';
+		var userMap = new Map();
+		var currentDate;
+			
+		var logViewUrl = '/pages/myspace/log/workLogTab.jsf';
+		var logSearchUrl = '/pages/myspace/log/workLogSearch.jsf';
+		var logMainUrl = '/pages/myspace/log/workLogList.jsf';
+		var logReportDetailWin = '/pages/myspace/reportDetailWin.jsf';
+		var tskStatUrl = '/pages/workflow/workflowStat.jsf';
+		
+		var _appIndex = '';
+		if ( _appIndex ) {
+			$("#logFilter input").eq(_appIndex).click();
+		} else { refreshBody(); }
+		
+		var tableMain = $("#logInfo").table({
+			selTdClass: "",
+			hasPage: true,
+			autoRefresh: false,
+			canFlex: false,
+			
+			loaded: function(){
+				closeLoader();
+				setHeadDate();
+			},
+			dragging: function( event, $obj ){
+				if ( light_status != '' ) { toggleFocus($obj.closest("tr").find('img')); }
+			},
+			stopDrag: function (){
+				saveFocusLog();
+			},
+			canMoveVertical: function(event){
+				$(this).data("table").vertical = existChooseMenu();
+			},
+			synScroll : function(){
+				if($.browser.msie){
+					$("div", $("#dateHead")).css("left", 585 - $(this).data("table").bodyC.attr("scrollLeft"));
+				}
+			}
+		});
+	</script>
+<script type="text/javascript" src="/platform/scripts/custom.js?V=V808R08M07SP0802"></script>
+</body>
+</html>

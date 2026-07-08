@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RDM 工时填报系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="assets/style.css" rel="stylesheet">
+</head>
+<body>
+
+<div class="proto-ribbon">
+    <strong>⚡ 原型演示</strong> · 操作与真实系统一致，数据为 Mock。提交「故障演示用任务」可看到失败重试流程
+</div>
+
+<!-- 顶部导航 -->
+<nav class="navbar navbar-expand-lg navbar-dark">
+    <div class="container">
+        <a class="navbar-brand" href="dashboard.html">
+            <i class="bi bi-clock-history"></i> RDM 工时系统
+        </a>
+        <div class="d-flex align-items-center">
+            <span class="navbar-text me-3">
+                <i class="bi bi-person-circle"></i> <span id="navUsername">-</span>
+            </span>
+            <button class="btn btn-outline-light btn-sm" id="logoutBtn">
+                <i class="bi bi-box-arrow-right"></i> 退出
+            </button>
+        </div>
+    </div>
+</nav>
+
+<div class="container main-container">
+
+    <!-- 周信息条 -->
+    <div class="week-bar">
+        <div>
+            <h2>
+                <i class="bi bi-calendar-week"></i>
+                <span id="weekTitle">加载中...</span>
+                <span class="badge-current" id="weekBadge" style="display:none;">本周</span>
+            </h2>
+            <p class="week-sub" id="weekSub">-</p>
+        </div>
+        <div class="d-flex align-items-center gap-3">
+            <label class="text-white" style="font-size:13px;">
+                <i class="bi bi-calendar-event"></i> 选择日期
+                <input type="date" class="date-picker ms-2" id="datePicker">
+            </label>
+            <div class="form-check form-switch ms-2" title="启用后周六周日可编辑；切周后会恢复禁用">
+                <input class="form-check-input" type="checkbox" id="enableWeekend">
+                <label class="form-check-label" for="enableWeekend">启用周末</label>
+            </div>
+        </div>
+    </div>
+
+    <!-- 回填提示 -->
+    <div class="refill-banner" id="refillBanner" style="display:none;">
+        <i class="bi bi-arrow-counterclockwise"></i>
+        <span id="refillText">已回填该周 RDM 中已有的工时数据。修改后提交将覆盖原记录。</span>
+    </div>
+
+    <div class="row">
+        <!-- 左侧：工时表格 -->
+        <div class="col-lg-9">
+            <div class="card timesheet-card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5><i class="bi bi-list-task"></i> 工时填写</h5>
+                    <small class="text-muted">
+                        每格上输入工时（步进 0.5h），下输入完成率（0–100）
+                    </small>
+                </div>
+                <div class="card-body" style="padding: 0;">
+                    <div class="timesheet-wrap">
+                        <table class="timesheet" id="timesheetTable">
+                            <thead id="timesheetHead"></thead>
+                            <tbody id="timesheetBody"></tbody>
+                            <tfoot id="timesheetFoot"></tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右侧：操作面板 -->
+        <div class="col-lg-3">
+            <div class="card action-panel">
+                <div class="card-header">
+                    <h5><i class="bi bi-gear"></i> 操作</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-primary btn-action" id="submitBtn">
+                            <i class="bi bi-check-circle"></i> 提交本周工时
+                        </button>
+                        <button class="btn btn-outline-secondary btn-action" id="clearBtn">
+                            <i class="bi bi-eraser"></i> 全部清空
+                        </button>
+                    </div>
+
+                    <!-- U1：批量填充某个任务的全周工时 -->
+                    <div class="bulk-fill-block">
+                        <div class="bulk-title">
+                            <i class="bi bi-magic"></i> 批量填充
+                        </div>
+                        <div class="bulk-hint">选中下方任务，按"工作日"或"全周"基准值填入</div>
+                        <select class="form-select form-select-sm" id="bulkTaskSelect">
+                            <option value="">-- 选择任务 --</option>
+                        </select>
+                        <div class="bulk-row">
+                            <label>每天小时</label>
+                            <input type="number" class="form-control form-control-sm"
+                                   id="bulkHour" step="0.5" min="0" max="24" value="8">
+                        </div>
+                        <div class="bulk-row">
+                            <label>每天完成率</label>
+                            <input type="number" class="form-control form-control-sm"
+                                   id="bulkRate" step="1" min="0" max="100" value="80" placeholder="可空">
+                            <span class="bulk-suffix">%</span>
+                        </div>
+                        <div class="d-grid gap-1 mt-2">
+                            <button class="btn btn-sm btn-outline-primary" id="bulkApplyWorkdayBtn"
+                                    title="周一到周五填入；周末跳过">
+                                <i class="bi bi-calendar-week"></i> 应用到工作日
+                            </button>
+                            <button class="btn btn-sm btn-outline-primary" id="bulkApplyAllBtn"
+                                    title="周一到周日全部填入（含周末）">
+                                <i class="bi bi-calendar-check"></i> 应用到全周
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="summary-block">
+                        <div class="row"><span>本周总工时</span><strong id="sumTotal">0 h</strong></div>
+                        <div class="row"><span>有数据任务</span><strong id="sumActive">0 / 0</strong></div>
+                        <div class="row"><span>周末状态</span><strong id="sumWeekend">禁用</strong></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="bi bi-lightbulb"></i> 小贴士</h5>
+                </div>
+                <div class="card-body" style="font-size:13px;">
+                    <ul class="list-unstyled mb-0">
+                        <li class="mb-2"><i class="bi bi-check2 text-success"></i> 任务来自【我负责 + 我参与】，已自动去重</li>
+                        <li class="mb-2"><i class="bi bi-check2 text-success"></i> 只显示状态为「未启动 / 进行中」的任务</li>
+                        <li class="mb-2"><i class="bi bi-check2 text-success"></i> 切到旧周会自动回填 RDM 已有数据</li>
+                        <li class="mb-2"><i class="bi bi-check2 text-success"></i> 提交：按任务逐个、每个任务再逐天提交，遇到失败立即停止</li>
+                        <li class="mb-2"><i class="bi bi-check2 text-success"></i> 当天小时为 0 不会被提交</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 提交进度面板 -->
+<div class="modal fade progress-modal" id="progressModal" tabindex="-1"
+     data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header" id="progressHeader">
+                <h5 class="modal-title">
+                    <i class="bi bi-cloud-upload"></i> 正在提交本周工时
+                </h5>
+            </div>
+            <div class="modal-body">
+                <div class="d-flex justify-content-between mb-2">
+                    <span>进度：<strong id="progCount">0 / 0</strong></span>
+                    <span id="progPercent">0%</span>
+                </div>
+                <div class="progress">
+                    <div class="progress-bar" role="progressbar" style="width:0%;" id="progBar"></div>
+                </div>
+                <div class="task-list" id="progList"></div>
+                <p class="modal-footer-note" id="progNote">
+                    请勿关闭窗口，提交过程中可能持续几十秒
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 失败弹窗 -->
+<div class="modal fade fail-modal" id="failModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-x-circle-fill fail-icon"></i> 提交失败</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>
+                    任务 <strong id="failTaskName">-</strong>
+                    (<code id="failTaskId">-</code>) 提交失败
+                </p>
+                <div class="fail-detail">
+                    <strong>失败原因：</strong>
+                    <span id="failReason">-</span>
+                </div>
+                <div class="pending-list">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <strong>后续 <span id="failPendingCount">0</span> 个任务未提交，请手动到 RDM 处理：</strong>
+                    <ul id="failPendingList"></ul>
+                </div>
+                <p class="text-muted mt-3" style="font-size:13px;">
+                    <i class="bi bi-info-circle"></i>
+                    已成功提交的任务保持已提交状态。
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-primary"
+                        onclick="window.open('http://10.111.36.3:2029', '_blank')">
+                    <i class="bi bi-box-arrow-up-right"></i> 打开 RDM 网页
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">我知道了</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="assets/app.js"></script>
+<script>
+/* ============================================================
+ * dashboard.html · 工时主表交互
+ *
+ * 状态：
+ *   state.selectedDate  当前选中日期
+ *   state.monday        当前选中周周一
+ *   state.days[7]       当前周 7 天信息
+ *   state.tasks[]       原始任务列表（B 接口）
+ *   state.entries{}     按 task_id 索引 -> {hours[7], rates[7]}
+ *   state.weekendEnabled 周末是否启用（C3）
+ * ============================================================ */
+
+(function () {
+
+    // ===== 未登录拦截：A4 =====
+    if (!isLoggedIn()) {
+        window.location.href = 'index.html';
+        return;
+    }
+    document.getElementById('navUsername').textContent = currentUser();
+
+    // ===== 状态 =====
+    const state = {
+        selectedDate: new Date(),
+        monday: null,
+        days: [],
+        tasks: [],
+        entries: {},
+        weekendEnabled: false,
+        hasRefill: false
+    };
+
+    // ===== 初始化 =====
+    async function init() {
+        bindControls();
+        await selectWeek(new Date());
+    }
+
+    // ===== 控件 =====
+    function bindControls() {
+        const datePicker = document.getElementById('datePicker');
+        datePicker.value = fmtDate(new Date());
+        datePicker.addEventListener('change', (e) => {
+            if (!e.target.value) return;
+            // 避免 'YYYY-MM-DD' 被 new Date 解析为 UTC 造成时区偏移
+            const [y, m, d] = e.target.value.split('-').map(Number);
+            selectWeek(new Date(y, m - 1, d));
+        });
+
+        document.getElementById('enableWeekend').addEventListener('change', (e) => {
+            state.weekendEnabled = e.target.checked;
+            renderTable();
+            updateSummary();
+        });
+
+        document.getElementById('submitBtn').addEventListener('click', startSubmit);
+        document.getElementById('clearBtn').addEventListener('click', clearAll);
+
+        // ===== U1 批量填充 =====
+        document.getElementById('bulkApplyWorkdayBtn').addEventListener('click', () => bulkApply(false));
+        document.getElementById('bulkApplyAllBtn').addEventListener('click', () => bulkApply(true));
+        // 点击表格行选择任务
+        document.getElementById('timesheetBody').addEventListener('click', (e) => {
+            const tr = e.target.closest('tr[data-task-id]');
+            if (tr) selectTask(tr.dataset.taskId);
+        });
+
+        document.getElementById('logoutBtn').addEventListener('click', async () => {
+            await apiCall('/api/logout', { method: 'POST' });
+            // A5：保留 localStorage 中"记住的账号密码"
+            window.location.href = 'index.html';
+        });
+    }
+
+    // ===== 选周 =====
+    async function selectWeek(date) {
+        state.selectedDate = date;
+        state.monday = getWeekMonday(date);
+        state.days = getWeekDays(state.monday);
+        // C3：切周复位周末禁用
+        state.weekendEnabled = false;
+        document.getElementById('enableWeekend').checked = false;
+
+        renderWeekBar();
+
+        // 拉任务 + 回填
+        const tasksResp = await apiCall('/api/tasks');
+        if (!tasksResp || !tasksResp.success) {
+            toast(tasksResp?.message || '任务加载失败', 'error');
+            return;
+        }
+        state.tasks = tasksResp.tasks || [];
+        initEntries();
+
+        const tsResp = await apiCall(`/api/timesheet?week_start=${fmtDate(state.monday)}`);
+        state.hasRefill = false;
+        if (tsResp && tsResp.success && tsResp.tasks && tsResp.tasks.length > 0) {
+            applyRefill(tsResp.tasks);
+            state.hasRefill = true;
+        }
+        renderRefillBanner(tsResp?.tasks?.length || 0);
+
+        renderTable();
+        updateSummary();
+    }
+
+    function initEntries() {
+        state.entries = {};
+        for (const t of state.tasks) {
+            state.entries[t.task_id] = {
+                hours: [0,0,0,0,0,0,0],
+                rates: [null,null,null,null,null,null,null]
+            };
+        }
+    }
+
+    function applyRefill(refillTasks) {
+        for (const r of refillTasks) {
+            if (state.entries[r.task_id]) {
+                state.entries[r.task_id].hours = r.hours.slice(0, 7);
+                state.entries[r.task_id].rates = r.completion_rates.slice(0, 7);
+            }
+            // D3：找不到匹配 task_id 的，忽略不报错
+        }
+    }
+
+    // ===== 顶部周信息 =====
+    function renderWeekBar() {
+        const w = getISOWeekNumber(state.monday);
+        const first = state.days[0];
+        const last = state.days[6];
+        document.getElementById('weekTitle').textContent =
+            `${first.date.getFullYear()} 第 ${w} 周`;
+        document.getElementById('weekSub').textContent =
+            `${fmtMD(first.date)} ${first.weekday}  ~  ${fmtMD(last.date)} ${last.weekday}`;
+
+        // "本周" badge
+        const today = new Date(); today.setHours(0,0,0,0);
+        const thisMonday = getWeekMonday(today);
+        const isCurrent = thisMonday.getTime() === state.monday.getTime();
+        document.getElementById('weekBadge').style.display = isCurrent ? 'inline-block' : 'none';
+    }
+
+    function renderRefillBanner(n) {
+        const el = document.getElementById('refillBanner');
+        if (n > 0) {
+            document.getElementById('refillText').textContent =
+                `已回填该周 RDM 中 ${n} 项已有工时记录。修改后提交将覆盖原记录。`;
+            el.style.display = 'flex';
+        } else {
+            el.style.display = 'none';
+        }
+    }
+
+    // ===== 表格 =====
+    function renderTable() {
+        renderHead();
+        renderBody();
+        renderFoot();
+        refreshBulkSelect();
+    }
+
+    function renderHead() {
+        const head = document.getElementById('timesheetHead');
+        let html = '<tr><th class="col-task">任务 / 项目</th>';
+        state.days.forEach((d) => {
+            const cls = ['col-day'];
+            if (d.isWeekend) cls.push('weekend');
+            if (d.isToday) cls.push('today');
+            html += `
+                <th class="${cls.join(' ')}">
+                    <span class="day-weekday">${d.weekday}</span>
+                    <span class="day-date">${d.mdLabel}</span>
+                </th>`;
+        });
+        html += '<th class="col-total">合计</th></tr>';
+        head.innerHTML = html;
+    }
+
+    function renderBody() {
+        const body = document.getElementById('timesheetBody');
+        if (state.tasks.length === 0) {
+            body.innerHTML = `
+                <tr><td colspan="9">
+                    <div class="empty-state">
+                        <div class="empty-icon"><i class="bi bi-inbox"></i></div>
+                        <h5>未找到可填写任务</h5>
+                        <p>状态为「未启动」或「进行中」的任务才会出现在这里</p>
+                        <button class="btn btn-outline-primary btn-sm" onclick="location.reload()">
+                            <i class="bi bi-arrow-clockwise"></i> 刷新
+                        </button>
+                    </div>
+                </td></tr>`;
+            return;
+        }
+
+        let html = '';
+        state.tasks.forEach((task) => {
+            const entry = state.entries[task.task_id];
+            const sourceLabel = { responsible: '负责', participate: '参与', both: '负责·参与' }[task.source] || task.source;
+            html += `<tr data-task-id="${task.task_id}">`;
+            html += `
+                <td class="cell-task">
+                    <div class="task-name">${escapeHtml(task.name)}</div>
+                    <div class="task-project">
+                        ${escapeHtml(task.project)}
+                        <span class="task-source ${task.source}">${sourceLabel}</span>
+                    </div>
+                </td>`;
+
+            state.days.forEach((d, i) => {
+                const isWE = d.isWeekend;
+                const disabled = isWE && !state.weekendEnabled;
+                const hour = entry.hours[i] ?? 0;
+                const rate = entry.rates[i];
+                // U4：小时=0 时完成率不置灰，仍可填；提交时若小时=0 则跳过当天
+                const cellCls = ['cell-day'];
+                if (isWE) cellCls.push(disabled ? 'weekend-disabled' : 'weekend');
+                html += `
+                    <td class="${cellCls.join(' ')}">
+                        <div class="cell-input-group">
+                            <div class="input-line">
+                                <input type="number" class="input-hour"
+                                       data-task="${task.task_id}" data-day="${i}" data-kind="hour"
+                                       step="0.5" min="0" max="24"
+                                       value="${hour || ''}" placeholder="0"
+                                       ${disabled ? 'disabled' : ''}>
+                            </div>
+                            <div class="input-line">
+                                <input type="number" class="input-rate"
+                                       data-task="${task.task_id}" data-day="${i}" data-kind="rate"
+                                       step="1" min="0" max="100"
+                                       value="${rate ?? ''}" placeholder="--"
+                                       ${disabled ? 'disabled' : ''}>
+                                <span class="input-rate-suffix">%</span>
+                            </div>
+                        </div>
+                    </td>`;
+            });
+
+            const total = entry.hours.reduce((a, b) => a + (b || 0), 0);
+            html += `<td class="cell-total">${formatHour(total)}</td>`;
+            html += '</tr>';
+        });
+        body.innerHTML = html;
+        bindCellInputs();
+    }
+
+    function renderFoot() {
+        const foot = document.getElementById('timesheetFoot');
+        if (state.tasks.length === 0) { foot.innerHTML = ''; return; }
+
+        const dayTotals = [0,0,0,0,0,0,0];
+        let weekTotal = 0;
+        for (const tid in state.entries) {
+            const hrs = state.entries[tid].hours;
+            for (let i = 0; i < 7; i++) {
+                dayTotals[i] += hrs[i] || 0;
+                weekTotal += hrs[i] || 0;
+            }
+        }
+        let html = '<tr><td class="cell-task">当日合计</td>';
+        dayTotals.forEach((t) => {
+            const warn = t > 24 ? 'col-warn' : '';
+            html += `<td class="${warn}">${formatHour(t)} h</td>`;
+        });
+        html += `<td class="cell-total">${formatHour(weekTotal)} h</td></tr>`;
+        foot.innerHTML = html;
+    }
+
+    function bindCellInputs() {
+        document.querySelectorAll('.input-hour, .input-rate').forEach((el) => {
+            el.addEventListener('input', onCellInput);
+            el.addEventListener('blur', onCellBlur);
+        });
+    }
+
+    function onCellInput(e) {
+        const taskId = e.target.dataset.task;
+        const day = parseInt(e.target.dataset.day, 10);
+        const kind = e.target.dataset.kind;
+        const entry = state.entries[taskId];
+        if (!entry) return;
+
+        if (kind === 'hour') {
+            const raw = parseFloat(e.target.value);
+            // F4：越界即时拦截
+            if (!isNaN(raw) && raw > 24) {
+                e.target.classList.add('invalid');
+                showInvalidTip(e.target, '单日不能超过 24 小时');
+            } else {
+                e.target.classList.remove('invalid');
+                hideInvalidTip(e.target);
+            }
+            entry.hours[day] = isNaN(raw) ? 0 : Math.max(0, Math.min(24, raw));
+            // U4：小时=0 时完成率仍可填，无需同步置灰
+        } else {
+            const raw = parseInt(e.target.value, 10);
+            if (!isNaN(raw) && (raw > 100 || raw < 0)) {
+                e.target.classList.add('invalid');
+            } else {
+                e.target.classList.remove('invalid');
+            }
+            entry.rates[day] = e.target.value === '' ? null
+                : Math.max(0, Math.min(100, isNaN(raw) ? 0 : raw));
+        }
+
+        // 行末合计 + 表尾
+        updateRowTotal(taskId);
+        renderFoot();
+        updateSummary();
+    }
+
+    function onCellBlur(e) {
+        const taskId = e.target.dataset.task;
+        const day = parseInt(e.target.dataset.day, 10);
+        const kind = e.target.dataset.kind;
+        const entry = state.entries[taskId];
+
+        if (kind === 'hour') {
+            const v = clampHour(e.target.value);
+            entry.hours[day] = v;
+            e.target.value = v === 0 ? '' : v;
+            e.target.classList.remove('invalid');
+            hideInvalidTip(e.target);
+        } else {
+            const v = clampRate(e.target.value);
+            entry.rates[day] = v;
+            e.target.value = v == null ? '' : v;
+            e.target.classList.remove('invalid');
+        }
+        updateRowTotal(taskId);
+        renderFoot();
+        updateSummary();
+    }
+
+    function showInvalidTip(input, msg) {
+        // 简化：用 title 显示
+        input.title = msg;
+    }
+    function hideInvalidTip(input) {
+        input.title = '';
+    }
+
+    function updateRowTotal(taskId) {
+        const row = document.querySelector(`tr[data-task-id="${taskId}"]`);
+        if (!row) return;
+        const total = state.entries[taskId].hours.reduce((a, b) => a + (b || 0), 0);
+        row.querySelector('.cell-total').textContent = formatHour(total);
+    }
+
+    // ===== 操作 =====
+    function clearAll() {
+        if (!confirm('确定要清空本周所有工时数据吗？（不影响 RDM 已有记录）')) return;
+        initEntries();
+        renderTable();
+        updateSummary();
+        toast('已清空本周输入', 'info');
+    }
+
+    // ===== U1 批量填充某个任务全周 =====
+    function refreshBulkSelect() {
+        const sel = document.getElementById('bulkTaskSelect');
+        const prev = sel.value;
+        sel.innerHTML = '<option value="">-- 选择任务 --</option>' +
+            state.tasks.map(t =>
+                `<option value="${t.task_id}">${escapeHtml(t.name)}</option>`).join('');
+        if (state.tasks.find(t => t.task_id === prev)) sel.value = prev;
+    }
+
+    function selectTask(taskId) {
+        document.getElementById('bulkTaskSelect').value = taskId;
+        // 高亮当前选中行
+        document.querySelectorAll('tr[data-task-id]').forEach(r => {
+            r.classList.toggle('row-selected', r.dataset.taskId === taskId);
+        });
+    }
+
+    function bulkApply(includeWeekend) {
+        const taskId = document.getElementById('bulkTaskSelect').value;
+        if (!taskId) {
+            toast('请先选择一个任务（也可点击表格中的某行）', 'warn');
+            return;
+        }
+        const entry = state.entries[taskId];
+        if (!entry) return;
+
+        const hour = clampHour(document.getElementById('bulkHour').value);
+        const rateRaw = document.getElementById('bulkRate').value;
+        const rate = rateRaw === '' ? null : clampRate(rateRaw);
+
+        // 是否包含周末：受 includeWeekend + state.weekendEnabled 共同约束
+        const fillWeekend = includeWeekend && state.weekendEnabled;
+        if (includeWeekend && !state.weekendEnabled) {
+            toast('周末当前禁用，仅填入工作日。需先勾选「启用周末」', 'warn', 3200);
+        }
+
+        for (let i = 0; i < 7; i++) {
+            const isWE = i >= 5;
+            if (isWE && !fillWeekend) continue;
+            entry.hours[i] = hour;
+            entry.rates[i] = rate;
+        }
+
+        const taskName = state.tasks.find(t => t.task_id === taskId)?.name || '';
+        renderTable();
+        selectTask(taskId);  // 重渲染后保留高亮
+        updateSummary();
+        toast(`已为「${taskName}」填入 ${hour}h${rate != null ? ' / ' + rate + '%' : ''}`, 'success');
+    }
+
+    // ===== 汇总 =====
+    function updateSummary() {
+        let total = 0;
+        let active = 0;
+        for (const tid in state.entries) {
+            const h = state.entries[tid].hours.reduce((a,b) => a + (b||0), 0);
+            total += h;
+            if (h > 0) active++;
+        }
+        document.getElementById('sumTotal').textContent = formatHour(total) + ' h';
+        document.getElementById('sumActive').textContent = `${active} / ${state.tasks.length}`;
+        document.getElementById('sumWeekend').textContent = state.weekendEnabled ? '已启用' : '禁用';
+    }
+
+    // ===== 提交（按任务 → 按天，失败立即停止） =====
+    async function startSubmit() {
+        // 1) 收集要提交的任务（至少一天小时 > 0）
+        const queue = [];
+        for (const task of state.tasks) {
+            const e = state.entries[task.task_id];
+            const days = [];
+            for (let i = 0; i < 7; i++) {
+                const h = e.hours[i] || 0;
+                if (h <= 0) continue;             // U4：当天 0 小时不提交
+                if (h > 24) {
+                    toast(`「${task.name}」${state.days[i].weekday}工时超过 24 小时，请检查`, 'error');
+                    return;
+                }
+                days.push({
+                    day_index: i,
+                    date: state.days[i].dateStr,
+                    weekday: state.days[i].weekday,
+                    hour: h,
+                    rate: e.rates[i]
+                });
+            }
+            if (days.length > 0) queue.push({ task, days });
+        }
+        if (queue.length === 0) {
+            toast('请至少填写一个任务的工时', 'warn');
+            return;
+        }
+
+        openProgressModal(queue);
+
+        // 总天数（用作进度分母）
+        const totalDays = queue.reduce((s, q) => s + q.days.length, 0);
+        let doneDays = 0;
+        let doneTasks = 0;
+
+        // 2) 任务级循环：一次只跑一个任务
+        for (let ti = 0; ti < queue.length; ti++) {
+            const { task, days } = queue[ti];
+            markProgItem(task.task_id, 'in-progress', `准备提交（${days.length} 天）`);
+
+            // 3) 任务内：按天逐条提交
+            let taskOK = true;
+            for (let di = 0; di < days.length; di++) {
+                const d = days[di];
+                markProgItem(task.task_id, 'in-progress',
+                    `提交 ${d.weekday} (${d.date}) · ${formatHour(d.hour)}h ...`);
+
+                const ok = await submitOneDay(task, d);
+                if (ok) {
+                    doneDays++;
+                    updateProgress(doneDays, totalDays);
+                    // 模拟节奏，让用户看清进度
+                    await new Promise(r => setTimeout(r, 240));
+                } else {
+                    // 失败：标记 + 停下整个流程
+                    taskOK = false;
+                    markProgItem(task.task_id, 'failed',
+                        `${d.weekday} 提交失败：${task._lastFailMsg || '未知错误'}`);
+                    const remainingDays = days.length - di - 1;
+                    const pendingTasks = queue.slice(ti + 1).map(q => q.task);
+                    pendingTasks.forEach(p => markProgItem(p.task_id, 'pending', '已停止（未开始）'));
+                    onFailStop(task, d, remainingDays, pendingTasks);
+                    return;
+                }
+            }
+
+            if (taskOK) {
+                doneTasks++;
+                const totalH = days.reduce((s, d) => s + d.hour, 0);
+                markProgItem(task.task_id, 'success',
+                    `已提交 ${days.length} 天 / 共 ${formatHour(totalH)}h`);
+            }
+        }
+
+        // 全部成功
+        finishProgress(doneTasks, totalDays);
+    }
+
+    /** 提交单个任务的某一天（无重试，失败立即返回 false） */
+    async function submitOneDay(task, day) {
+        const payload = {
+            week_start: fmtDate(state.monday),
+            task_id: task.task_id,
+            name: task.name,
+            day_index: day.day_index,
+            date: day.date,
+            hour: day.hour,
+            completion_rate: day.rate
+        };
+        const res = await apiCall('/api/submit-day', {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        });
+        if (res && res.success) return true;
+        task._lastFailMsg = res?.message || '未知错误';
+        return false;
+    }
+
+    // ===== 进度面板 =====
+    let progressModalInst = null;
+
+    function openProgressModal(queue) {
+        const header = document.getElementById('progressHeader');
+        header.classList.remove('error');
+        header.querySelector('.modal-title').innerHTML =
+            '<i class="bi bi-cloud-upload"></i> 正在提交本周工时';
+
+        const totalDays = queue.reduce((s, q) => s + q.days.length, 0);
+        document.getElementById('progCount').textContent = `0 / ${totalDays}`;
+        document.getElementById('progPercent').textContent = '0%';
+        document.getElementById('progBar').style.width = '0%';
+        document.getElementById('progNote').textContent =
+            `共 ${queue.length} 个任务、${totalDays} 天工时；按"任务 → 天"逐条提交，遇到失败立即停止`;
+
+        const list = document.getElementById('progList');
+        list.innerHTML = queue.map(q => `
+            <div class="task-item pending" data-task-id="${q.task.task_id}">
+                <span class="status-icon"><i class="bi bi-hourglass"></i></span>
+                <div class="task-text">
+                    <strong>${escapeHtml(q.task.name)}</strong>
+                    <div class="meta">${escapeHtml(q.task.project)} · 排队中（${q.days.length} 天）</div>
+                </div>
+            </div>
+        `).join('');
+
+        progressModalInst = new bootstrap.Modal(document.getElementById('progressModal'));
+        progressModalInst.show();
+    }
+
+    function markProgItem(taskId, status, metaText) {
+        const item = document.querySelector(`.task-item[data-task-id="${taskId}"]`);
+        if (!item) return;
+        item.classList.remove('pending', 'in-progress', 'success', 'failed');
+        item.classList.add(status);
+
+        const icons = {
+            'pending': '<i class="bi bi-hourglass"></i>',
+            'in-progress': '<i class="bi bi-arrow-repeat"></i>',
+            'success': '<i class="bi bi-check-circle-fill"></i>',
+            'failed': '<i class="bi bi-x-circle-fill"></i>'
+        };
+        item.querySelector('.status-icon').innerHTML = icons[status] || '';
+        const metaEl = item.querySelector('.meta');
+        if (metaEl) {
+            const projectName = metaEl.textContent.split('·')[0].trim();
+            metaEl.textContent = `${projectName} · ${metaText}`;
+        }
+    }
+
+    function updateProgress(done, total) {
+        document.getElementById('progCount').textContent = `${done} / ${total}`;
+        const pct = Math.round(done / total * 100);
+        document.getElementById('progPercent').textContent = pct + '%';
+        document.getElementById('progBar').style.width = pct + '%';
+    }
+
+    function finishProgress(taskCount, dayCount) {
+        updateProgress(dayCount, dayCount);
+        setTimeout(() => {
+            if (progressModalInst) progressModalInst.hide();
+            toast(`✓ 已提交 ${taskCount} 个任务、共 ${dayCount} 天工时`, 'success', 3200);
+        }, 600);
+    }
+
+    function onFailStop(task, day, remainingDaysOfThisTask, pendingTasks) {
+        // 进度面板顶部变红
+        document.getElementById('progressHeader').classList.add('error');
+        document.getElementById('progressHeader').querySelector('.modal-title').innerHTML =
+            '<i class="bi bi-x-circle"></i> 提交失败，已停止';
+        document.getElementById('progNote').textContent =
+            '已在该任务的失败处停下，所有未提交的天/任务都保留在表格中，处理后请手动重提';
+
+        // 失败弹窗
+        document.getElementById('failTaskName').textContent = task.name;
+        document.getElementById('failTaskId').textContent = task.task_id;
+        document.getElementById('failReason').innerHTML =
+            `<strong>${day.weekday}（${day.date}） ${formatHour(day.hour)}h</strong> 提交失败：` +
+            `${escapeHtml(task._lastFailMsg || '未知错误')}<br>` +
+            `<span class="text-muted">同任务剩余 ${remainingDaysOfThisTask} 天、` +
+            `后续 ${pendingTasks.length} 个任务都已停止，未提交。</span>`;
+
+        const totalPending = remainingDaysOfThisTask + pendingTasks.length;
+        document.getElementById('failPendingCount').textContent = pendingTasks.length;
+        document.getElementById('failPendingList').innerHTML =
+            pendingTasks.length === 0
+                ? '<li>（无后续任务）</li>'
+                : pendingTasks.map(t => `<li>${escapeHtml(t.name)}</li>`).join('');
+
+        setTimeout(() => {
+            if (progressModalInst) progressModalInst.hide();
+            const failModal = new bootstrap.Modal(document.getElementById('failModal'));
+            failModal.show();
+        }, 800);
+    }
+
+    // ===== 工具 =====
+    function escapeHtml(s) {
+        return String(s || '').replace(/[&<>"']/g, c =>
+            ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    }
+    function formatHour(n) {
+        if (!n) return '0';
+        return (Math.round(n * 2) / 2).toString();
+    }
+
+    init();
+})();
+</script>
+</body>
+</html>

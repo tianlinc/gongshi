@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RDM 工时填报系统 · 登录</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/app.css') }}" rel="stylesheet">
+</head>
+<body>
+<div class="login-page">
+    <div class="login-card">
+        <h1>RDM 工时系统</h1>
+        <p class="login-sub">自动化工时填报平台</p>
+
+        <!-- 错误提示条 -->
+        <div class="login-alert" id="loginAlert"></div>
+
+        <form id="loginForm" autocomplete="off">
+            <div class="form-floating">
+                <input type="text" class="form-control" id="username" placeholder="用户名" autocomplete="off" required autofocus>
+                <label for="username"><i class="bi bi-person"></i> 用户名</label>
+            </div>
+
+            <div class="form-floating">
+                <input type="password" class="form-control" id="password" placeholder="密码" autocomplete="new-password" required>
+                <label for="password"><i class="bi bi-lock"></i> 密码</label>
+            </div>
+
+            <!-- A6：记住我 + 明文提示 + 清除按钮 -->
+            <div class="remember-row">
+                <div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="rememberMe" checked>
+                        <label class="form-check-label" for="rememberMe">
+                            <i class="bi bi-floppy"></i> 记住我（用户名 + 密码）
+                        </label>
+                    </div>
+                    <span class="remember-hint">
+                        <i class="bi bi-exclamation-triangle icon"></i>
+                        密码以明文形式保存在本浏览器，仅本人电脑可用
+                    </span>
+                </div>
+                <button type="button" class="clear-link" id="clearBtn" title="清除已保存账号">
+                    <i class="bi bi-trash3"></i> 清除已保存账号
+                </button>
+            </div>
+
+            <button type="submit" class="btn-login" id="loginBtn">
+                <span class="btn-text">登录</span>
+                <span class="spinner-border spinner-border-sm" style="display:none;"></span>
+            </button>
+        </form>
+
+        <div class="login-footer">
+            内部工具 · 仅限公司网络使用
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+<script>
+(function () {
+    const LS_USER = STORAGE_KEYS.REMEMBER_USERNAME;
+    const LS_PASS = STORAGE_KEYS.REMEMBER_PASSWORD;
+    const LS_FLAG = STORAGE_KEYS.REMEMBER_FLAG;
+
+    const usernameInput = document.getElementById('username');
+    const passwordInput = document.getElementById('password');
+    const rememberCheck = document.getElementById('rememberMe');
+    const loginBtn = document.getElementById('loginBtn');
+    const alertBox = document.getElementById('loginAlert');
+
+    /**
+     * 自动回填：进入页面时如果有保存的账号密码，填入两个输入框（A6）
+     */
+    function autoFill() {
+        if (localStorage.getItem(LS_FLAG) === 'true') {
+            const savedUser = localStorage.getItem(LS_USER);
+            const savedPass = localStorage.getItem(LS_PASS);
+            if (savedUser) {
+                usernameInput.value = savedUser;
+                rememberCheck.checked = true;
+            }
+            if (savedPass) {
+                passwordInput.value = savedPass;
+            }
+        } else {
+            // 没勾过的，清除历史遗留数据
+            localStorage.removeItem(LS_USER);
+            localStorage.removeItem(LS_PASS);
+            localStorage.removeItem(LS_FLAG);
+            rememberCheck.checked = true;  // 默认勾选
+        }
+    }
+
+    /**
+     * 清除已保存账号（A6）
+     */
+    function clearSaved() {
+        localStorage.removeItem(LS_USER);
+        localStorage.removeItem(LS_PASS);
+        localStorage.removeItem(LS_FLAG);
+        usernameInput.value = '';
+        passwordInput.value = '';
+        rememberCheck.checked = true;
+        toast('已清除保存的账号密码', 'info');
+    }
+
+    /**
+     * 表单提交
+     */
+    async function handleLogin(e) {
+        e.preventDefault();
+
+        const username = usernameInput.value.trim();
+        const password = passwordInput.value.trim();
+
+        if (!username || !password) {
+            alertBox.textContent = '用户名或密码不能为空';
+            alertBox.style.display = 'block';
+            return;
+        }
+
+        // 隐藏之前的错误
+        alertBox.style.display = 'none';
+        loginBtn.querySelector('.btn-text').textContent = '登录中...';
+        loginBtn.querySelector('.spinner-border').style.display = 'inline-block';
+        loginBtn.disabled = true;
+
+        const data = await apiCall('/api/login', {
+            method: 'POST',
+            body: JSON.stringify({ username, password })
+        });
+
+        if (data && data.success) {
+            // 保存/清除 localStorage
+            if (rememberCheck.checked) {
+                localStorage.setItem(LS_USER, username);
+                localStorage.setItem(LS_PASS, password);
+                localStorage.setItem(LS_FLAG, 'true');
+            } else {
+                localStorage.removeItem(LS_USER);
+                localStorage.removeItem(LS_PASS);
+                localStorage.removeItem(LS_FLAG);
+            }
+            window.location.href = '/dashboard';
+        } else {
+            alertBox.textContent = (data && data.message) || '登录失败，请稍后重试';
+            alertBox.style.display = 'block';
+            loginBtn.querySelector('.btn-text').textContent = '登录';
+            loginBtn.querySelector('.spinner-border').style.display = 'none';
+            loginBtn.disabled = false;
+        }
+    }
+
+    // 自动回填
+    autoFill();
+
+    // 清除
+    document.getElementById('clearBtn').addEventListener('click', clearSaved);
+
+    // 登录
+    document.getElementById('loginForm').addEventListener('submit', handleLogin);
+
+    // 输入时隐藏错误提示
+    usernameInput.addEventListener('input', () => { alertBox.style.display = 'none'; });
+    passwordInput.addEventListener('input', () => { alertBox.style.display = 'none'; });
+})();
+</script>
+</body>
+</html>

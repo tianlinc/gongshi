@@ -1,0 +1,207 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" 
+"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+	<meta http-equiv="X-UA-Compatible" content="IE=EmulateIE7" />
+	<title></title>
+	
+	<link rel="stylesheet" type="text/css" href="/styles/power.css?V=V808R08M07SP0802"/>
+	<link rel="stylesheet" type="text/css" href="/styles/utils/iMain.css?V=V808R08M07SP0802"/>
+	
+	<script type="text/javascript" src="/scripts/tool.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/date.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/cacheEx.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/utils/iMain.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/compatibleExplorer.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/virtualModalDialogAdapter.js?V=V808R08M07SP0802"></script>
+
+	<script type="text/javascript" src="/scripts/reference/jquery-1.4.4.min.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/reference/jquery.ui.core.min.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/reference/jquery.ui.widget.min.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/reference/jquery.ui.mouse.min.js?V=V808R08M07SP0802"></script>
+	
+	<script>
+		var powerPath = "/", lang = "zh";
+		var defaultCharLength =  "2";
+	</script>
+	<link rel="stylesheet" type="text/css" href="/styles/plugin/bronzesoft.ui.tabs.css?V=V808R08M07SP0802"/>
+	<link rel="stylesheet" type="text/css" href="/styles/utils/iDropdownMenu.css?V=V808R08M07SP0802"/>
+	<style>
+		.dropdown-menu-down-img {
+			background-position: 12px 8px;
+		}
+	</style>
+</head>
+
+<body style="background-color: #f5f5f5;" 
+   
+  
+  
+  
+ onkeydown="checkBK();"
+ onbeforeunload=""
+>
+<script>
+	if( !$.browser.msie ){ // For chrome, firefox onbeforeunload envent.
+		window.addEventListener('unload', function(){
+			$(document.body).attr("onbeforeunload").call();
+		}, false);
+	} else {
+		window.attachEvent('onunload', function(){
+			$(document.body).attr("onbeforeunload").call();
+			clearFrames();
+		});
+	}
+</script>
+<div class="top-column" id="nameDiv">
+		<span class="title-span"></span>
+		
+		<span id="operateDiv">
+			<span class="dropdown-menu-trigger dropdown-menu-down-img"></span>
+			<ul class="dropdown-menu-hide">
+				
+				<li val='&#23548;&#20986;' onclick="exportWorkLog();"></li>
+			</ul>
+		</span>
+		
+		
+	</div>
+	
+	<div id="tabPane">
+	<ul>
+		<li id="reportLink" uid="reportFrame" onclick="showBaseTabLink();" url='/pages/myspace/log/workLogView.jsf?isView=&userId=&reportId='>
+			&#22522;&#26412;&#20449;&#24687;
+		</li>
+		
+		<li id="fileTab" uid="fileFrame" onclick="chooseLogFile();" url="">
+			&#38468;&#20214;&nbsp;<span id="attachmentCount"></span>
+		</li>
+		
+		
+	</ul>
+  	</div>
+	
+	
+<form id="exportForm" name="exportForm" method="post" action="/pages/myspace/log/workLogTab.jsf" enctype="application/x-www-form-urlencoded">
+<input type="hidden" name="exportForm" value="exportForm" />
+
+		<input type="hidden" id="reportId" name="reportId" />
+		
+<script type="text/javascript" language="Javascript">function dpf(f) {var adp = f.adp;if (adp != null) {for (var i = 0;i < adp.length;i++) {f.removeChild(adp[i]);}}};function apf(f, pvp) {var adp = new Array();f.adp = adp;var ps = pvp.split(',');for (var i = 0,ii = 0;i < ps.length;i++,ii++) {var p = document.createElement("input");p.type = "hidden";p.name = ps[i];p.value = ps[i + 1];f.appendChild(p);adp[ii] = p;i += 1;}};function jsfcljs(f, pvp, t) {apf(f, pvp);var ft = f.target;if (t) {f.target = t;}f.submit();f.target = ft;dpf(f);};</script>
+<a id="exportForm:workLog" href="#" onclick="if(typeof jsfcljs == 'function'){jsfcljs(document.forms['exportForm'],'exportForm:workLog,exportForm:workLog','');}return false"></a><input type="hidden" name="javax.faces.ViewState" id="javax.faces.ViewState" value="H4sIAAAAAAAAAM1YX2wURRj/ev1fUEqBAsHqQQtXSLO9u9I/V0pKW67t6bWnd6UIxBzTu2m77d7usjvX26NI4EExGqJGfTBiJNFHeDIxxAeVaGKiwUQSffDBoC/GRIwxJv55QGdm9/au7R4ttiTsw9zszjfffPP7/t+V21Ce1mDTifAMmkOChOQpITIxgxPkwCtfPf1Orb5XcgEYKgCs0zVoSygpQU/LwiRKYF1AqiqJCURERRZiBBE8gmQ0hbVQSpWaxjSMR5Uk/mPyw4+ueoc+Xs/4ZA4De5oVbUpAM8jYP6NPCpMaSuGMos3yT0IfHcZFnIkqCoHNM3ExGZ/R1XhboD0Q6PAHOuNeQz8FZ8GVCXJme5nohiUSFVBVZCwTYZqkJGGYDpE0UdNkDBvO3Pxryq1jTbl15rj1cW67F8DGwbI5MdSiWMXImVNXoVxlq5UrkOM2eK/ctjhw83nXlp1vbdnZBtLOldC4DLtBRUtBDTZURSNsntsdoHurYd8yuweUVArJybAoz0Il84mwMmWkGQf2uBxmVfasmnroRu7HaSJSdkifHkFqeeV31z+tP/l1KbgGoUZSUHIQJYiihaCaTGtYn1akpKH2HuIsKjJVjCU7gEBToawZPEHdXRg4Eo0GR8fi46Hg0Xg0Ehljh28m4HaijYw8GRll1KHDMSrbprxsfZqGsmFRJ8b5mw1vfo7eLoWSEJTp4mnMg01NpoyODxEoZxrxFvFca9lXxBWtZX8R37KW24o4jLUcIAuUaahqkaBkg8+DaL+iSBjJN9zauW8u/fOrC0qOQ/kcktKUVwm3iEZQGa+a4bGRcLy/LxYaILCzVaXxU29NZXWVItkqKVOtlhGMoQmBnkhPqc3DGFYSSMJn/9p48pL3719KoSIEVdNU7Qkad8NQmVDSMtGyBOp4eG9lkrXGiCbKUwfC7FoEyzoN3lyevWGoYgRpKoH1XqEnNFEl1lvlHNJEJJuvhvovfQi4BkYJAP09Pc2+t/DBWIhFSCaYZoW6Hy+/9+f5C10upmoLi9xtON1oOjWBteevvNGw7vVbL+XyznoKk23i5Wyymw9qfppfdvCPSntWmvcUtYBwUfqz8Ll6c/ynnxvmh3JilBBLZntnCb3lHmd35slwmDoW1mJoDmvHvnj/4GuXboy4wBWG6oSEdH2U5jwL2Bqd0iT5HgL1pqpEpTWGKdySeBpNSPgAtTt6nIcnAGoa01iYQbqKNQFLwuO6Os4kCxoq9WemUHTs9vfezdd6WM7VYJspJKVcRJapOXfi1id3XnVxsk02WZ7i3edejP1+/GYPRyFzBGLLGmizv6PF17bX7WmcJ9TATnjY8qSkZASSVbEwmZYTvF4wfcrzzLMeeq+dBfdaKiYrJ6ou7rpz4YWr19iNGGyHMj3QvNIjCo3MrG5U1eBstttDE7ckYpLmNMqSgsq9o54pnAelCvbaTfVhPrY5wP+xPTbrYqw50wLTYrMe8+jezBAEl8d9v7+lEHZVU9hFhQmk45A8qXCkGbuBTCvsuAtVcbB22EOT7XvBZeBhb0P3D5mnILICZDoWIKMlCdJnBT5IaILaG5tOihIuwCgAu1dEXxytBntYPVos1HiXFn8ar/eEI6HDiKC+JFJpWm9icx5L+May7GcuKKehnW14Amd1AhvMCMMSCI0xhGaCDXbk4hsX0dAagtJUa0qG7h9HWi5Z6Iw2/16jp2k8sqJYYcKx+gkWwRhpnVVqrOelRi2bGgVuVFlQzhSS5ysTbhFbbCCrOZDVVrreX6RgtZbbi1Wg1npHsZLSWu8sViNa613G4mKtuA0T6HLOHovCH3/tF+UkTUtcyVjLn2GZazvsbJyne0WSpVbfTysPZhw0+g2kdaKk6Dfd2VQJ9BTv6QpPXiSUJQi32McK4+eeBWZqX0oXzOYkimWaFOlGyxoEVkbcxTAIlIj2bcvuXyDZD/7lA0m7t8UX4JFEFMSkHSt2QKX1xTkaENqCOBSY3U52yjjOPlAhthPaV4ZMZ4cFDaO2wWmAavtbMXj2rRQen5cxTT1Q+PRA94rw8dumY9d/Nki74OGFC6tHysc4Kw8UUiuzJF+Lz28BRcOZlAfpUajJf1w9QH7G9dTaAFR/r0nLZXInUMEbWJp+7Gbf4KfstAfHwpT1oupSbpWYlr60BuaH2VIvePLKcbhHg0Mn5axoKjlB2hQmxZQ9C+IKlB1oMXXd3B+NHI0Fo/HxYDQWioy6Dx50+9xnzrgdvtNartft8bi73Z44UVSPbSAx6F0lp0KrMvtA06rq8v8AdFtXYEd+UFQ/7P8bR1u6bqg5nDTrb1CHdm4Ek2klmc+2vevm0bdbtYtmP7fdbtQW050Kb113/OUffnNZXVJfZhgG70EN1ndeP5hXPmp+4V3aroVd2uLDWZsWzL4Vrt12OZtr077MeOGRu/Fd6se2jQHD3tGG7Yf743+9FrnYxBYAAA==" />
+</form>
+	
+	<script type="text/javascript" src="/scripts/plugin/bronzesoft.ui.tabs.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript" src="/scripts/utils/iDropdownMenu.js?V=V808R08M07SP0802"></script>
+	<script type="text/javascript">
+		var startDate = "", reportId = "";
+		var isView = "", userId = "";
+		
+		$("#tabPane").rdmtabs({height: getLeftMenuH() - 28});
+		
+		if (top.isAdmin) $("#operateDiv li:last").remove();
+		
+		$("#operateDiv").dropdownMenu();
+		
+		function showBaseTabLink() {
+		    $("#menuDiv a").show();
+			$("#remarkLink, #exportLink").css("display", (reportId == "" ? "none" : "block"));
+		}
+		
+		function chooseWorkLog(type) {
+			// get first day of this week
+			var today = new Date(), day = today.getDay();
+			if(day == 0)  day = 7;
+			
+			var dateStr = Date.addDays(getCurrentDate(), 1 - day);
+			
+			// previous week or next week
+			if(type != 0) {
+				var sDate = new Date(startDate.replace(/-/g, "/"));
+				var sDateStr = formatDate(sDate.getFullYear(), sDate.getMonth() + 1, sDate.getDate());
+				
+				dateStr = Date.addDays(sDateStr, type > 0 ? 7 : -7);
+			}
+			
+			top.iPath.pop();
+			
+			// set info
+			var doc = $("#reportFrame")[0].contentWindow.document;
+			
+			$("#_startDate", doc).val(dateStr);
+			$("#tabPane").rdmtabs("selectTabById", "reportLink");
+			$("#operate\\:refreshLog", doc).click();
+		}
+		
+		function chooseLogFile() {
+			var url = "/pages/attachment/attachmentList.jsf?type=LOG&objectId=" + reportId;
+			$("#menuDiv a[id!='returnLink']").hide();
+			$("#fileTab").attr({"url": url, "loaded" : "N"});
+		}
+		
+		function addRemark(editNoteId){
+			var url = "/pages/myspace/log/workLogNote.jsf?reportId=" + reportId;
+			
+			if (editNoteId) {
+				url += "&noteId=" + editNoteId;
+			}
+			
+			buildPage("remarkFrame", url);  $("#remarkFrame").css({zIndex: 3});
+		}
+		
+		function exportWorkLog() {
+			stopClear(3);
+			$("#reportFrame")[0].contentWindow.isClear = "N";
+			
+			$("#reportId").val(reportId);
+			$("#exportForm\\:workLog").click();
+		}
+ 		
+ 		function refreshLog(id, date, fileCount) {
+ 			reportId = id;
+ 			startDate = date;
+ 			
+ 			$("#attachmentCount").html("(" + fileCount + ")");
+ 			$("#fileTab, #remarkLink, #exportLink").css("display", (reportId == "" ? "none" : "block"));
+ 		}
+ 		
+ 		function refreshNote() {
+ 			clearPage("remarkFrame");
+ 			$("#reportFrame")[0].contentWindow.refreshNote();
+ 		}
+		
+		function afterSave(id, type, fromPage) {
+			if (type == 'DOC'&& fromPage == 'attachment') {
+		        var con = $("#tabPane").rdmtabs("getSelectedFrame")[0].contentWindow;
+			    if (typeof con.afterSave == "function") con.afterSave(id, type, fromPage);
+		    } else {
+			    $("#reportFrame")[0].contentWindow.refreshLogList();
+			}
+		}
+		
+		function returnPage() {
+			leavePage(function(){parent.clearPage('logFrame');});
+		}
+	</script>
+<script type="text/javascript" src="/platform/scripts/custom.js?V=V808R08M07SP0802"></script>
+</body>
+</html>

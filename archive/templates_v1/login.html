@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RDM 工时填报系统 - 登录</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Microsoft YaHei', sans-serif;
+        }
+        .login-container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            padding: 50px;
+            width: 100%;
+            max-width: 450px;
+        }
+        .login-logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .login-logo h1 {
+            color: #667eea;
+            font-size: 32px;
+            margin: 0;
+        }
+        .login-logo p {
+            color: #999;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+        .form-floating {
+            margin-bottom: 20px;
+        }
+        .form-control:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+        }
+        .btn-login {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            padding: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            border-radius: 10px;
+            width: 100%;
+            color: white;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .btn-login:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+            background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+        }
+        .alert {
+            display: none;
+            border-radius: 10px;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            color: #999;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-logo">
+            <h1>📊 RDM 工时系统</h1>
+            <p>自动化工时填报平台</p>
+        </div>
+
+        <div id="alertBox" class="alert alert-danger"></div>
+
+        <form id="loginForm">
+            <div class="form-floating">
+                <input type="text" class="form-control" id="username" placeholder="用户名" value="tianlin" required>
+                <label for="username">用户名</label>
+            </div>
+
+            <div class="form-floating">
+                <input type="password" class="form-control" id="password" placeholder="密码" value="Adapter@202606" required>
+                <label for="password">密码</label>
+            </div>
+
+            <button type="submit" class="btn btn-login" id="loginBtn">
+                <span class="btn-text">登录</span>
+                <span class="spinner-border spinner-border-sm" style="display: none;"></span>
+            </button>
+        </form>
+
+        <div class="footer">
+            内部工具 · 仅供公司使用
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value.trim();
+            const loginBtn = document.getElementById('loginBtn');
+            const btnText = loginBtn.querySelector('.btn-text');
+            const spinner = loginBtn.querySelector('.spinner-border');
+            const alertBox = document.getElementById('alertBox');
+
+            // 显示加载状态
+            btnText.textContent = '登录中...';
+            spinner.style.display = 'inline-block';
+            loginBtn.disabled = true;
+            alertBox.style.display = 'none';
+
+            try {
+                const response = await fetch('/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // 登录成功，跳转到主页
+                    window.location.href = '/dashboard';
+                } else {
+                    // 登录失败
+                    alertBox.textContent = data.message;
+                    alertBox.style.display = 'block';
+                }
+            } catch (error) {
+                alertBox.textContent = '登录失败：' + error.message;
+                alertBox.style.display = 'block';
+            } finally {
+                btnText.textContent = '登录';
+                spinner.style.display = 'none';
+                loginBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
