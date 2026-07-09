@@ -1,0 +1,79 @@
+name: Build
+
+# ============================================================
+#  IEI Timer Faster 跨平台构建 CI
+#  INSPUR-80: Windows + macOS 并行打包
+#
+#  触发方式:
+#    - push tag v* (如 v1.0.0)
+#    - 手动触发 (Actions 页面 → Run workflow)
+#
+#  产物 (下载路径: Actions → 选择运行 → Artifacts):
+#    - Windows: IEI_Timer_Faster_Setup.exe (Inno Setup 安装包)
+#    - macOS:   IEI_Timer_Faster_Setup.dmg (磁盘镜像)
+# ============================================================
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+
+  # ==========================================================
+  #  Windows 构建
+  # ==========================================================
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        run: pip install -r service_installer/requirements.txt pyinstaller
+
+      - name: Install Inno Setup 6
+        run: choco install innosetup --no-progress -y
+
+      - name: Build
+        run: |
+          cd service_installer
+          .\build.bat
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: IEI_Timer_Faster_Setup.exe
+          path: service_installer/dist/IEI_Timer_Faster_Setup.exe
+          if-no-files-found: error
+
+  # ==========================================================
+  #  macOS 构建
+  # ==========================================================
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build
+        run: |
+          cd service_installer
+          chmod +x build.sh
+          ./build.sh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: IEI_Timer_Faster_Setup.dmg
+          path: service_installer/dist/IEI_Timer_Faster_Setup.dmg
+          if-no-files-found: error
