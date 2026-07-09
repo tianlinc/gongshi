@@ -65,6 +65,9 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Install Python dependencies
+        run: pip install -r service_installer/requirements.txt pyinstaller
+
       - name: Build
         run: |
           cd service_installer

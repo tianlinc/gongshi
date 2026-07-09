@@ -88,7 +88,7 @@ REM  步骤 5: PyInstaller 构建
 REM ============================================================
 echo [5/6] 构建中，约 2-5 分钟...
 echo.
-pyinstaller --noconfirm service.spec
+python -m PyInstaller --noconfirm service.spec
 if errorlevel 1 (
     echo.
     echo [X] 构建失败，请检查上方错误信息

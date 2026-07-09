@@ -43,7 +43,7 @@ $PYTHON --version
 #  步骤 2: 安装依赖
 # ============================================================
 echo "[2/5] 安装依赖..."
-$PYTHON -m pip install -r requirements.txt pyinstaller --quiet || {
+$PYTHON -m pip install -r requirements.txt pyinstaller || {
     echo "[X] 依赖安装失败"
     exit 1
 }
