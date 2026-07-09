@@ -1,5 +1,0 @@
-LINE 1: hello
-LINE 2: world
-LINE 3: foo
-LINE 4: bar
-LINE 5: baz

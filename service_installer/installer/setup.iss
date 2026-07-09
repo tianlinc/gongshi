@@ -1,21 +1,24 @@
 ; =============================================================================
-; IEI Timer Faster 服务版 — Inno Setup 安装脚本
+; IEI Timer Faster 桌面版 — Inno Setup 安装脚本
 ; =============================================================================
-; 构建命令: ISCC.exe installer\setup.iss
-; 输出文件: dist\IEI_Timer_Faster_Service_Setup.exe
+; INSPUR-74: 从 Windows 后台服务（NSSM）改造为独立桌面应用。
+;   用户双击快捷方式直接在 WebView2 窗口中访问，无需系统浏览器。
 ;
-; 与 lightweight/installer/setup.iss 的区别:
-;   - 源码: dist\IEI Timer Faster Service\* (服务版 PyInstaller 产物)
-;   - 集成 NSSM: 安装时注册 Windows 服务 + 自动启动，卸载时停止 + 删除
-;   - 快捷方式指向 http://localhost:5000 (非 exe)
-;   - 无 registry autostart (NSSM SERVICE_AUTO_START 替代)
+; 与改造前的区别:
+;   - 移除 NSSM 服务注册/停止/删除（不再作为 Windows 后台服务运行）
+;   - 快捷方式指向 exe（非 http://localhost:5000 URL）
+;   - 安装后不注册服务，用户双击即用
+;   - 卸载时清理应用目录，无需 NSSM 操作
+;
+; 构建命令: ISCC.exe installer\setup.iss
+; 输出文件: dist\IEI_Timer_Faster_Setup.exe
 ; =============================================================================
 
 #define MyAppName "IEI Timer Faster"
 #define MyAppVersion "1.0.0"
 #define MyAppPublisher "InManage"
 #define MyAppURL "http://10.111.36.3:2029"
-#define MyAppServiceExe "IEI Timer Faster Service.exe"
+#define MyAppExe "IEI Timer Faster.exe"
 
 [Setup]
 AppId={{A8F3C2B1-9D4E-5F6A-7B8C-0D1E2F3A4B5C}
@@ -29,11 +32,11 @@ DefaultDirName={localappdata}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
 OutputDir=..\dist
-OutputBaseFilename=IEI_Timer_Faster_Service_Setup
+OutputBaseFilename=IEI_Timer_Faster_Setup
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
-UninstallDisplayName={#MyAppName} (服务版)
+UninstallDisplayName={#MyAppName}
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 DisableProgramGroupPage=yes
@@ -46,35 +49,17 @@ Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.i
 Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: "附加图标:"; Flags: checkedonce
 
 [Files]
-; 服务版 PyInstaller 产物
-Source: "..\dist\IEI Timer Faster Service\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-; NSSM (由 build.bat 自动下载到 ..\bin\nssm.exe)
-Source: "..\bin\nssm.exe"; DestDir: "{app}"; Flags: ignoreversion
+; PyInstaller 产物（onedir 目录）
+Source: "..\dist\IEI Timer Faster\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; 快捷方式图标
 Source: "iei_timer.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{autodesktop}\{#MyAppName}"; Filename: "http://localhost:5000"; IconFilename: "{app}\iei_timer.ico"; Tasks: desktopicon
-Name: "{group}\{#MyAppName}"; Filename: "http://localhost:5000"; IconFilename: "{app}\iei_timer.ico"
-Name: "{group}\停止 {#MyAppName} 服务"; Filename: "{app}\nssm.exe"; Parameters: "stop ""{#MyAppName}"""
+; 桌面快捷方式 → 指向 exe（不是 URL）
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"; IconFilename: "{app}\iei_timer.ico"; Tasks: desktopicon
+; 开始菜单
+Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"; IconFilename: "{app}\iei_timer.ico"
 Name: "{group}\卸载 {#MyAppName}"; Filename: "{uninstallexe}"
-
-[Run]
-; 注册 Windows 服务
-Filename: "{app}\nssm.exe"; Parameters: "install ""{#MyAppName}"" ""{app}\{#MyAppServiceExe}"""; \
-    StatusMsg: "正在注册 Windows 服务..."; Flags: runhidden
-; 设置服务为自动启动 (SERVICE_AUTO_START)
-Filename: "{app}\nssm.exe"; Parameters: "set ""{#MyAppName}"" Start SERVICE_AUTO_START"; \
-    StatusMsg: "正在配置服务自启动..."; Flags: runhidden
-; 启动服务
-Filename: "{app}\nssm.exe"; Parameters: "start ""{#MyAppName}"""; \
-    StatusMsg: "正在启动服务..."; Flags: runhidden
-
-[UninstallRun]
-; 停止服务
-Filename: "{app}\nssm.exe"; Parameters: "stop ""{#MyAppName}"""; Flags: runhidden; RunOnceId: "StopService"
-; 删除服务
-Filename: "{app}\nssm.exe"; Parameters: "remove ""{#MyAppName}"" confirm"; Flags: runhidden; RunOnceId: "RemoveService"
 
 [Code]
 function GetUninstallString: String;

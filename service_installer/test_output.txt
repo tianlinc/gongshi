@@ -1,5 +1,0 @@
-Checking: C:\Program Files (x86)\Inno Setup 6
-Checking: C:\Users\tianl\AppData\Local\Programs\Inno Setup 6
-FOUND at: C:\Users\tianl\AppData\Local\Programs\Inno Setup 6\ISCC.exe
-After loop: ISCC=[C:\Users\tianl\AppData\Local\Programs\Inno Setup 6\ISCC.exe]
-ISCC IS defined

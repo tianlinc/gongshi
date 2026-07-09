@@ -1,6 +1,0 @@
-[TEST] Running ISCC detection...
-[TEST] Temp file check:
-C:\Users\tianl\AppData\Local\Programs\Inno Setup 6\ISCC.exe
-[TEST] Read from file: [C:\Users\tianl\AppData\Local\Programs\Inno Setup 6\ISCC.exe]
-[TEST] ISCC after detection: [C:\Users\tianl\AppData\Local\Programs\Inno Setup 6\ISCC.exe]
-[TEST] ISCC IS defined

@@ -30,7 +30,6 @@ http://localhost:5000
 gongshi/
 ├── app.py              # Flask 主程序（RDMClient + 路由）
 ├── start.bat           # 一键启动脚本
-├── install.bat         # 单独安装依赖
 ├── templates/          # 前端页面
 │   ├── login.html      # 登录页
 │   └── dashboard.html  # 工时填写主页

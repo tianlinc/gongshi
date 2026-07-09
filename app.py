@@ -5,7 +5,7 @@ RDM 工时填报系统 v2 - 单文件后端
 
 实现内容：
 - RDMClient：登录（双重编码 AES-ECB）、统一 _request、
-  get_my_tasks（Playwright 浏览器引擎抓取）、
+  get_my_tasks（任务列表抓取）、
   get_week_existing（解析 unBody）、submit_day（entity.jsf → taskForm:save 简单提交）
 - 模块级 clients dict（保留 v1 session 模型，flask.session 仅存 username + logged_in）
 - 6 个路由：GET / + GET /dashboard + POST /api/login + POST /api/logout +
@@ -31,7 +31,6 @@ import time
 import threading
 import logging
 from bs4 import BeautifulSoup
-from playwright.sync_api import sync_playwright
 from license_utils import (
     generate_sn, generate_license, verify_license,
     read_status, write_status, check_activated, activate,
@@ -60,6 +59,10 @@ S4 = "#-%#!A-#-@-#@"   # 字段名 vs day 值
 # 状态白名单：RN=进行中, NR=未启动（HAR 实证：RDM HTML 中 status 属性值为 NR 非 NS）
 FILLABLE_STATUSES = {'RN', 'NR'}
 STATUS_TEXT_MAP = {'RN': '进行中', 'NR': '未启动'}
+
+# 任务列表抓取模式：True=纯 HTTP(A4J AJAX) 抓取
+# INSPUR-73: HTTP 模式已验证通过，默认启用
+USE_HTTP_TASKS = True
 
 
 def encode_unplanned_info_single_day(task_id: str, day_index: int,
@@ -219,150 +222,197 @@ class RDMClient:
             log.exception("[X] login error")
             return {"success": False, "message": f"登录出错: {str(e)}"}
 
-    # ----- 我的任务列表（Playwright 浏览器引擎） -----
-    def get_my_tasks(self):
+    # ----- 我的任务列表（HTTP A4J 引擎，INSPUR-73）-----
+    def get_my_tasks_http(self):
         """
-        用 Playwright headless 浏览器拉取【我负责+我参与】任务并去重合并。
-        只 goto 一次页面，通过点击 radio 按钮触发 A4J 刷新切换 scope。
-        """
-        cookies = self.session.cookies.get_dict()
-        pw_cookies = [
-            {"name": k, "value": v, "domain": "10.111.36.3", "path": "/"}
-            for k, v in cookies.items()
-        ]
-        ua = self.session.headers.get("User-Agent", "")
+        HTTP 直连版：用 requests 发 A4J AJAX 请求取代 Playwright 浏览器抓取。
 
+        流程：GET myTask.jsf → POST cate=0（我负责）→ POST cate=22（我参与）
+        每个 POST 的 XML 响应中直接用 BeautifulSoup 解析 tr.body-row。
+        """
         merged = {}
-        browser = _get_browser()  # P1 加固：复用全局单例，避免冷启动 Chromium
-        context = browser.new_context(user_agent=ua)
-        context.add_cookies(pw_cookies)
-        page = context.new_page()
 
-        try:
-            # 只加载一次页面
-            page.goto(f"{self.base_url}/pages/task/list/myTask.jsf",
-                      timeout=20000)
-            page.wait_for_load_state("networkidle")
+        # 1. GET myTask.jsf：获取初始 ViewState + AJAXREQUEST container ID
+        r = self._request('GET', '/pages/task/list/myTask.jsf')
+        soup = BeautifulSoup(r.text, 'html.parser')
 
-            for cate, radio_id, label in [
-                ("0", "myRecive", "我负责"),
-                ("22", "myReciveActor", "我参与"),
-            ]:
-                # 点击 radio 切换 scope
-                radio = page.wait_for_selector(f"#{radio_id}", timeout=10000)
-                # 先记下当前 DOM 里 body-row 的 count，用来判断 A4J 刷新完毕
-                old_count = len(page.query_selector_all("tr.body-row"))
-                radio.click()
+        view_state = self._parse_view_state(soup)
+        if not view_state:
+            print("[X] myTask.jsf 未拿到 ViewState")
+            return []
 
-                # 等 A4J 刷新：body-row 数量发生变化 或 超时
-                try:
-                    page.wait_for_function(
-                        f"document.querySelectorAll('tr.body-row').length !== {old_count}",
-                        timeout=8000
-                    )
-                    page.wait_for_timeout(500)  # 再给半秒让渲染结束
-                except Exception:
-                    # 可能数量没变（两 scope 相同），或超时 —— 等 network idle 兜底
-                    page.wait_for_load_state("networkidle")
+        # 提取 AJAXREQUEST（JSF container ID）
+        ajaxrequest = ''
+        m = re.search(r"A4J\.AJAX\.Submit\('([^']+)'", r.text)
+        if m:
+            ajaxrequest = m.group(1)
+        else:
+            m = re.search(r"j_id_jsp_\d+_\d+", r.text)
+            if m:
+                ajaxrequest = m.group(0)
 
-                # --- 切日期过滤器为"所有"，确保 NR（未启动）任务不被 RDM 日期过滤排除 ---
-                try:
-                    filter_btn = page.wait_for_selector("span.menu-more", timeout=5000)
-                    # INSPUR-27: 安全获取 current_val，避免 a.menu-show 为 null 时抛异常导致过滤器切换被跳过
-                    current_val = page.evaluate("""
-                        (() => {
-                            const el = document.querySelector('a.menu-show');
-                            return el ? el.getAttribute('val') : '';
-                        })()
-                    """)
-                    if current_val != "5":
-                        old_count2 = len(page.query_selector_all("tr.body-row"))
-                        filter_btn.click()
-                        # 等下拉菜单出现（首次点击 JS 会动态创建 li 元素）
-                        page.wait_for_selector("#taskMenu li:last-child", timeout=5000)
-                        # 点击"所有"（即最后一个 li）
-                        all_li = page.query_selector("#taskMenu li:last-child")
-                        all_li.click()
-                        # 等 A4J refreshBody 完成
-                        try:
-                            page.wait_for_function(
-                                f"document.querySelectorAll('tr.body-row').length !== {old_count2}",
-                                timeout=8000
-                            )
-                            page.wait_for_timeout(500)
-                        except Exception:
-                            page.wait_for_load_state("networkidle")
-                        print(f"[OK] {label} 日期过滤器已切换为 所有")
-                    else:
-                        print(f"[OK] {label} 日期过滤器已是 所有")
-                except Exception as e:
-                    print(f"[OK] {label} 日期过滤器切换跳过: {e}")
-                # -------------------------------------------------------------------
-                rows = page.query_selector_all("tr.body-row")
-                print(f"[OK] {label} 抓取 {len(rows)} 条任务")
-                for row in rows:
-                    status = row.get_attribute("status") or ""
-                    tid = row.get_attribute("id") or ""
-                    tds = row.query_selector_all("td")
-                    name = ""
-                    project = ""
-                    project_id = ""
-                    plan_start = ""
-                    plan_end = ""
-                    if len(tds) > 5:
-                        a = tds[5].query_selector("a")
-                        name = (a.inner_text() if a else tds[5].inner_text()).strip()
-                    if len(tds) > 7:
-                        a = tds[7].query_selector("a")
-                        project = (a.inner_text() if a else tds[7].inner_text()).strip()
-                        if a:
-                            onclick = a.get_attribute("onclick") or ""
-                            m = re.search(r"openEntity\(['\"]([^'\"]+)['\"]", onclick)
-                            if m:
-                                project_id = m.group(1)
-                    if len(tds) > 10:
-                        plan_start = (tds[9].inner_text() if tds[9] else "").strip()
-                        plan_end = (tds[10].inner_text() if tds[10] else "").strip()
+        if not ajaxrequest:
+            print("[X] myTask.jsf 未拿到 AJAXREQUEST")
+            return []
 
-                    task = {
-                        "task_id": tid,
-                        "name": name,
-                        "project": project,
-                        "project_id": project_id,
-                        "status_code": status,
-                        "plan_start": plan_start,
-                        "plan_end": plan_end,
-                    }
-                    if tid in merged:
-                        merged[tid]["source"] = "both"
-                    else:
-                        task["source"] = label
-                        merged[tid] = task
-        finally:
-            context.close()  # P1 加固：只关 context，不关浏览器单例
+        # 2. 循环两个 scope
+        for cate, label in [("0", "我负责"), ("22", "我参与")]:
+            r, view_state = self._a4j_fetch_tasks(
+                ajaxrequest, view_state, cate, label
+            )
+            tasks = self._parse_a4j_tasks(r.text, label)
+            for t in tasks:
+                tid = t['task_id']
+                if tid in merged:
+                    merged[tid]['source'] = 'both'
+                else:
+                    merged[tid] = t
 
-        # 过滤 status ∈ {RN, NR}
+        # 3. 过滤 status ∈ {RN, NR}
         result = []
         for t in merged.values():
-            st = t.get("status_code", "")
+            st = t.get('status_code', '')
             if st in FILLABLE_STATUSES:
-                t["status"] = STATUS_TEXT_MAP.get(st, st)
+                t['status'] = STATUS_TEXT_MAP.get(st, st)
                 result.append({
-                    "task_id": t["task_id"],
-                    "name": t["name"],
-                    "project": t["project"],
-                    "status": t["status"],
-                    "status_code": t["status_code"],
-                    "source": t["source"],
-                    "plan_start": t.get("plan_start", ""),
-                    "plan_end": t.get("plan_end", ""),
+                    'task_id': t['task_id'],
+                    'name': t['name'],
+                    'project': t['project'],
+                    'project_id': t.get('project_id', ''),
+                    'status': t['status'],
+                    'status_code': t['status_code'],
+                    'source': t['source'],
+                    'plan_start': t.get('plan_start', ''),
+                    'plan_end': t.get('plan_end', ''),
                 })
-            else:
-                if st not in ("FN", "TC", "SP", "FS", ""):
-                    print(f"[OK] 未知任务状态 status={st} name={t.get('name','')}")
+            elif st and st not in ('FN', 'TC', 'SP', 'FS', ''):
+                print(f"[OK] 未知任务状态 status={st} name={t.get('name','')}")
 
         print(f"[OK] 获取任务 {len(result)} 条 user={self.username}")
         return result
+
+    def _a4j_fetch_tasks(self, ajaxrequest, view_state, cate, label):
+        """
+        发一次 A4J AJAX POST 到 myTask.jsf 获取指定 scope 的任务列表。
+
+        返回 (response, new_view_state)。
+        """
+        form_data = {
+            'AJAXREQUEST': ajaxrequest,
+            'operate': 'operate',
+            'page': '',
+            'cate': cate,
+            'type': 'TSK',
+            'module': 'TSK',
+            'planId': '',
+            'refreshType': '0',
+            'isInit': 'N',
+            'nodeId': 'value%3D%22',
+            'projectIds': '',
+            'taskName': '',
+            'emptySearch': '',
+            'baseSearch': '',
+            'hasPlanOwner': '',
+            'showFCTask': 'N',
+            'condition': '',
+            'isOwner': '',
+            'light': '',
+            'pjtTask': '',
+            'userId': '',
+            'objectId': '',
+            'filterIds': '',
+            'operate:_path': '',
+            'operate:_fileName': '',
+            'operate:_fileContentType': '',
+            'javax.faces.ViewState': view_state,
+            'operate:refreshBody': 'operate:refreshBody',
+        }
+        headers = {
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            'Faces-Request': 'partial/ajax',
+        }
+
+        if app.debug:
+            log.debug("[DEBUG] _a4j_fetch_tasks POST %s cate=%s", label, cate)
+
+        r = self._request(
+            'POST',
+            '/pages/task/list/myTask.jsf',
+            data=form_data,
+            headers=headers,
+        )
+        print(f"[OK] {label} HTTP 请求完成 status={r.status_code} len={len(r.text)}")
+
+        # 从 XML 响应中提取新的 ViewState
+        new_vs = view_state  # fallback
+        try:
+            xml_soup = BeautifulSoup(r.text, 'html.parser')
+            vs_input = xml_soup.find(
+                'input', attrs={'name': 'javax.faces.ViewState'}
+            )
+            if vs_input and vs_input.get('value'):
+                new_vs = vs_input['value']
+        except Exception:
+            pass
+
+        return r, new_vs
+
+    @staticmethod
+    def _parse_a4j_tasks(xml_text, label):
+        """
+        从 myTask.jsf A4J XML 响应中解析任务列表。
+
+        XML 结构：<div id="taskPanel"> → <table> → <tbody> → <tr class="body-row">
+        task_id 来自 tr#id, status 来自 tr#status。
+        字段映射：td[5]=任务名, td[7]=项目名+project_id, td[9]=plan_start, td[10]=plan_end
+        """
+        soup = BeautifulSoup(xml_text, 'html.parser')
+        rows = soup.find_all('tr', class_='body-row')
+
+        tasks = []
+        for row in rows:
+            tid = row.get('id', '')
+            status = row.get('status', '')
+            tds = row.find_all('td')
+
+            name = ''
+            project = ''
+            project_id = ''
+            plan_start = ''
+            plan_end = ''
+
+            if len(tds) > 5:
+                a = tds[5].find('a')
+                name = (a.get_text(strip=True) if a
+                        else tds[5].get_text(strip=True))
+
+            if len(tds) > 7:
+                a = tds[7].find('a')
+                if a:
+                    project = a.get_text(strip=True)
+                    onclick = a.get('onclick', '')
+                    m = re.search(r"openEntity\(['\"]([^'\"]+)['\"]", onclick)
+                    if m:
+                        project_id = m.group(1)
+
+            if len(tds) > 10:
+                plan_start = tds[9].get_text(strip=True)
+                plan_end = tds[10].get_text(strip=True)
+
+            tasks.append({
+                'task_id': tid,
+                'name': name,
+                'project': project,
+                'project_id': project_id,
+                'status_code': status,
+                'plan_start': plan_start,
+                'plan_end': plan_end,
+                'source': label,
+            })
+
+        print(f"[OK] {label} 解析 {len(tasks)} 条任务")
+        return tasks
+
 
     # ----- 任务缓存（JSON 文件缓存，TTL 4h）-----
     def _get_cache_path(self, username):
@@ -1214,45 +1264,6 @@ class RDMClient:
 
 clients = {}
 
-# ===========================================================================
-# Playwright 浏览器实例（thread-local，解决 Flask 多线程安全问题）
-# ===========================================================================
-# Playwright sync API 对象绑定创建线程，跨线程使用会抛
-# "cannot switch to a different thread"。改用 threading.local()
-# 为每个请求线程维护独立浏览器实例。
-# ===========================================================================
-
-_thread_local = threading.local()
-
-
-def _get_browser():
-    """获取或创建当前线程的 Playwright Chromium 浏览器实例"""
-    if not hasattr(_thread_local, 'browser') or _thread_local.browser is None:
-        tid = threading.get_ident()
-        print(f"[OK] Playwright 浏览器启动中（线程 {tid}）...")
-        _thread_local.playwright = sync_playwright().start()
-        _thread_local.browser = _thread_local.playwright.chromium.launch(headless=True, channel="chromium")
-        print(f"[OK] Playwright 浏览器就绪（线程 {tid}）")
-    return _thread_local.browser
-
-
-def _cleanup_browser():
-    """清理当前线程的 Playwright 浏览器实例"""
-    if hasattr(_thread_local, 'browser') and _thread_local.browser:
-        try:
-            _thread_local.browser.close()
-        except Exception:
-            pass
-        _thread_local.browser = None
-    if hasattr(_thread_local, 'playwright') and _thread_local.playwright:
-        try:
-            _thread_local.playwright.stop()
-        except Exception:
-            pass
-        _thread_local.playwright = None
-    print("[OK] Playwright 浏览器实例已清理")
-
-
 def get_client():
     """获取当前用户的 RDMClient；未登录或 Flask 重启 → None"""
     username = session.get('username')
@@ -1475,16 +1486,13 @@ def api_logout():
     if username and username in clients:
         del clients[username]
     session.clear()
-    # P1 加固：所有用户都已登出时清理浏览器单例
-    if not clients:
-        _cleanup_browser()
     print(f"[OK] 用户登出: {username or '(unknown)'}")
     return jsonify({'success': True})
 
 
 @app.route('/api/tasks', methods=['GET'])
 def api_tasks():
-    """拉取我的任务（缓存优先；?refresh=true 强制 Playwright 抓取）"""
+    """拉取我的任务（缓存优先；?refresh=true 强制重新抓取）"""
     client = get_client()
     try:
         force_refresh = request.args.get('refresh') == 'true'
@@ -1495,7 +1503,7 @@ def api_tasks():
                 print(f"[OK] 缓存命中 {len(cache['tasks'])} 条任务 user={client.username}")
                 return jsonify({'success': True, 'tasks': cache['tasks'], 'cached': True, 'cached_at': cache.get('cached_at', '')})
 
-        tasks = client.get_my_tasks()
+        tasks = client.get_my_tasks_http()
         client._write_cache(tasks)
         print(f"[OK] 拉取任务 {len(tasks)} 条 user={client.username}")
         return jsonify({'success': True, 'tasks': tasks, 'cached': False})

@@ -11,8 +11,6 @@ license_status.json
 .multica/
 .agent_context/
 .team-backup/
-# Windows reserved device name (zero-byte file, accidentally created)
-nul
 # Prebuilt Chromium binaries (~400MB, not source code)
 **/playwright-browsers-prebuilt/
 # Build output
@@ -20,5 +18,7 @@ build_output.txt
 build_error.txt
 dist/
 # Build artifacts (large .pkg files exceed GitHub limits)
-lightweight/build/
 service_installer/build/
+# Generated HAR analysis output files
+tools/har_analysis_output.txt
+tools/har_entries_*_full.txt

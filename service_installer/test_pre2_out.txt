@@ -1,2 +1,0 @@
-ISCC result: [C:\Users\tianl\AppData\Local\Programs\Inno Setup 6\ISCC.exe]
-ISCC FOUND: C:\Users\tianl\AppData\Local\Programs\Inno Setup 6\ISCC.exe

@@ -184,16 +184,23 @@ def _get_status_file_path() -> str:
     """
     获取 license_status.json 的完整路径。
 
-    - PyInstaller 打包模式（sys.frozen）：写入 %APPDATA%/gongshi/license_status.json
-      （sys._MEIPASS 是只读临时目录，不能写入。仿照 desktop/run.py 中
-      credentials.dat 和 RDM 任务缓存的模式，使用用户数据目录。）
+    - PyInstaller 打包模式（sys.frozen）：
+        Windows: %APPDATA%/gongshi/license_status.json
+        macOS:   ~/Library/Application Support/gongshi/license_status.json
+        其他:    ~/gongshi/license_status.json
     - 开发模式：与 license_utils.py 同目录，跟历史行为兼容。
     """
     import sys
     if getattr(sys, 'frozen', False):
-        # 桌面打包模式 → 用户数据目录（%APPDATA%/gongshi/）
-        appdata = os.environ.get('APPDATA') or os.path.expanduser('~')
-        data_dir = os.path.join(appdata, 'gongshi')
+        # 桌面打包模式 → 用户数据目录
+        if sys.platform == 'darwin':
+            data_dir = os.path.join(
+                os.path.expanduser('~'), 'Library', 'Application Support', 'gongshi')
+        elif sys.platform == 'win32':
+            appdata = os.environ.get('APPDATA') or os.path.expanduser('~')
+            data_dir = os.path.join(appdata, 'gongshi')
+        else:
+            data_dir = os.path.join(os.path.expanduser('~'), 'gongshi')
         os.makedirs(data_dir, exist_ok=True)
         return os.path.join(data_dir, 'license_status.json')
     # 开发模式 → 与 license_utils.py 同目录
