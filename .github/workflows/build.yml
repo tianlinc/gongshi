@@ -41,10 +41,34 @@ jobs:
       - name: Install Inno Setup 6
         run: choco install innosetup --no-progress -y
 
-      - name: Build
+      - name: Build (PyInstaller)
+        shell: cmd
+        working-directory: service_installer
         run: |
-          cd service_installer
-          .\build.bat
+          echo === Python check ===
+          python --version
+          echo === PyInstaller check ===
+          python -m pip show pyinstaller
+          echo === Build start ===
+          python -m PyInstaller --noconfirm service.spec
+          echo === Build done ===
+
+      - name: Build (Inno Setup installer)
+        shell: cmd
+        run: |
+          echo === Looking for ISCC ===
+          set "ISCC="
+          if exist "%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe" set "ISCC=%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe"
+          if not defined ISCC if exist "%ProgramFiles%\Inno Setup 6\ISCC.exe" set "ISCC=%ProgramFiles%\Inno Setup 6\ISCC.exe"
+          if not defined ISCC if exist "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" set "ISCC=C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if not defined ISCC where iscc 2>nul && set "ISCC=iscc"
+          if not defined ISCC (echo [X] ISCC not found & exit /b 1)
+          echo [OK] ISCC: %ISCC%
+          "%ISCC%" /O"service_installer\dist" /F"IEI_Timer_Faster_Setup" "service_installer\installer\setup.iss"
+
+      - name: Cleanup intermediate
+        shell: cmd
+        run: rmdir /s /q "service_installer\dist\IEI Timer Faster" 2>nul || ver>nul
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -68,11 +92,51 @@ jobs:
       - name: Install Python dependencies
         run: pip install -r service_installer/requirements.txt pyinstaller
 
-      - name: Build
+      - name: Prepare icon
+        working-directory: service_installer
+        continue-on-error: true
         run: |
-          cd service_installer
-          chmod +x build.sh
-          ./build.sh
+          if [ -f "iei_timer.icns" ]; then echo "icns already exists"; elif [ -f "iei_timer.ico" ]; then
+            python3 -c "
+import struct, os
+with open('iei_timer.ico','rb') as f: data=f.read()
+count=data[4]|(data[5]<<8);bs,bo,bl=0,0,0
+for i in range(count):
+    o=6+i*16;w=data[o];h=data[o+1]
+    if w==0:w=256
+    if h==0:h=256
+    if w*h>bs:bs,bo,bl=w*h,data[o+12]|(data[o+13]<<8)|(data[o+14]<<16)|(data[o+15]<<24),data[o+8]|(data[o+9]<<8)|(data[o+10]<<16)|(data[o+11]<<24)
+if bo>0 and data[bo:bo+bl][:8]==b'\\x89PNG\\r\\n\\x1a\\n':
+    with open('iei_timer.png','wb') as f: f.write(data[bo:bo+bl])
+    os.system('mkdir -p tmp.iconset')
+    for sz in [16,32,64,128,256,512]:
+        os.system(f'sips -z {sz} {sz} iei_timer.png --out tmp.iconset/icon_{sz}x{sz}.png 2>/dev/null')
+        if sz<=256: os.system(f'sips -z {sz*2} {sz*2} iei_timer.png --out tmp.iconset/icon_{sz}x{sz}@2x.png 2>/dev/null')
+    os.system('iconutil -c icns tmp.iconset -o iei_timer.icns 2>/dev/null')
+    import shutil; shutil.rmtree('tmp.iconset', ignore_errors=True)
+    print('icns created' if os.path.exists('iei_timer.icns') else 'icns failed')
+" 2>/dev/null || true
+          fi
+
+      - name: Build (PyInstaller)
+        working-directory: service_installer
+        run: |
+          python3 --version
+          pip show pyinstaller
+          python3 -m PyInstaller --noconfirm service.spec
+
+      - name: Package (DMG)
+        working-directory: service_installer
+        run: |
+          rm -rf "dist/IEI Timer Faster" 2>/dev/null || true
+          if [ -d "dist/IEI Timer Faster.app" ]; then
+            hdiutil create -volname "IEI Timer Faster" -srcfolder "dist/IEI Timer Faster.app" -ov -format UDZO "dist/IEI_Timer_Faster_Setup.dmg"
+            echo "DMG created: dist/IEI_Timer_Faster_Setup.dmg"
+          else
+            echo "ERROR: .app bundle not found at dist/IEI Timer Faster.app/"
+            ls -la dist/ 2>/dev/null || echo "(dist/ empty)"
+            exit 1
+          fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
