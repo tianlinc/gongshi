@@ -348,6 +348,11 @@ class UpdateChecker:
                 return (0, 0, 0)
         return _parse(remote) > _parse(current)
 
+    def get_last_check(self):
+        """返回最近一次检查结果（线程安全）。"""
+        with self._lock:
+            return self._last_check
+
     # ---- 下载 ----
 
     def start_download(self, url, save_dir):
