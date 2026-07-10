@@ -96,9 +96,11 @@ jobs:
         working-directory: service_installer
         continue-on-error: true
         run: |
-          if [ -f "iei_timer.icns" ]; then echo "icns already exists"; elif [ -f "iei_timer.ico" ]; then
+          if [ -f "iei_timer.icns" ]; then
+            echo "icns already exists"
+          elif [ -f "iei_timer.ico" ]; then
             python3 -c "
-import struct, os
+import struct,os
 with open('iei_timer.ico','rb') as f: data=f.read()
 count=data[4]|(data[5]<<8);bs,bo,bl=0,0,0
 for i in range(count):
@@ -106,16 +108,20 @@ for i in range(count):
     if w==0:w=256
     if h==0:h=256
     if w*h>bs:bs,bo,bl=w*h,data[o+12]|(data[o+13]<<8)|(data[o+14]<<16)|(data[o+15]<<24),data[o+8]|(data[o+9]<<8)|(data[o+10]<<16)|(data[o+11]<<24)
-if bo>0 and data[bo:bo+bl][:8]==b'\\x89PNG\\r\\n\\x1a\\n':
-    with open('iei_timer.png','wb') as f: f.write(data[bo:bo+bl])
-    os.system('mkdir -p tmp.iconset')
-    for sz in [16,32,64,128,256,512]:
-        os.system(f'sips -z {sz} {sz} iei_timer.png --out tmp.iconset/icon_{sz}x{sz}.png 2>/dev/null')
-        if sz<=256: os.system(f'sips -z {sz*2} {sz*2} iei_timer.png --out tmp.iconset/icon_{sz}x{sz}@2x.png 2>/dev/null')
-    os.system('iconutil -c icns tmp.iconset -o iei_timer.icns 2>/dev/null')
-    import shutil; shutil.rmtree('tmp.iconset', ignore_errors=True)
-    print('icns created' if os.path.exists('iei_timer.icns') else 'icns failed')
+if bo:
+    png=data[bo:bo+bl]
+    if png[:4]==b'\\x89PNG':
+        with open('iei_timer.png','wb') as f: f.write(png)
+        os.system('mkdir -p tmp.iconset')
+        for sz in (16,32,64,128,256,512):
+            os.system(f'sips -z {sz} {sz} iei_timer.png --out tmp.iconset/icon_{sz}x{sz}.png 2>/dev/null')
+            if sz<=256: os.system(f'sips -z {sz*2} {sz*2} iei_timer.png --out tmp.iconset/icon_{sz}x{sz}@2x.png 2>/dev/null')
+        os.system('iconutil -c icns tmp.iconset -o iei_timer.icns 2>/dev/null')
+        import shutil; shutil.rmtree('tmp.iconset',ignore_errors=True)
+print('icns created' if os.path.exists('iei_timer.icns') else 'icns failed')
 " 2>/dev/null || true
+          else
+            echo "no .ico file found"
           fi
 
       - name: Build (PyInstaller)
