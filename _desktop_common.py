@@ -244,6 +244,8 @@ class UpdateChecker:
         """Windows 平台：从 GitHub Releases API 检查更新。"""
         import urllib.request
         import urllib.error
+        import logging
+        _log = logging.getLogger(__name__)
 
         try:
             req = urllib.request.Request(
@@ -252,15 +254,17 @@ class UpdateChecker:
             )
             with urllib.request.urlopen(req, timeout=self.TIMEOUT) as resp:
                 data = json.loads(resp.read().decode('utf-8'))
-        except Exception as _e:
-            print(f"[!] 更新检查失败（网络异常）: {_e}")
+        except Exception:
+            _log.exception("[X] 更新检查失败（网络异常），api=%s", self.GITHUB_API)
             self._last_check = None
             return None
 
         tag = data.get('tag_name', '')
         remote_version = tag.lstrip('v')
+        _log.info("[OK] GitHub Releases API 返回 tag=%s", tag)
 
         if not self._is_newer(remote_version, current_version):
+            _log.info("[OK] 已是最新版本 (current=%s, remote=%s)", current_version, remote_version)
             self._last_check = None
             return None
 
@@ -272,6 +276,14 @@ class UpdateChecker:
             if sys.platform == 'win32' and name.lower().endswith('.exe'):
                 download_url = asset.get('browser_download_url')
                 break
+
+        if not download_url:
+            _log.warning("[!] 未找到匹配的安装包 assets=%s",
+                         [a.get('name', '?') for a in data.get('assets', [])])
+            self._last_check = None
+            return None
+
+        _log.info("[OK] 发现新版本 V%s (current=%s), url=%s", remote_version, current_version, download_url)
 
         result = {
             'has_update': True,
@@ -287,6 +299,8 @@ class UpdateChecker:
         import urllib.request
         import urllib.error
         import xml.etree.ElementTree as ET
+        import logging
+        _log = logging.getLogger(__name__)
 
         try:
             req = urllib.request.Request(
@@ -295,15 +309,17 @@ class UpdateChecker:
             )
             with urllib.request.urlopen(req, timeout=self.TIMEOUT) as resp:
                 xml_text = resp.read().decode('utf-8')
-        except Exception as _e:
-            print(f"[!] 更新检查失败（网络异常）: {_e}")
+        except Exception:
+            _log.exception("[X] 更新检查失败（网络异常），appcast_url=%s", self.APPCASAT_URL)
             self._last_check = None
             return None
 
+        _log.info("[OK] appcast.xml 获取成功 (len=%d)", len(xml_text))
+
         try:
             root = ET.fromstring(xml_text)
-        except Exception as _e:
-            print(f"[!] appcast.xml 解析失败: {_e}")
+        except Exception:
+            _log.exception("[X] appcast.xml 解析失败，原始内容前 500 字符:\n%s", xml_text[:500])
             self._last_check = None
             return None
 
@@ -311,12 +327,14 @@ class UpdateChecker:
         ns = {'sparkle': 'http://www.andymatuschak.org/xml-namespaces/sparkle'}
         items = root.findall('.//channel/item')
         if not items:
+            _log.warning("[!] appcast.xml 未找到 <channel/item> 条目")
             self._last_check = None
             return None
 
         first_item = items[0]
         enclosure = first_item.find('enclosure')
         if enclosure is None:
+            _log.warning("[!] appcast.xml <item> 内未找到 <enclosure>")
             self._last_check = None
             return None
 
@@ -325,13 +343,21 @@ class UpdateChecker:
             ''
         )
         download_url = enclosure.get('url', '')
-        title = first_item.findtext('title', '')
-        description = first_item.findtext('description', '') or ''
 
-        if not remote_version or not self._is_newer(remote_version, current_version):
+        if not remote_version:
+            _log.warning("[!] appcast.xml enclosure 缺少 sparkle:version 属性")
             self._last_check = None
             return None
 
+        if not self._is_newer(remote_version, current_version):
+            _log.info("[OK] 已是最新版本 (current=%s, remote=%s)", current_version, remote_version)
+            self._last_check = None
+            return None
+
+        _log.info("[OK] 发现新版本 V%s (current=%s), url=%s", remote_version, current_version, download_url)
+
+        title = first_item.findtext('title', '')
+        description = first_item.findtext('description', '') or ''
         result = {
             'has_update': True,
             'version': remote_version,
