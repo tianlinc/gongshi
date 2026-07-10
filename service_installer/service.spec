@@ -31,6 +31,7 @@ a = Analysis(
         ('../templates', 'templates'),
         ('../static', 'static'),
         ('../cache', 'cache'),
+        ('../VERSION', '.'),  # INSPUR-82: VERSION 文件打包到产物根目录
     ],
     hiddenimports=[
         # Flask 全家
@@ -127,6 +128,13 @@ coll = COLLECT(
 # -------------------- BUNDLE（仅 macOS：创建 .app 包）--------------------
 if _sys.platform == 'darwin':
     _icon = 'iei_timer.icns' if _os.path.exists('iei_timer.icns') else None
+    # INSPUR-82: 从 VERSION 文件读取版本号用于 macOS Bundle
+    _ver_path = _os.path.join(_os.path.dirname(__file__), '..', 'VERSION')
+    try:
+        with open(_os.path.normpath(_ver_path), 'r', encoding='utf-8') as _vf:
+            _bundle_ver = _vf.read().strip()
+    except Exception:
+        _bundle_ver = '1.0.0'
     app = BUNDLE(
         coll,
         name='IEI Timer Faster.app',
@@ -135,7 +143,7 @@ if _sys.platform == 'darwin':
         info_plist={
             'NSHighResolutionCapable': 'True',
             'LSMinimumSystemVersion': '10.13',
-            'CFBundleShortVersionString': '1.0.0',
-            'CFBundleVersion': '1.0.0',
+            'CFBundleShortVersionString': _bundle_ver,
+            'CFBundleVersion': _bundle_ver,
         },
     )

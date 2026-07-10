@@ -15,7 +15,14 @@
 ; =============================================================================
 
 #define MyAppName "IEI Timer Faster"
-#define MyAppVersion "1.0.0"
+; INSPUR-82: 从项目根目录 VERSION 文件读取版本号
+#define _fh FileOpen("..\..\VERSION")
+#if _fh >= 0
+  #define MyAppVersion FileRead(_fh)
+  #expr FileClose(_fh)
+#else
+  #define MyAppVersion "1.0.0"
+#endif
 #define MyAppPublisher "InManage"
 #define MyAppURL "http://10.111.36.3:2029"
 #define MyAppExe "IEI Timer Faster.exe"
@@ -40,6 +47,7 @@ UninstallDisplayName={#MyAppName}
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 DisableProgramGroupPage=yes
+DisableDirPage=auto
 VersionInfoVersion={#MyAppVersion}
 
 [Languages]
@@ -62,6 +70,11 @@ Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"; IconFilename: "{app
 Name: "{group}\卸载 {#MyAppName}"; Filename: "{uninstallexe}"
 
 [Code]
+function IsSilentInstall: Boolean;
+begin
+  Result := Pos('/VERYSILENT', UpperCase(GetCmdTail)) > 0;
+end;
+
 function GetUninstallString: String;
 var
   sUnInstPath: String;
@@ -72,6 +85,20 @@ begin
   if not RegQueryStringValue(HKCU, sUnInstPath, 'UninstallString', sUnInstallString) then
     RegQueryStringValue(HKLM, sUnInstPath, 'UninstallString', sUnInstallString);
   Result := sUnInstallString;
+end;
+
+function GetInstallDir: String;
+var
+  sUninstallString: String;
+begin
+  Result := '';
+  sUninstallString := GetUninstallString;
+  { UninstallString 格式: "C:\...\unins000.exe" → 提取目录 }
+  if sUninstallString <> '' then
+  begin
+    sUninstallString := RemoveQuotes(sUninstallString);
+    Result := ExtractFilePath(sUninstallString);
+  end;
 end;
 
 function IsUpgrade: Boolean;
@@ -89,19 +116,33 @@ begin
   if IsUpgrade then
   begin
     sUnInstallString := GetUninstallString;
-    if MsgBox('检测到已安装的旧版本，将在安装前自动卸载。是否继续？',
-      mbConfirmation, MB_YESNO) = IDYES then
+
+    { 静默安装：直接卸载旧版本，不弹确认对话框 }
+    if IsSilentInstall then
     begin
       sUnInstallString := RemoveQuotes(sUnInstallString);
-      if not Exec(ExpandConstant('{cmd}'), '/C ' + sUnInstallString + ' /SILENT',
+      if not Exec(ExpandConstant('{cmd}'), '/C ' + sUnInstallString + ' /VERYSILENT /SUPPRESSMSGBOXES /NORESTART',
         '', SW_HIDE, ewWaitUntilTerminated, iResultCode) then
       begin
-        MsgBox('卸载旧版本失败，请手动卸载后重试。', mbError, MB_OK);
-        Result := False;
+        Log('静默卸载旧版本失败，继续安装覆盖');
       end;
     end
     else
-      Result := False;
+    begin
+      if MsgBox('检测到已安装的旧版本，将在安装前自动卸载。是否继续？',
+        mbConfirmation, MB_YESNO) = IDYES then
+      begin
+        sUnInstallString := RemoveQuotes(sUnInstallString);
+        if not Exec(ExpandConstant('{cmd}'), '/C ' + sUnInstallString + ' /SILENT',
+          '', SW_HIDE, ewWaitUntilTerminated, iResultCode) then
+        begin
+          MsgBox('卸载旧版本失败，请手动卸载后重试。', mbError, MB_OK);
+          Result := False;
+        end;
+      end
+      else
+        Result := False;
+    end;
   end;
 end;
 

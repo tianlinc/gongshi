@@ -98,6 +98,21 @@ def _setup_logging(data_dir):
     return log_path
 
 
+def _read_version():
+    """读取 VERSION 文件。
+
+    开发模式：项目根目录/VERSION
+    frozen 模式：sys._MEIPASS/VERSION
+    读取失败返回 fallback '0.0.0'。
+    """
+    version_path = os.path.join(_get_bundle_dir(), 'VERSION')
+    try:
+        with open(version_path, 'r', encoding='utf-8') as f:
+            return f.read().strip()
+    except Exception:
+        return '0.0.0'
+
+
 def _find_available_port(start=5000, max_tries=3):
     """找可用端口，依次尝试 start ~ start+max_tries-1。"""
     for port in range(start, start + max_tries):
@@ -162,6 +177,352 @@ class CredentialManager:
 
 
 # =========================================================================
+# 更新检查器
+# =========================================================================
+
+_update_checker = None
+
+
+def get_update_checker():
+    """获取 UpdateChecker 模块级单例。"""
+    global _update_checker
+    if _update_checker is None:
+        _update_checker = UpdateChecker()
+    return _update_checker
+
+
+class UpdateChecker:
+    """跨平台更新检查器。
+
+    Windows:  GitHub Releases API → .exe 安装包
+    macOS:    appcast.xml（Sparkle 协议）→ .dmg 安装包
+
+    Thread-safe：下载状态用 threading.Lock 保护。
+    超时 5s — 网络无响应时静默放弃，不阻塞主流程。
+    """
+
+    GITHUB_API = 'https://api.github.com/repos/tianlinc/gongshi/releases/latest'
+    APPCASAT_URL = 'https://tianlinc.github.io/gongshi/appcast.xml'
+    TIMEOUT = 5  # API 请求超时（秒）
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._last_check = None       # 最近一次 check_update 结果 dict 或 None（无更新/未检查）
+        self._downloading = False
+        self._progress_percent = 0
+        self._downloaded = False
+        self._file_path = None
+        self._error = None
+
+    # ---- 版本检查 ----
+
+    def check_update(self, current_version):
+        """检查是否有新版本。
+
+        Windows: GitHub Releases API
+        macOS:   appcast.xml（Sparkle 协议）
+
+        Parameters
+        ----------
+        current_version : str
+            当前版本号，如 "1.0.0"（不含 v 前缀）
+
+        Returns
+        -------
+        dict or None
+            有新版本时返回 {has_update, version, download_url, release_notes}
+            无更新或网络错误时返回 None
+        """
+        if sys.platform == 'darwin':
+            return self._check_mac_update(current_version)
+        else:
+            return self._check_windows_update(current_version)
+
+    def _check_windows_update(self, current_version):
+        """Windows 平台：从 GitHub Releases API 检查更新。"""
+        import urllib.request
+        import urllib.error
+
+        try:
+            req = urllib.request.Request(
+                self.GITHUB_API,
+                headers={'User-Agent': 'gongshi-updater/1.0'}
+            )
+            with urllib.request.urlopen(req, timeout=self.TIMEOUT) as resp:
+                data = json.loads(resp.read().decode('utf-8'))
+        except Exception as _e:
+            print(f"[!] 更新检查失败（网络异常）: {_e}")
+            self._last_check = None
+            return None
+
+        tag = data.get('tag_name', '')
+        remote_version = tag.lstrip('v')
+
+        if not self._is_newer(remote_version, current_version):
+            self._last_check = None
+            return None
+
+        # 找到当前平台的安装包
+        download_url = None
+        body = data.get('body', '')
+        for asset in data.get('assets', []):
+            name = asset.get('name', '')
+            if sys.platform == 'win32' and name.lower().endswith('.exe'):
+                download_url = asset.get('browser_download_url')
+                break
+
+        result = {
+            'has_update': True,
+            'version': remote_version,
+            'download_url': download_url,
+            'release_notes': body or '',
+        }
+        self._last_check = result
+        return result
+
+    def _check_mac_update(self, current_version):
+        """macOS 平台：从 appcast.xml（Sparkle 协议）检查更新。"""
+        import urllib.request
+        import urllib.error
+        import xml.etree.ElementTree as ET
+
+        try:
+            req = urllib.request.Request(
+                self.APPCASAT_URL,
+                headers={'User-Agent': 'gongshi-updater/1.0'}
+            )
+            with urllib.request.urlopen(req, timeout=self.TIMEOUT) as resp:
+                xml_text = resp.read().decode('utf-8')
+        except Exception as _e:
+            print(f"[!] 更新检查失败（网络异常）: {_e}")
+            self._last_check = None
+            return None
+
+        try:
+            root = ET.fromstring(xml_text)
+        except Exception as _e:
+            print(f"[!] appcast.xml 解析失败: {_e}")
+            self._last_check = None
+            return None
+
+        # 解析 Sparkle namespaced XML
+        ns = {'sparkle': 'http://www.andymatuschak.org/xml-namespaces/sparkle'}
+        items = root.findall('.//channel/item')
+        if not items:
+            self._last_check = None
+            return None
+
+        first_item = items[0]
+        enclosure = first_item.find('enclosure')
+        if enclosure is None:
+            self._last_check = None
+            return None
+
+        remote_version = (
+            enclosure.get('{http://www.andymatuschak.org/xml-namespaces/sparkle}version') or
+            ''
+        )
+        download_url = enclosure.get('url', '')
+        title = first_item.findtext('title', '')
+        description = first_item.findtext('description', '') or ''
+
+        if not remote_version or not self._is_newer(remote_version, current_version):
+            self._last_check = None
+            return None
+
+        result = {
+            'has_update': True,
+            'version': remote_version,
+            'download_url': download_url,
+            'release_notes': f'{title}\n{description}',
+        }
+        self._last_check = result
+        return result
+
+    def _is_newer(self, remote, current):
+        """简单三段式版本号比较（a.b.c）。"""
+        def _parse(v):
+            try:
+                return tuple(int(x) for x in str(v).split('.'))
+            except (ValueError, TypeError):
+                return (0, 0, 0)
+        return _parse(remote) > _parse(current)
+
+    # ---- 下载 ----
+
+    def start_download(self, url, save_dir):
+        """启动后台下载线程。
+
+        Parameters
+        ----------
+        url : str
+            安装包下载地址
+        save_dir : str
+            保存目录（如 %APPDATA%/gongshi/updates/）
+        """
+        self._reset_download_state()
+        threading.Thread(
+            target=self._do_download, args=(url, save_dir), daemon=True
+        ).start()
+
+    def _reset_download_state(self):
+        with self._lock:
+            self._downloading = True
+            self._progress_percent = 0
+            self._downloaded = False
+            self._file_path = None
+            self._error = None
+
+    def _do_download(self, url, save_dir):
+        """后台下载，更新进度状态。"""
+        import urllib.request
+        import urllib.error
+
+        os.makedirs(save_dir, exist_ok=True)
+        filename = url.rsplit('/', 1)[-1] or 'update.exe'
+        filepath = os.path.join(save_dir, filename)
+
+        try:
+            req = urllib.request.Request(
+                url,
+                headers={'User-Agent': 'gongshi-updater/1.0'}
+            )
+            with urllib.request.urlopen(req, timeout=300) as resp:
+                total = int(resp.headers.get('Content-Length', 0))
+                so_far = 0
+                with open(filepath, 'wb') as f:
+                    while True:
+                        chunk = resp.read(8192)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        so_far += len(chunk)
+                        if total > 0:
+                            pct = int(so_far * 100 / total)
+                            with self._lock:
+                                self._progress_percent = pct
+
+            with self._lock:
+                self._downloading = False
+                self._downloaded = True
+                self._file_path = filepath
+                self._progress_percent = 100
+            print(f"[OK] 更新包下载完成: {filepath}")
+
+        except Exception as e:
+            with self._lock:
+                self._downloading = False
+                self._downloaded = False
+                self._error = str(e)
+            print(f"[X] 更新包下载失败: {e}")
+
+    # ---- 状态查询（线程安全） ----
+
+    def get_status(self):
+        """获取当前下载状态。"""
+        with self._lock:
+            return {
+                'downloading': self._downloading,
+                'progress_percent': self._progress_percent,
+                'downloaded': self._downloaded,
+                'error': self._error,
+            }
+
+    def get_file_path(self):
+        """获取下载的安装包文件路径。"""
+        with self._lock:
+            return self._file_path
+
+    def install_update(self):
+        """安装已下载的更新包。
+
+        Windows: subprocess 启动静默安装，然后退出当前进程
+        macOS:   open 命令打开 DMG，弹出 Finder
+
+        返回 (success: bool, message: str)
+        """
+        with self._lock:
+            file_path = self._file_path
+            downloaded = self._downloaded
+
+        if not downloaded or not file_path or not os.path.isfile(file_path):
+            return False, '安装包文件不存在'
+        print(f"[OK] 安装模式: platform={sys.platform}, file={file_path}")  # noqa: W503
+
+        if sys.platform == 'win32':
+            return self._install_windows(file_path)
+        elif sys.platform == 'darwin':
+            return self._install_mac(file_path)
+        else:
+            return False, f'不支持的平台: {sys.platform}'
+
+    @staticmethod
+    def _get_windows_install_dir():
+        """从注册表读取现有安装目录。
+
+        Returns
+        -------
+        str or None
+            安装目录路径，读取失败返回 None
+        """
+        try:
+            import winreg
+            appid = '{A8F3C2B1-9D4E-5F6A-7B8C-0D1E2F3A4B5C}'
+            for root in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
+                try:
+                    key = winreg.OpenKey(
+                        root,
+                        f'Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{appid}_is1'
+                    )
+                    install_dir, _ = winreg.QueryValueEx(key, 'InstallLocation')
+                    winreg.CloseKey(key)
+                    if install_dir and os.path.isdir(install_dir):
+                        return install_dir
+                except OSError:
+                    continue
+        except Exception:
+            pass
+        return None
+
+    @staticmethod
+    def _install_windows(file_path):
+        """Windows 平台：用 subprocess 启动 Inno Setup 静默安装。"""
+        import subprocess
+
+        # 尝试读取现有安装目录
+        install_dir = UpdateChecker._get_windows_install_dir()
+
+        cmd = [file_path, '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART']
+        if install_dir:
+            cmd.append(f'/DIR={install_dir}')
+            print(f"[OK] 安装目录: {install_dir}")
+        else:
+            print("[!] 未找到现有安装目录，使用默认目录")
+
+        try:
+            print(f"[OK] 静默安装命令: {' '.join(cmd)}")
+            subprocess.Popen(cmd, shell=True)
+        except Exception as e:
+            return False, f'启动安装失败: {e}'
+
+        # 退出当前进程，让安装程序替换文件
+        print("[OK] 更新安装已启动，退出当前进程")
+        os._exit(0)
+
+    @staticmethod
+    def _install_mac(file_path):
+        """macOS 平台：打开 DMG 文件。"""
+        import subprocess
+
+        try:
+            subprocess.run(['open', file_path], check=True)
+            print(f"[OK] 已打开 DMG: {file_path}")
+            return True, '已打开 DMG 文件，请在 Finder 中拖入应用程序'
+        except Exception as e:
+            return False, f'打开 DMG 失败: {e}'
+
+
+# =========================================================================
 # DesktopLauncher — 主启动器类
 # =========================================================================
 
@@ -211,7 +572,7 @@ h2{font-size:22px;font-weight:400;margin-bottom:12px;color:#fff}
 </style></head><body>
 <div style="text-align:center">
 <div class="spinner"></div>
-<h2>IEI Timer Faster</h2><p style="color:#888;font-size:12px;margin-top:-8px">V1.0.0</p>
+<h2>IEI Timer Faster</h2><p style="color:#888;font-size:12px;margin-top:-8px">V{version}</p>
 <p class="status" id="s">正在初始化<span class="dots"></span></p>
 </div>
 <script>
@@ -245,8 +606,9 @@ check();
             log_path = _setup_logging(data_dir)
 
         # 横幅
+        _ver = _read_version()
         print("=" * 60)
-        print("  IEI Timer Faster V1.0.0")
+        print(f"  IEI Timer Faster V{_ver}")
         print("=" * 60)
         if is_frozen:
             print(f"[OK] 日志文件: {log_path}")
@@ -396,7 +758,7 @@ check();
 
         @app.route('/init')
         def _init_page():
-            return self._INIT_HTML
+            return self._INIT_HTML.replace('{version}', _read_version())
 
         # Guard: 未就绪时重定向到 /init，并短路免登录 API 的鉴权检查
         def _guard_init():
@@ -479,6 +841,18 @@ check();
                 break
             except Exception:
                 time.sleep(0.25)
+
+        # ---- 后台更新检查（异步，不阻塞主流程）----
+        def _check_for_update():
+            time.sleep(2)  # 启动后延迟 2-3 秒，等 UI 渲染
+            checker = get_update_checker()
+            result = checker.check_update(_read_version())
+            if result:
+                print(f"[OK] 发现新版本 V{result['version']}")
+            else:
+                print("[OK] 已是最新版本")
+
+        threading.Thread(target=_check_for_update, daemon=True).start()
 
         # ---- pywebview 桌面窗口 ----
         try:

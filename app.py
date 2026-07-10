@@ -45,6 +45,16 @@ log = logging.getLogger('gongshi')
 log.setLevel(logging.INFO)  # 默认 INFO；app.debug 时在 main 中切换 DEBUG
 
 
+def _read_app_version():
+    """读取项目根目录 VERSION 文件，返回版本号字符串。失败回退 '0.0.0'。"""
+    try:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        with open(os.path.join(base_dir, 'VERSION'), 'r', encoding='utf-8') as f:
+            return f.read().strip()
+    except Exception:
+        return '0.0.0'
+
+
 # ===========================================================================
 # _unplannedInfo 编码常量（来自 scripts/myspace/unplannedTask.js 实证）
 # DEPRECATED（2026-06-23）：submit_day() 已改用 entity.jsf → taskForm:save 路径，
@@ -1404,15 +1414,15 @@ def _intercept_unauth_api():
     p = request.path
     if not p.startswith('/api/'):
         return None
-    if p in ('/api/login', '/api/logout'):
+    if p in ('/api/login', '/api/logout', '/api/version'):
         return None
 
     # ---- 登录检查 ----
     if get_client() is None:
         return jsonify({'success': False, 'message': '未登录'}), 200
 
-    # ---- 激活检查（License 相关 API 豁免）----
-    if not p.startswith('/api/license/'):
+    # ---- 激活检查（License 和 Update 相关 API 豁免）----
+    if not p.startswith('/api/license/') and not p.startswith('/api/update/') and p != '/api/system-info':
         is_active, _ = check_activated(session.get('username', ''))
         if not is_active:
             return jsonify({
@@ -1765,11 +1775,40 @@ def api_team_logs(taskId):
     try:
         logs = client.get_team_logs(taskId.strip())
         print(f"[OK] 全员日报 task={taskId} 共 {len(logs)} 条")
+
+        # 按人分组统计：每人工时总和 + 最后一条记录的完成率
+        member_map = {}  # member_name -> {total_hour, entry_count, latest_date, latest_rate}
+        for log in logs:
+            name = log.get('member_name', '')
+            if not name:
+                continue
+            if name not in member_map:
+                member_map[name] = {'total_hour': 0.0, 'entry_count': 0, 'latest_date': '', 'latest_rate': 0}
+            member_map[name]['total_hour'] += float(log.get('hour', 0) or 0)
+            member_map[name]['entry_count'] += 1
+            # 取日期最新的一条记录的完成率
+            date_str = str(log.get('date', '') or '')
+            if date_str > member_map[name]['latest_date']:
+                member_map[name]['latest_date'] = date_str
+                member_map[name]['latest_rate'] = float(log.get('rate', 0) or 0)
+
+        stats = []
+        for name, data in member_map.items():
+            stats.append({
+                'member_name': name,
+                'total_hour': round(data['total_hour'], 1),
+                'final_rate': data['latest_rate'],
+                'entry_count': data['entry_count'],
+            })
+        # 按工时总和降序排列
+        stats.sort(key=lambda x: x['total_hour'], reverse=True)
+
         return jsonify({
             'success': True,
             'task_id': taskId,
             'logs': logs,
             'count': len(logs),
+            'stats': stats,
         })
     except RuntimeError:
         return jsonify({
@@ -1923,6 +1962,150 @@ def api_license_activate():
         'type': payload.get('type'),
         'exp': payload.get('exp'),
     })
+
+
+# ===========================================================================
+# 系统信息 API（版本 + License + 更新）
+# ===========================================================================
+
+@app.route('/api/system-info', methods=['GET'])
+def api_system_info():
+    """返回系统综合信息：版本号 + License 激活状态 + 更新检查结果。
+
+    三个部分各独立容错：一个部分失败不影响其他部分的展示。
+    """
+    # 1. 版本号
+    try:
+        version = _read_app_version()
+    except Exception as _e:
+        log.warning("[!] 版本号读取失败: %s", _e)
+        version = '0.0.0'
+
+    # 2. License 信息
+    try:
+        username = session.get('username', '')
+        is_active, lic_info = check_activated(username)
+        license_data = {
+            'activated': is_active,
+            'sn': lic_info.get('sn', ''),
+            'type': lic_info.get('type', ''),
+            'exp': lic_info.get('exp'),
+            'activated_at': lic_info.get('activated_at', ''),
+        }
+    except Exception as _e:
+        log.warning("[!] License 信息获取失败: %s", _e)
+        license_data = {
+            'activated': False,
+            'sn': '',
+            'type': '',
+            'exp': None,
+            'activated_at': '',
+        }
+
+    # 3. 更新信息（仅桌面模式）
+    update_data = {'has_update': False}
+    try:
+        from _desktop_common import get_update_checker
+        checker = get_update_checker()
+        result = checker.get_last_check()
+        if result:
+            update_data = {
+                'has_update': True,
+                'version': result.get('version', ''),
+                'release_notes': result.get('release_notes', ''),
+            }
+    except Exception as _e:
+        log.warning("[!] 更新信息获取失败: %s", _e)
+
+    return jsonify({
+        'success': True,
+        'version': version,
+        'license': license_data,
+        'update': update_data,
+    })
+
+
+@app.route('/api/version', methods=['GET'])
+def api_version():
+    """返回当前版本号，无需登录"""
+    return jsonify({'version': _read_app_version()})
+
+
+# ===========================================================================
+# 更新检查 API
+# ===========================================================================
+
+@app.route('/api/update/check', methods=['GET'])
+def api_update_check():
+    """返回更新信息。check_now=1 时主动检查，否则返回缓存。"""
+    try:
+        from _desktop_common import get_update_checker, _read_version
+    except ImportError:
+        return jsonify({'has_update': False})
+
+    try:
+        checker = get_update_checker()
+
+        # 主动检查模式
+        if request.args.get('check_now') == '1':
+            current_version = _read_version()
+            result = checker.check_update(current_version)
+            if result:
+                return jsonify(result)
+            return jsonify({'has_update': False})
+
+        # 返回缓存
+        result = checker.get_last_check()
+        if result:
+            return jsonify(result)
+    except Exception as _e:
+        log.warning("[!] 更新检查失败: %s", _e)
+
+    return jsonify({'has_update': False})
+
+
+@app.route('/api/update/download', methods=['POST'])
+def api_update_download():
+    """触发异步下载最新版本安装包。需要登录但不需激活检查。"""
+    try:
+        from _desktop_common import get_update_checker, _get_data_dir
+    except ImportError:
+        return jsonify({'success': False, 'message': '桌面模式下才支持在线更新'})
+
+    checker = get_update_checker()
+    last = checker.get_last_check()
+    if not last or not last.get('download_url'):
+        return jsonify({'success': False, 'message': '无可用下载链接'})
+
+    data_dir = _get_data_dir()
+    updates_dir = os.path.join(data_dir, 'updates')
+    checker.start_download(last['download_url'], updates_dir)
+    return jsonify({'success': True, 'message': '开始下载'})
+
+
+@app.route('/api/update/status', methods=['GET'])
+def api_update_status():
+    """查询下载进度。需要登录但不需激活检查。"""
+    try:
+        from _desktop_common import get_update_checker
+    except ImportError:
+        return jsonify({'downloading': False, 'progress_percent': 0, 'downloaded': False})
+
+    checker = get_update_checker()
+    return jsonify(checker.get_status())
+
+
+@app.route('/api/update/install', methods=['POST'])
+def api_update_install():
+    """安装已下载的更新包。Windows 会退出当前进程，macOS 会打开 DMG。"""
+    try:
+        from _desktop_common import get_update_checker
+    except ImportError:
+        return jsonify({'success': False, 'message': '桌面模式下才支持在线更新'})
+
+    checker = get_update_checker()
+    success, msg = checker.install_update()
+    return jsonify({'success': success, 'message': msg})
 
 
 # ===========================================================================
