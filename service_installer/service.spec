@@ -90,6 +90,11 @@ a = Analysis(
 # -------------------- PYZ --------------------
 pyz = PYZ(a.pure, a.zipped_data)
 
+# macOS: EXE 名必须与 COLLECT 名不同，避免文件/目录同名冲突
+#   Windows: ai_timer.exe (文件) vs IEI Timer Faster/ (目录) → 无冲突（扩展名不同）
+#   macOS:   ai_timer (文件) vs IEI Timer Faster/ (目录) → 冲突，必须改名
+_exe_name = 'ai_timer' if _sys.platform == 'darwin' else 'IEI Timer Faster'
+
 # -------------------- EXE --------------------
 exe = EXE(
     pyz,
@@ -97,7 +102,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='IEI Timer Faster',
+    name=_exe_name,
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
