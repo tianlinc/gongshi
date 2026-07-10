@@ -184,3 +184,35 @@ jobs:
           publish_branch: gh-pages
           keep_files: true
           commit_message: 'deploy: update appcast.xml to ${{ github.ref_name }}'
+
+  # ==========================================================
+  #  自动创建 GitHub Release 并上传未压缩产物
+  # ==========================================================
+  create-release:
+    needs: [build-windows, build-macos]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: IEI_Timer_Faster_Setup.exe
+          path: ./release
+
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: IEI_Timer_Faster_Setup.dmg
+          path: ./release
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          files: |
+            ./release/IEI_Timer_Faster_Setup.exe
+            ./release/IEI_Timer_Faster_Setup.dmg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
