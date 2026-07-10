@@ -35,6 +35,7 @@ from license_utils import (
     generate_sn, generate_license, verify_license,
     read_status, write_status, check_activated, activate,
 )
+import rdm_config
 
 app = Flask(__name__)
 app.secret_key = b'rdm_timesheet_secret_key_2026'
@@ -130,7 +131,9 @@ def normalize_to_monday(date_str: str) -> str:
 class RDMClient:
     """RDM 系统客户端"""
 
-    def __init__(self, base_url="http://10.111.36.3:2029"):
+    def __init__(self, base_url=None):
+        if base_url is None:
+            base_url = rdm_config.get_rdm_base_url()
         self.base_url = base_url
         self.session = requests.Session()
         # P3 修复：跳过系统代理（RDM 是内网服务器，应直连）
@@ -1416,6 +1419,8 @@ def _intercept_unauth_api():
         return None
     if p in ('/api/login', '/api/logout', '/api/version'):
         return None
+    if p.startswith('/api/rdm-config'):
+        return None
 
     # ---- 登录检查 ----
     if get_client() is None:
@@ -2025,6 +2030,23 @@ def api_system_info():
     })
 
 
+@app.route('/api/release-notes', methods=['GET'])
+def api_release_notes():
+    """返回发布日志（各版本变更说明），供前端 Release Note 弹窗使用。
+
+    数据来自 GitHub Releases API，返回格式：
+    [{version: "v1.0.2", changes: ["变更1", "变更2"], ...}]
+    """
+    try:
+        from _desktop_common import get_update_checker
+        checker = get_update_checker()
+        notes = checker.get_all_release_notes()
+        return jsonify({'success': True, 'release_notes': notes})
+    except Exception as _e:
+        log.warning("[!] Release Note 获取失败: %s", _e)
+        return jsonify({'success': True, 'release_notes': []})
+
+
 @app.route('/api/version', methods=['GET'])
 def api_version():
     """返回当前版本号，无需登录"""
@@ -2133,6 +2155,105 @@ def api_update_restart():
         return response
 
     return jsonify({'success': True, 'message': msg})
+
+
+# ===========================================================================
+# RDM 地址配置 API（无需登录，供前端登录页使用）
+# ===========================================================================
+
+
+@app.route('/api/rdm-config', methods=['GET', 'POST'])
+def api_rdm_config():
+    """
+    RDM 地址配置接口。
+
+    GET  — 获取当前 RDM 地址
+    POST — 保存 RDM 地址（需 JSON body: {"url": "http://..."}）
+    """
+    if request.method == 'GET':
+        url = rdm_config.get_rdm_base_url()
+        return jsonify({'success': True, 'url': url})
+    elif request.method == 'POST':
+        data = request.get_json(silent=True) or {}
+        url = (data.get('url') or '').strip()
+        if not url:
+            return jsonify({'success': False, 'message': 'RDM 地址不能为空'})
+        # 简单的 URL 格式校验
+        if not url.startswith('http://') and not url.startswith('https://'):
+            return jsonify({'success': False, 'message': 'RDM 地址必须以 http:// 或 https:// 开头'})
+        rdm_config.set_rdm_base_url(url)
+        print(f"[OK] RDM 地址已更新: {url}")
+        return jsonify({'success': True, 'url': url, 'message': 'RDM 地址已保存'})
+
+
+@app.route('/api/rdm-config/reset', methods=['POST'])
+def api_rdm_config_reset():
+    """恢复默认 RDM 地址"""
+    url = rdm_config.reset_rdm_base_url()
+    return jsonify({'success': True, 'url': url, 'message': '已恢复默认 RDM 地址'})
+
+
+@app.route('/api/rdm-config/check', methods=['POST'])
+def api_rdm_config_check():
+    """
+    真实连通性检测：向当前配置的 RDM 地址发送 HTTP GET 请求。
+
+    请求体 JSON（可选）：
+      - url: 要检测的 URL（不传则使用已保存的 RDM 地址）
+
+    返回：
+      - success: 连通性检测结果（true/false）
+      - reachable: 服务可达
+      - message: 人类可读状态描述
+      - status_code: HTTP 状态码（可达时）
+      - elapsed_ms: 响应耗时（毫秒）
+    """
+    data = request.get_json(silent=True) or {}
+    target_url = (data.get('url') or '').strip()
+    if not target_url:
+        target_url = rdm_config.get_rdm_base_url()
+
+    if not target_url.startswith('http://') and not target_url.startswith('https://'):
+        return jsonify({
+            'success': False,
+            'reachable': False,
+            'message': '无效的 RDM 地址',
+        })
+
+    import time as _time
+    try:
+        start = _time.time()
+        # 创建一个不带登录态的全新 session，仅用于连通性探测
+        probe = requests.Session()
+        probe.trust_env = False
+        probe.headers.update({
+            'User-Agent': ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                           'AppleWebKit/537.36 (KHTML, like Gecko) '
+                           'Chrome/120.0.0.0 Safari/537.36'),
+        })
+        r = probe.get(target_url, timeout=5)
+        elapsed_ms = round((_time.time() - start) * 1000)
+        return jsonify({
+            'success': True,
+            'reachable': True,
+            'message': f'RDM 服务运行正常（HTTP {r.status_code}，响应 {elapsed_ms}ms）',
+            'status_code': r.status_code,
+            'elapsed_ms': elapsed_ms,
+        })
+    except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
+        elapsed_ms = round((_time.time() - start) * 1000)
+        return jsonify({
+            'success': True,
+            'reachable': False,
+            'message': f'无法连接 RDM 服务，请检查地址和网络（超时 {elapsed_ms}ms）',
+            'elapsed_ms': elapsed_ms,
+        })
+    except Exception as e:
+        return jsonify({
+            'success': True,
+            'reachable': False,
+            'message': f'连通性检测异常: {str(e)}',
+        })
 
 
 # ===========================================================================

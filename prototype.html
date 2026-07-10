@@ -1,0 +1,1442 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IEI Timer Faster — 前端改版原型</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        /* ============================================================
+         * 原型全局样式
+         * 与现有视觉规范一致的蓝紫渐变主题
+         * ============================================================ */
+        :root {
+            --gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --primary: #667eea;
+            --primary-dark: #5a4dc4;
+            --bg: #f5f7fa;
+            --card-shadow: 0 2px 15px rgba(0,0,0,0.05);
+            --card-radius: 15px;
+            --danger: #dc3545;
+            --success: #198754;
+        }
+
+        * { box-sizing: border-box; }
+        body {
+            background-color: var(--bg);
+            font-family: 'Microsoft YaHei', 'Segoe UI', sans-serif;
+            color: #333;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* ===== 原型导航栏 ===== */
+        .proto-nav {
+            background: #343a40;
+            color: #fff;
+            padding: 8px 20px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            font-size: 13px;
+            position: sticky;
+            top: 0;
+            z-index: 1100;
+        }
+        .proto-nav .badge {
+            font-size: 11px;
+            padding: 3px 8px;
+        }
+        .proto-nav .nav-btn {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: #fff;
+            padding: 4px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+        .proto-nav .nav-btn:hover,
+        .proto-nav .nav-btn.active {
+            background: rgba(255,255,255,0.25);
+            border-color: rgba(255,255,255,0.5);
+        }
+
+        /* ===== 视图切换 ===== */
+        .view { display: none; }
+        .view.active { display: block; }
+
+        /* ============================================================
+         * 1+2. 登录页（左右布局）
+         * ============================================================ */
+        .login-split {
+            display: flex;
+            min-height: calc(100vh - 40px);
+        }
+
+        /* 左侧品牌区 */
+        .login-brand {
+            flex: 0 0 45%;
+            background: var(--gradient);
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 60px;
+            position: relative;
+            overflow: hidden;
+        }
+        .login-brand::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -30%;
+            width: 600px;
+            height: 600px;
+            background: rgba(255,255,255,0.04);
+            border-radius: 50%;
+        }
+        .login-brand::after {
+            content: '';
+            position: absolute;
+            bottom: -20%;
+            left: -10%;
+            width: 400px;
+            height: 400px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 50%;
+        }
+        .login-brand-content {
+            position: relative;
+            z-index: 1;
+        }
+        .login-brand h1 {
+            font-size: 30px;
+            font-weight: 700;
+            margin: 0 0 12px;
+            letter-spacing: 1px;
+        }
+        .login-brand .slogan {
+            font-size: 16px;
+            opacity: 0.85;
+            margin-bottom: 36px;
+            line-height: 1.6;
+        }
+        .login-brand .features {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .login-brand .features li {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 14px;
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        .login-brand .features li i {
+            font-size: 20px;
+            opacity: 0.8;
+        }
+
+        /* 右侧登录区 */
+        .login-form-side {
+            flex: 0 0 55%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg);
+            padding: 40px;
+        }
+        .login-form-wrapper {
+            width: 100%;
+            max-width: 400px;
+        }
+        .login-card {
+            background: #fff;
+            border-radius: var(--card-radius);
+            box-shadow: var(--card-shadow);
+            padding: 40px 36px;
+        }
+        .login-card h2 {
+            font-size: 22px;
+            font-weight: 600;
+            color: #333;
+            margin: 0 0 4px;
+            text-align: center;
+        }
+        .login-card .login-sub {
+            color: #999;
+            font-size: 13px;
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        .login-card .form-floating {
+            margin-bottom: 14px;
+        }
+        .login-card .form-control:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+        }
+        .login-card .btn-login {
+            background: var(--gradient);
+            border: none;
+            padding: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            border-radius: 10px;
+            width: 100%;
+            color: #fff;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-top: 6px;
+        }
+        .login-card .btn-login:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+        .login-card .btn-login:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .login-alert {
+            background: #fff5f6;
+            color: #842029;
+            border-left: 4px solid #dc3545;
+            padding: 10px 14px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-size: 13px;
+            display: none;
+        }
+
+        /* RDM 地址配置入口 */
+        .login-rdm-config {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        .login-rdm-config .btn-rdm-config {
+            background: none;
+            border: none;
+            padding: 4px 10px;
+            font-size: 12px;
+            color: var(--primary);
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: underline;
+        }
+        .login-rdm-config .btn-rdm-config:hover {
+            color: #764ba2;
+        }
+        .login-rdm-config .rdm-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            margin-left: 8px;
+            font-size: 12px;
+        }
+        .login-rdm-config .rdm-status .status-ok {
+            color: var(--success);
+        }
+        .login-rdm-config .rdm-status .status-fail {
+            color: var(--danger);
+        }
+        .login-rdm-config .rdm-status .status-checking {
+            color: #ffc107;
+        }
+
+        .login-footer {
+            text-align: center;
+            color: #aaa;
+            font-size: 12px;
+            margin-top: 16px;
+        }
+
+        /* Remember me */
+        .remember-row {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            margin: 6px 0 14px;
+            gap: 8px;
+        }
+        .remember-row .form-check-label { font-size: 13px; color: #333; cursor: pointer; }
+        .remember-hint {
+            font-size: 11px;
+            color: #d4a017;
+            margin: 4px 0 0 22px;
+            display: block;
+        }
+        .clear-link {
+            background: none;
+            border: none;
+            color: var(--primary);
+            font-size: 12px;
+            text-decoration: underline;
+            padding: 0;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .clear-link:hover { color: #764ba2; }
+
+        /* ============================================================
+         * 3. 主页面
+         * ============================================================ */
+
+        /* 导航栏 */
+        .navbar-custom {
+            background: var(--gradient);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 8px 0;
+        }
+        .navbar-custom .navbar-brand {
+            font-weight: 600;
+            font-size: 20px;
+            color: #fff !important;
+        }
+        .navbar-custom .nav-btn {
+            font-size: 13px;
+            border-radius: 8px;
+            padding: 5px 12px;
+        }
+
+        /* 任务下拉自定义 */
+        .task-dropdown-menu {
+            max-height: 360px;
+            overflow-y: auto;
+            min-width: 340px;
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+        }
+        .task-dropdown-item {
+            padding: 10px 14px;
+            border-bottom: 1px solid #f0f0f0;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .task-dropdown-item:hover { background: #f8f9ff; }
+        .task-dropdown-item:last-child { border-bottom: none; }
+        .task-dropdown-item .task-name {
+            font-weight: 600;
+            font-size: 13px;
+            color: #333;
+        }
+        .task-dropdown-item .task-meta {
+            font-size: 11px;
+            color: #999;
+            margin-top: 2px;
+        }
+
+        /* 按钮分类 */
+        .header-btn-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .header-btn-group .divider {
+            width: 1px;
+            height: 20px;
+            background: rgba(255,255,255,0.2);
+            margin: 0 6px;
+        }
+
+        /* 关于按钮红点 */
+        .btn-about {
+            position: relative;
+            overflow: visible !important;
+        }
+        .btn-about .red-dot {
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            width: 10px;
+            height: 10px;
+            background: #ff4444;
+            border-radius: 50%;
+            display: none;
+            animation: pulse-dot 2s infinite;
+        }
+        .btn-about .red-dot.show { display: block; }
+        @keyframes pulse-dot {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.5); opacity: 0.7; }
+        }
+
+        /* 月份导航条 */
+        .month-bar {
+            background: var(--gradient);
+            color: #fff;
+            padding: 10px 22px;
+            border-radius: var(--card-radius);
+            margin: 12px 0;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .month-bar h3 {
+            margin: 0;
+            font-size: 20px;
+            font-weight: 600;
+        }
+        .month-bar .btn-month-nav {
+            background: rgba(255,255,255,0.15);
+            border: none;
+            color: #fff;
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+        .month-bar .btn-month-nav:hover { background: rgba(255,255,255,0.3); }
+
+        /* 任务信息区（放在日期行） */
+        .task-info-inline {
+            margin-left: auto;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .task-info-inline .badge-task-status {
+            background: rgba(255,255,255,0.2);
+            font-size: 12px;
+            padding: 4px 10px;
+            border-radius: 12px;
+        }
+
+        /* 卡片通用 */
+        .card-custom {
+            border: none;
+            border-radius: var(--card-radius);
+            box-shadow: var(--card-shadow);
+            margin-bottom: 16px;
+        }
+        .card-custom .card-header {
+            background: #fff;
+            border-bottom: 2px solid #f5f7fa;
+            padding: 12px 18px;
+            border-radius: var(--card-radius) var(--card-radius) 0 0;
+            font-weight: 600;
+        }
+
+        /* 模拟月历 */
+        .proto-calendar {
+            overflow: hidden;
+        }
+        .proto-calendar table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            font-size: 13px;
+        }
+        .proto-calendar th {
+            background: #f8f9fa;
+            padding: 10px 6px;
+            text-align: center;
+            font-weight: 600;
+            color: #555;
+            border-bottom: 1px solid #eef0f5;
+        }
+        .proto-calendar td {
+            padding: 4px;
+            text-align: center;
+            border-bottom: 1px solid #f0f0f0;
+            height: 70px;
+            vertical-align: top;
+        }
+        .proto-calendar td.workday { background: #e8f4fd; }
+        .proto-calendar td.weekend { background: #fde8ec; }
+        .proto-calendar td.today {
+            box-shadow: inset 0 0 0 2px var(--primary);
+            background: #e8f4fd;
+        }
+        .proto-calendar td.other-month { background: #e9e9e9; color: #bbb; }
+        .proto-calendar td.filled { background: #e6f7e9; }
+        .proto-calendar td.future { opacity: 0.6; }
+        .proto-calendar .day-num {
+            font-weight: 600;
+            margin-bottom: 2px;
+            font-size: 14px;
+        }
+        .proto-calendar .day-hour {
+            font-size: 12px;
+            color: var(--primary);
+        }
+        .proto-calendar .day-badge {
+            display: inline-block;
+            background: var(--success);
+            color: #fff;
+            font-size: 10px;
+            padding: 1px 6px;
+            border-radius: 8px;
+            margin-top: 2px;
+        }
+        .proto-calendar .day-holiday {
+            display: inline-block;
+            background: #ff6b6b;
+            color: #fff;
+            font-size: 10px;
+            padding: 1px 6px;
+            border-radius: 8px;
+            margin-top: 2px;
+        }
+
+        /* ============================================================
+         * 模态框样式
+         * ============================================================ */
+        .modal-content-custom {
+            border: none;
+            border-radius: 16px;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.18);
+        }
+        .modal-header-custom {
+            background: var(--gradient);
+            color: #fff;
+            border-radius: 16px 16px 0 0;
+            padding: 16px 20px;
+            border: none;
+        }
+        .modal-header-custom .btn-close { filter: brightness(10); }
+        .modal-body-custom { padding: 20px 24px; }
+
+        /* License 表格 */
+        .lic-table td:first-child {
+            width: 90px;
+            color: #888;
+            font-size: 13px;
+        }
+        .lic-table td:last-child {
+            font-size: 13px;
+        }
+
+        /* 版本信息卡片 */
+        .version-info-card {
+            background: #f8f9ff;
+            border: 1px solid #e0e4ff;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 14px;
+        }
+        .version-info-card h6 {
+            color: var(--primary);
+            font-weight: 600;
+            margin: 0 0 8px;
+        }
+        .version-info-card .changelog {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .version-info-card .changelog li {
+            padding: 4px 0;
+            font-size: 13px;
+            color: #555;
+            display: flex;
+            align-items: flex-start;
+            gap: 6px;
+        }
+        .version-info-card .changelog li::before {
+            content: '•';
+            color: var(--primary);
+            font-weight: bold;
+        }
+
+        .version-compare {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        .version-compare .v-col {
+            border: 1px solid #e0e4ff;
+            border-radius: 10px;
+            padding: 14px;
+        }
+        .version-compare .v-col.current {
+            background: #f8f9ff;
+        }
+        .version-compare .v-col.new {
+            background: #fff8e1;
+            border-color: #ffe082;
+        }
+        .version-compare .v-col h6 {
+            font-size: 14px;
+            font-weight: 600;
+            margin: 0 0 8px;
+        }
+        .version-compare .v-col ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            font-size: 12px;
+        }
+        .version-compare .v-col li {
+            padding: 3px 0;
+            color: #666;
+            display: flex;
+            align-items: flex-start;
+            gap: 4px;
+        }
+        .version-compare .v-col li::before { content: '•'; color: var(--primary); }
+        .version-compare .v-col.new li::before { content: '+'; color: #f57c00; font-weight: bold; }
+
+        /* ============================================================
+         * 4. 发现新版本提示
+         * ============================================================ */
+        .update-toast-wrapper {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            z-index: 1090;
+            animation: toast-in 0.4s ease-out;
+            cursor: pointer;
+        }
+        @keyframes toast-in {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .update-toast {
+            background: #fff;
+            border-radius: 14px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.18);
+            min-width: 340px;
+            max-width: 420px;
+            overflow: hidden;
+            transition: transform 0.2s;
+        }
+        .update-toast:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 36px rgba(0,0,0,0.22);
+        }
+        .update-toast-header {
+            background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+            color: #fff;
+            padding: 14px 18px;
+            font-size: 14px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .update-toast-header i { font-size: 20px; }
+        .update-toast-close {
+            margin-left: auto;
+            background: none;
+            border: none;
+            color: rgba(255,255,255,0.8);
+            font-size: 22px;
+            cursor: pointer;
+            line-height: 1;
+            padding: 0;
+        }
+        .update-toast-close:hover { color: #fff; }
+        .update-toast-body {
+            padding: 12px 18px;
+            font-size: 13px;
+            color: #666;
+            line-height: 1.6;
+        }
+        .update-toast-body .version-tag {
+            display: inline-block;
+            background: #e8f5e9;
+            color: #2e7d32;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-right: 8px;
+        }
+        .update-toast-footer {
+            padding: 10px 18px 14px;
+            font-size: 12px;
+            color: #999;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .update-toast-footer .click-hint {
+            color: var(--primary);
+        }
+
+        /* ============================================================
+         * RDM 配置弹窗
+         * ============================================================ */
+        .rdm-config-section {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+        .rdm-config-section label {
+            font-weight: 600;
+            font-size: 13px;
+            color: #555;
+            margin-bottom: 6px;
+        }
+        .connect-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 10px;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+        }
+        .connect-status.ok {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+        .connect-status.fail {
+            background: #ffebee;
+            color: #c62828;
+        }
+        .connect-status.checking {
+            background: #fff8e1;
+            color: #f57f17;
+        }
+
+        /* ============================================================
+         * 帮助提示
+         * ============================================================ */
+        .tooltip-custom {
+            position: relative;
+            display: inline-block;
+        }
+        .tooltip-custom .tooltip-text {
+            visibility: hidden;
+            background: #333;
+            color: #fff;
+            text-align: center;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            position: absolute;
+            z-index: 1;
+            bottom: 120%;
+            left: 50%;
+            transform: translateX(-50%);
+            white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .tooltip-custom:hover .tooltip-text {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        /* 响应式 */
+        @media (max-width: 768px) {
+            .login-split { flex-direction: column; }
+            .login-brand {
+                flex: 0 0 auto;
+                padding: 30px 24px;
+                min-height: auto;
+            }
+            .login-brand h1 { font-size: 28px; }
+            .login-form-side { padding: 20px; }
+            .version-compare { grid-template-columns: 1fr; }
+        }
+
+        /* 模拟表单提交动画 */
+        .login-form-wrapper.to-dashboard {
+            animation: slideUp 0.4s ease-out forwards;
+        }
+        @keyframes slideUp {
+            to { opacity: 0; transform: translateY(-20px); }
+        }
+    </style>
+</head>
+<body>
+
+<!-- 原型导航栏 -->
+<div class="proto-nav">
+    <strong>IEI Timer Faster</strong> &mdash; 前端改版原型
+    <span class="badge bg-warning text-dark">原型预览</span>
+    <span style="margin-left:auto;opacity:0.7;">V1.0.3 原型 v1</span>
+    <button class="nav-btn active" onclick="switchView('login')">登录页</button>
+    <button class="nav-btn" onclick="switchView('dashboard')">主页面</button>
+    <span style="font-size:11px;opacity:0.5;">| 含：RDM配置、连通检测、新布局、更新提醒、版本信息</span>
+</div>
+
+<!-- ============================================================
+     视图1+2：登录页（左右布局 + RDM配置 + 连通检测）
+     ============================================================ -->
+<div id="view-login" class="view active">
+    <div class="login-split">
+        <!-- 左侧品牌宣传区 -->
+        <div class="login-brand">
+            <div class="login-brand-content">
+                <h1>IEI Timer Faster</h1>
+                <p class="slogan">
+                    告别逐格填写，一次搞定一周工时。<br>
+                    专注研发，让工时填报不再打断你的思路。
+                </p>
+                <ul class="features">
+                    <li><i class="bi bi-calendar-check"></i> 月历视图，一眼看清整月工时</li>
+                    <li><i class="bi bi-magic"></i> 批量填充 + 阶梯比例，智能计算完成率</li>
+                    <li><i class="bi bi-cloud-arrow-up"></i> 一键同步到 RDM 研发管理平台</li>
+                    <li><i class="bi bi-people"></i> 全员日报，团队工时一目了然</li>
+                    <li><i class="bi bi-shield-check"></i> License 激活，安全可控</li>
+                    <li><i class="bi bi-arrow-repeat"></i> 自动更新，持续迭代</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- 右侧登录区 -->
+        <div class="login-form-side">
+            <div class="login-form-wrapper" id="loginFormWrapper">
+                <div class="login-card">
+                    <h2>登录</h2>
+                    <p class="login-sub">使用 RDM 账号登录工时系统</p>
+
+                    <!-- 错误提示条 -->
+                    <div class="login-alert" id="loginAlert"></div>
+
+                    <form id="loginForm" autocomplete="off">
+                        <div class="form-floating">
+                            <input type="text" class="form-control" id="username"
+                                   placeholder="用户名" autocomplete="off" autofocus>
+                            <label for="username"><i class="bi bi-person"></i> 用户名</label>
+                        </div>
+                        <div class="form-floating">
+                            <input type="password" class="form-control" id="password"
+                                   placeholder="密码" autocomplete="new-password">
+                            <label for="password"><i class="bi bi-lock"></i> 密码</label>
+                        </div>
+
+                        <!-- 记住我 -->
+                        <div class="remember-row">
+                            <div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="rememberMe" checked>
+                                    <label class="form-check-label" for="rememberMe">
+                                        <i class="bi bi-floppy"></i> 记住我
+                                    </label>
+                                </div>
+                            </div>
+                            <button type="button" class="clear-link" onclick="protoClearSaved()">
+                                <i class="bi bi-trash3"></i> 清除
+                            </button>
+                        </div>
+
+                        <button type="submit" class="btn-login" id="loginBtn">
+                            <span class="btn-text">登录</span>
+                        </button>
+                    </form>
+
+                    <div class="login-footer">
+                        <!-- RDM 地址配置入口 -->
+                        <div class="login-rdm-config">
+                            <span class="rdm-status" id="rdmStatus">
+                                <span class="status-checking">
+                                    <i class="bi bi-arrow-repeat spin"></i> 检测中...
+                                </span>
+                            </span>
+                            <button type="button" class="btn-rdm-config"
+                                    onclick="openRdmConfig()" title="配置 RDM 服务器地址">
+                                <i class="bi bi-gear"></i> RDM 地址
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================
+     视图3：主页面（头部优化 + 按钮分类 + 关于/License）
+     ============================================================ -->
+<div id="view-dashboard" class="view">
+    <!-- 顶部导航栏 -->
+    <nav class="navbar-custom">
+        <div class="container d-flex align-items-center">
+            <!-- 品牌 -->
+            <a class="navbar-brand me-3" href="#">
+                <i class="bi bi-clock-history"></i> IEI Timer Faster
+            </a>
+
+            <!-- 任务选择 + 同步 -->
+            <div class="header-btn-group">
+                <div class="dropdown">
+                    <button class="btn btn-outline-light btn-sm dropdown-toggle nav-btn"
+                            data-bs-toggle="dropdown" id="taskBtn">
+                        <i class="bi bi-list-check"></i>
+                        <span id="taskBtnLabel">[演示] InManage监控 - 后端开发</span>
+                    </button>
+                    <div class="dropdown-menu task-dropdown-menu p-0">
+                        <div class="p-2 border-bottom">
+                            <input type="text" class="form-control form-control-sm"
+                                   placeholder="搜索任务..." style="border-radius:8px;">
+                        </div>
+                        <div class="task-dropdown-item active">
+                            <div class="task-name">InManage监控平台 - 后端开发</div>
+                            <div class="task-meta">InManage监控组 &nbsp; 2026-03-01 ~ 2026-12-31 &nbsp;
+                                <span class="badge bg-success" style="font-size:10px;">进行中</span>
+                            </div>
+                        </div>
+                        <div class="task-dropdown-item">
+                            <div class="task-name">IEI Timer Faster - 前端改版</div>
+                            <div class="task-meta">工时系统 &nbsp; 2026-07-01 ~ 2026-08-15 &nbsp;
+                                <span class="badge bg-success" style="font-size:10px;">进行中</span>
+                            </div>
+                        </div>
+                        <div class="task-dropdown-item">
+                            <div class="task-name">数据平台 - API 重构</div>
+                            <div class="task-meta">基础架构组 &nbsp; 2026-06-01 ~ &nbsp;
+                                <span class="badge bg-success" style="font-size:10px;">进行中</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <button class="btn btn-outline-light btn-sm nav-btn" title="从 RDM 同步最新任务列表（节假日同步在日期行操作）">
+                    <i class="bi bi-arrow-repeat"></i> 同步RDM任务
+                </button>
+
+                <span style="color:rgba(255,255,255,0.7);font-size:11px;margin:0 6px;">
+                    更新于 2 分钟前
+                </span>
+            </div>
+
+            <!-- 右侧按钮 -->
+            <div class="header-btn-group ms-auto">
+                <!-- 关于按钮（带小红点） -->
+                <button class="btn btn-outline-light btn-sm nav-btn btn-about"
+                        onclick="openAboutModal()" title="关于 & 版本信息">
+                    <i class="bi bi-info-circle"></i> 关于
+                    <span class="red-dot show" id="aboutRedDot"></span>
+                </button>
+
+                <!-- License 按钮 -->
+                <button class="btn btn-outline-light btn-sm nav-btn"
+                        onclick="openLicenseModal()" title="License 信息">
+                    <i class="bi bi-shield-check"></i> License
+                </button>
+
+                <!-- RDM 链接 -->
+                <a class="btn btn-outline-light btn-sm nav-btn"
+                   href="http://10.111.36.3:2029" target="_blank"
+                   title="打开 RDM 管理平台">
+                    <i class="bi bi-box-arrow-up-right"></i> RDM
+                </a>
+
+                <!-- 用户名 + 退出（放一起，最右边） -->
+                <div class="d-flex align-items-center gap-1" style="background:rgba(255,255,255,0.08);border-radius:8px;padding:2px 4px 2px 10px;">
+                    <span style="color:rgba(255,255,255,0.9);font-size:13px;">
+                        <i class="bi bi-person-circle"></i> 田琳
+                    </span>
+                    <button class="btn btn-outline-light btn-sm nav-btn" onclick="switchView('login')"
+                            title="退出登录" style="border:none;font-size:16px;padding:4px 8px;">
+                        <i class="bi bi-box-arrow-right"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container main-container">
+        <!-- 月份导航栏（原设计，不改动） -->
+        <div class="month-bar">
+            <button class="btn-month-nav" title="上个月">
+                <i class="bi bi-chevron-left"></i>
+            </button>
+            <h3>2026 年 7 月</h3>
+            <button class="btn-month-nav" title="下个月">
+                <i class="bi bi-chevron-right"></i>
+            </button>
+            <span class="badge" style="background:rgba(255,255,255,0.25);">本月</span>
+        </div>
+
+        <!-- 从日期选择一行开始，保持原设计，不改动 -->
+        <div class="card-custom">
+            <div class="card-body text-center py-5" style="color:#999;font-size:13px;">
+                <i class="bi bi-lock" style="font-size:24px;"></i>
+                <br>月历视图 · 批量填充 · 全员日报等区域保持 <strong>当前产品原有设计</strong>，此处不做改动。
+            </div>
+        </div>
+    </div>
+
+    <!-- 右下角：发现新版本提示（可点击查看详情） -->
+    <div class="update-toast-wrapper" id="updateToast" onclick="openAboutModal()" style="display:block;">
+        <div class="update-toast">
+            <div class="update-toast-header">
+                <i class="bi bi-rocket-takeoff"></i> 发现新版本
+                <button class="update-toast-close" onclick="event.stopPropagation();closeUpdateToast();">&times;</button>
+            </div>
+            <div class="update-toast-body">
+                <span class="version-tag">V1.0.3</span>
+                本次更新包含登录页改版、主页面布局优化、版本信息完善等内容。
+            </div>
+            <div class="update-toast-footer">
+                <span>2026-07-10 发布</span>
+                <span class="click-hint"><i class="bi bi-hand-index"></i> 点击查看详情</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================
+     RDM 配置弹窗
+     ============================================================ -->
+<div class="modal fade" id="rdmConfigModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content modal-content-custom">
+            <div class="modal-header modal-header-custom">
+                <h5 class="modal-title"><i class="bi bi-gear"></i> RDM 服务器配置</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body modal-body-custom">
+                <div class="rdm-config-section">
+                    <label>RDM 服务器地址</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="rdmUrl"
+                               value="http://10.111.36.3:2029"
+                               style="border-radius:8px 0 0 8px;">
+                        <button class="btn btn-primary" onclick="testRdmConnection()"
+                                style="border-radius:0 8px 8px 0;">
+                            <i class="bi bi-plug"></i> 检测连通性
+                        </button>
+                    </div>
+                    <small class="text-muted">RDM 研发管理平台的访问地址，修改后全局生效。</small>
+                </div>
+
+                <div class="connect-status checking" id="connectStatus" style="display:flex;">
+                    <i class="bi bi-arrow-repeat"></i>
+                    <span>正在检测 RDM 服务连通性...</span>
+                </div>
+
+                <div class="mt-3 d-flex justify-content-between">
+                    <button class="btn btn-outline-secondary btn-sm" onclick="resetRdmConfig()">
+                        <i class="bi bi-arrow-counterclockwise"></i> 恢复默认
+                    </button>
+                    <button class="btn btn-primary btn-sm" onclick="saveRdmConfig()">
+                        <i class="bi bi-check-lg"></i> 保存配置
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================
+     关于弹窗（版本信息 + 更新检查）
+     ============================================================ -->
+<div class="modal fade" id="aboutModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content modal-content-custom">
+            <div class="modal-header modal-header-custom">
+                <h5 class="modal-title"><i class="bi bi-info-circle"></i> 关于 IEI Timer Faster</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body modal-body-custom">
+                <!-- 产品信息 -->
+                <div class="version-info-card mb-3">
+                    <h6>产品信息</h6>
+                    <div class="d-flex align-items-center justify-content-between" style="font-size:13px;">
+                        <div>
+                            <span style="color:#888;">当前版本</span>
+                            <span class="badge ms-2" style="background:var(--primary);">V1.0.2</span>
+                        </div>
+                        <button class="btn btn-outline-primary btn-sm" onclick="openReleaseNote();event.stopPropagation();">
+                            <i class="bi bi-journal-text"></i> Release Note
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 更新检查 -->
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <div>
+                        <span class="text-success" id="updateStatusMsg" style="display:none;">
+                            <i class="bi bi-check-circle-fill"></i> 已是最新版本
+                        </span>
+                        <span class="text-muted" id="updateInitMsg" style="font-size:13px;">
+                            <i class="bi bi-arrow-repeat"></i> 点击右侧按钮检查是否有新版本
+                        </span>
+                        <span class="text-primary" id="updateAvailableMsg" style="display:none;">
+                            <i class="bi bi-arrow-up-circle"></i> 发现新版本 V1.0.3
+                        </span>
+                    </div>
+                    <button class="btn btn-outline-primary btn-sm" onclick="simulateCheckUpdate()">
+                        <i class="bi bi-arrow-repeat"></i> 检查更新
+                    </button>
+                </div>
+
+                <!-- 发现新版本后的介绍区域（初始隐藏，检查后显示） -->
+                <div class="version-info-card" id="newVersionBox" style="display:none;background:#fff8e1;border-color:#ffe082;">
+                    <h6 style="color:#f57c00;"><i class="bi bi-rocket-takeoff"></i> 新版本 V1.0.3</h6>
+                    <p style="font-size:12px;color:#666;margin:0 0 8px;">本次更新包含登录页改版、主页面布局优化、版本信息完善等内容。</p>
+                    <button class="btn btn-outline-warning btn-sm" onclick="openReleaseNote();event.stopPropagation();">
+                        <i class="bi bi-eye"></i> 查看更新内容
+                    </button>
+                    <button class="btn btn-primary btn-sm ms-2" id="downloadUpdateBtn" onclick="simulateDownloadUpdate()" style="display:none;">
+                        <i class="bi bi-download"></i> 下载更新
+                    </button>
+                    <div class="mt-2" id="downloadProgress" style="display:none;">
+                        <div class="progress" style="height:8px;border-radius:4px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" style="width:0%;" id="dlProgressBar"></div>
+                        </div>
+                        <small class="text-muted mt-1" id="dlProgressText"></small>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" style="border:none;">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================
+     Release Note 弹窗
+     ============================================================ -->
+<div class="modal fade" id="releaseNoteModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content modal-content-custom">
+            <div class="modal-header modal-header-custom">
+                <h5 class="modal-title"><i class="bi bi-journal-text"></i> Release Note</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body modal-body-custom">
+                <div class="version-info-card">
+                    <h6>V1.0.2</h6>
+                    <ul class="changelog">
+                        <li>支持缓存任务列表，启动速度大幅提升</li>
+                        <li>月历视图改为整月展示，支持跨月查看</li>
+                        <li>任务下拉框增加搜索过滤和项目信息展示</li>
+                        <li>批量填充增加阶梯比例模式，智能计算完成率</li>
+                        <li>新增全员日报功能，查看团队工时统计</li>
+                        <li>节假日自动同步，法定假期标注在月历上</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-footer" style="border:none;">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================
+     License 信息弹窗
+     ============================================================ -->
+<div class="modal fade" id="licenseModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content modal-content-custom">
+            <div class="modal-header modal-header-custom">
+                <h5 class="modal-title"><i class="bi bi-shield-check"></i> License 信息</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body modal-body-custom">
+                <table class="table table-borderless mb-0 lic-table">
+                    <tbody>
+                        <tr>
+                            <td>激活状态</td>
+                            <td><span class="badge bg-success">已激活</span></td>
+                        </tr>
+                        <tr>
+                            <td>授权类型</td>
+                            <td id="licType">1 年</td>
+                        </tr>
+                        <tr>
+                            <td>过期时间</td>
+                            <td id="licExp">2027-06-25</td>
+                        </tr>
+                        <tr>
+                            <td>激活时间</td>
+                            <td id="licActivatedAt">2026-06-25</td>
+                        </tr>
+                        <tr>
+                            <td>SN 码</td>
+                            <td>
+                                <code style="font-size:11px;word-break:break-all;">dGlhbmxpbg==</code>
+                                <button class="btn btn-link btn-sm py-0" onclick="copySn()" title="复制 SN 码">
+                                    <i class="bi bi-clipboard"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="modal-footer" style="border:none;">
+                <a class="btn btn-outline-success btn-sm" href="#" onclick="protoToast('模拟跳转到激活页面', 'info')">
+                    <i class="bi bi-arrow-repeat"></i> 重新激活
+                </a>
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+/* ============================================================
+ * 原型交互逻辑
+ * ============================================================ */
+
+// ===== 视图切换 =====
+function switchView(name) {
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.getElementById('view-' + name).classList.add('active');
+
+    // 高亮导航按钮
+    document.querySelectorAll('.proto-nav .nav-btn').forEach(b => b.classList.remove('active'));
+    event && event.target && event.target.closest('.nav-btn') &&
+        event.target.closest('.nav-btn').classList.add('active');
+
+    // 登录页自动检测连通性
+    if (name === 'login') {
+        setTimeout(autoCheckRdm, 300);
+    }
+    // 主页面检查是否有更新提示
+    if (name === 'dashboard') {
+        updateToastCheck();
+    }
+}
+
+// ===== 原型 Toast 通知 =====
+function protoToast(msg, type) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'update-toast-wrapper';
+    wrapper.style.top = '24px';
+    wrapper.style.right = '24px';
+    wrapper.style.bottom = 'auto';
+    wrapper.style.animation = 'toast-in 0.3s ease-out';
+    const colors = {
+        success: { bg: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)', icon: 'check-circle' },
+        error:   { bg: 'linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%)', icon: 'exclamation-circle' },
+        warn:    { bg: 'linear-gradient(135deg, #ffd93d 0%, #ff8c00 100%)', icon: 'exclamation-triangle' },
+        info:    { bg: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', icon: 'info-circle' }
+    };
+    const c = colors[type] || colors.info;
+    wrapper.innerHTML = `
+        <div class="update-toast">
+            <div class="update-toast-header" style="background:${c.bg};cursor:default;">
+                <i class="bi bi-${c.icon}"></i> 提示
+            </div>
+            <div class="update-toast-body">${msg}</div>
+        </div>`;
+    document.body.appendChild(wrapper);
+    setTimeout(() => wrapper.remove(), 3000);
+}
+
+// ===== 登录页交互 =====
+document.getElementById('loginForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const btn = document.getElementById('loginBtn');
+    const alertBox = document.getElementById('loginAlert');
+    const user = document.getElementById('username').value.trim();
+    const pass = document.getElementById('password').value.trim();
+
+    if (!user || !pass) {
+        alertBox.textContent = '用户名或密码不能为空';
+        alertBox.style.display = 'block';
+        return;
+    }
+
+    alertBox.style.display = 'none';
+    btn.querySelector('.btn-text').textContent = '登录中...';
+    btn.disabled = true;
+
+    // 模拟登录
+    setTimeout(() => {
+        protoToast('登录成功，正在跳转...', 'success');
+        document.getElementById('loginFormWrapper').classList.add('to-dashboard');
+        setTimeout(() => {
+            switchView('dashboard');
+            btn.querySelector('.btn-text').textContent = '登录';
+            btn.disabled = false;
+            document.getElementById('loginFormWrapper').classList.remove('to-dashboard');
+        }, 600);
+    }, 1000);
+});
+
+function protoClearSaved() {
+    document.getElementById('username').value = '';
+    document.getElementById('password').value = '';
+    protoToast('已清除保存的账号密码', 'info');
+}
+
+// ===== RDM 地址配置 =====
+function openRdmConfig() {
+    new bootstrap.Modal(document.getElementById('rdmConfigModal')).show();
+    // 自动检测连通性
+    setTimeout(simulateRdmCheck, 500);
+}
+
+function simulateRdmCheck() {
+    const status = document.getElementById('connectStatus');
+    status.className = 'connect-status checking';
+    status.style.display = 'flex';
+    status.querySelector('span').textContent = '正在检测 RDM 服务连通性...';
+    status.querySelector('i').className = 'bi bi-arrow-repeat';
+
+    // 模拟 1.5 秒后返回结果
+    setTimeout(() => {
+        const url = document.getElementById('rdmUrl').value.trim();
+        // 模拟：默认地址检测成功，其他地址随机
+        const ok = url === 'http://10.111.36.3:2029';
+        status.className = 'connect-status ' + (ok ? 'ok' : 'fail');
+        status.innerHTML = ok
+            ? '<i class="bi bi-check-circle-fill"></i><span>连接成功！RDM 服务运行正常。</span>'
+            : '<i class="bi bi-x-circle-fill"></i><span>无法连接到 RDM 服务，请检查地址是否正确。</span>';
+    }, 1500);
+}
+
+function testRdmConnection() {
+    const status = document.getElementById('connectStatus');
+    status.className = 'connect-status checking';
+    status.style.display = 'flex';
+    status.innerHTML = '<i class="bi bi-arrow-repeat"></i><span>正在检测...</span>';
+    setTimeout(simulateRdmCheck, 800);
+}
+
+function resetRdmConfig() {
+    document.getElementById('rdmUrl').value = 'http://10.111.36.3:2029';
+    simulateRdmCheck();
+    protoToast('已恢复默认 RDM 地址', 'info');
+}
+
+function saveRdmConfig() {
+    const url = document.getElementById('rdmUrl').value.trim();
+    protoToast('RDM 地址已保存：' + url, 'success');
+    updateRdmStatus(true);
+    new bootstrap.Modal(document.getElementById('rdmConfigModal')).hide();
+}
+
+// 登录页 RDM 连通状态显示
+function updateRdmStatus(ok) {
+    const el = document.getElementById('rdmStatus');
+    if (ok) {
+        el.innerHTML = '<span class="status-ok"><i class="bi bi-check-circle-fill"></i> 已连接</span>';
+    } else {
+        el.innerHTML = '<span class="status-fail"><i class="bi bi-x-circle-fill"></i> 未连接</span>';
+    }
+}
+
+// 登录页自动检测
+function autoCheckRdm() {
+    setTimeout(() => updateRdmStatus(true), 800);
+}
+
+// ===== 关于弹窗 =====
+function openAboutModal() {
+    // 关闭更新 toast
+    const toast = document.getElementById('updateToast');
+    if (toast) toast.style.display = 'none';
+    // 重置状态
+    document.getElementById('updateInitMsg').style.display = '';
+    document.getElementById('updateStatusMsg').style.display = 'none';
+    document.getElementById('updateAvailableMsg').style.display = 'none';
+    document.getElementById('newVersionBox').style.display = 'none';
+    document.getElementById('downloadUpdateBtn').style.display = 'none';
+    document.getElementById('downloadProgress').style.display = 'none';
+    new bootstrap.Modal(document.getElementById('aboutModal')).show();
+}
+
+function openReleaseNote() {
+    new bootstrap.Modal(document.getElementById('releaseNoteModal')).show();
+}
+
+function simulateCheckUpdate() {
+    document.getElementById('updateInitMsg').style.display = 'none';
+    document.getElementById('updateStatusMsg').innerHTML =
+        '<span class="spinner-border spinner-border-sm" role="status"></span> 正在检查更新...';
+    document.getElementById('updateStatusMsg').style.display = 'block';
+    document.getElementById('updateAvailableMsg').style.display = 'none';
+    document.getElementById('newVersionBox').style.display = 'none';
+
+    setTimeout(() => {
+        // 模拟：发现新版本
+        document.getElementById('updateStatusMsg').style.display = 'none';
+        document.getElementById('updateAvailableMsg').style.display = 'block';
+        document.getElementById('newVersionBox').style.display = 'block';
+        document.getElementById('downloadUpdateBtn').style.display = '';
+        document.getElementById('aboutRedDot').classList.add('show');
+    }, 1500);
+}
+
+function simulateDownloadUpdate() {
+    const progDiv = document.getElementById('downloadProgress');
+    const bar = document.getElementById('dlProgressBar');
+    const text = document.getElementById('dlProgressText');
+    const dlBtn = document.getElementById('downloadUpdateBtn');
+
+    dlBtn.disabled = true;
+    dlBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 下载中...';
+    progDiv.style.display = 'block';
+    bar.style.width = '0%';
+    let p = 0;
+    const timer = setInterval(() => {
+        p += Math.random() * 20 + 5;
+        if (p >= 100) {
+            p = 100;
+            clearInterval(timer);
+            bar.classList.remove('progress-bar-striped', 'progress-bar-animated');
+            bar.classList.add('bg-success');
+            text.textContent = '下载完成，准备安装...';
+            dlBtn.innerHTML = '<i class="bi bi-box-arrow-up"></i> 安装更新';
+            dlBtn.disabled = false;
+            dlBtn.onclick = function() {
+                protoToast('模拟安装中...（实际会调用系统安装程序）', 'info');
+                document.getElementById('aboutRedDot').classList.remove('show');
+                document.getElementById('updateAvailableMsg').innerHTML =
+                    '<i class="bi bi-check-circle-fill"></i> 已更新到最新版本 V1.0.3';
+                document.getElementById('updateAvailableMsg').className = 'text-success';
+                document.getElementById('newVersionBox').style.display = 'none';
+                document.getElementById('downloadProgress').style.display = 'none';
+            };
+        }
+        bar.style.width = p + '%';
+        text.textContent = '下载中 ' + Math.round(p) + '%';
+    }, 300);
+}
+
+// ===== License 弹窗 =====
+function openLicenseModal() {
+    new bootstrap.Modal(document.getElementById('licenseModal')).show();
+    try { bootstrap.Modal.getInstance('#aboutModal')?.hide(); } catch(_) {}
+}
+
+function copySn() {
+    navigator.clipboard.writeText('dGlhbmxpbg==')  // demo SN
+        .then(() => protoToast('SN 码已复制到剪贴板', 'success'))
+        .catch(() => protoToast('复制失败，请手动复制', 'error'));
+}
+
+// ===== 更新 Toast =====
+function closeUpdateToast() {
+    document.getElementById('updateToast').style.display = 'none';
+}
+
+function updateToastCheck() {
+    // 模拟：主页面显示更新 toast
+    const toast = document.getElementById('updateToast');
+    if (toast) {
+        toast.style.display = 'block';
+    }
+    // 显示关于按钮红点
+    document.getElementById('aboutRedDot').classList.add('show');
+}
+
+// ===== 初始化 =====
+autoCheckRdm();
+</script>
+
+</body>
+</html>

@@ -13,11 +13,13 @@
 <!-- 顶部导航 -->
 <nav class="navbar navbar-expand navbar-dark">
     <div class="container">
-        <a class="navbar-brand me-2" href="/dashboard">
-            <i class="bi bi-clock-history"></i> 工时系统
+        <!-- 品牌 -->
+        <a class="navbar-brand me-3" href="/dashboard">
+            <i class="bi bi-clock-history"></i> IEI Timer Faster
         </a>
-        <!-- 任务下拉（在导航栏内） -->
-        <div class="d-flex align-items-center me-3">
+
+        <!-- 左侧区域：任务选择 + 同步按钮 + 缓存信息 -->
+        <div class="d-flex align-items-center gap-2">
             <input type="text" class="form-control form-control-sm navbar-search" id="taskSearchInput"
                    placeholder="搜索任务..." style="display:none;">
             <div class="dropdown" id="taskDropdown">
@@ -30,31 +32,41 @@
                      style="max-height: 360px; overflow-y: auto; min-width: 320px;">
                 </div>
             </div>
+            <button class="btn btn-sm btn-outline-light nav-header-btn" id="syncBtn"
+                    title="同步 RDM 任务列表 + 节假日">
+                <i class="bi bi-arrow-repeat"></i> 同步
+            </button>
+            <button class="btn btn-sm btn-outline-light nav-header-btn" id="holidaySyncBtn"
+                    title="同步中国法定节假日" style="display:none;">
+                <i class="bi bi-calendar-heart"></i> 同步节假日
+            </button>
+            <span id="cacheInfo" style="color:rgba(255,255,255,0.65);font-size:11px;white-space:nowrap;"></span>
         </div>
-        <button class="btn btn-sm btn-outline-light me-2" id="syncBtn"
-                title="从 RDM 实时抓取最新任务列表" style="font-size:12px;">
-            <i class="bi bi-arrow-repeat"></i> 从 RDM 同步
-        </button>
-        <button class="btn btn-sm btn-outline-light me-2" id="holidaySyncBtn"
-                title="同步中国法定节假日" style="display:none;font-size:12px;">
-            <i class="bi bi-calendar-heart"></i> 同步节假日
-        </button>
-        <span id="cacheInfo" style="display:none;color:rgba(255,255,255,0.7);font-size:12px;margin-right:12px;white-space:nowrap;"></span>
-        <div class="d-flex align-items-center ms-auto">
-            <span class="navbar-text me-3">
-                <i class="bi bi-person-circle"></i> <span id="navUsername">{{ username|default('-') }}</span>
-            </span>
-            <a class="btn btn-outline-light btn-sm me-2" href="http://10.111.36.3:2029"
+
+        <!-- 右侧区域：分割线 → 关于 → License → RDM链接 → 分割线 → 用户名+退出 -->
+        <div class="d-flex align-items-center ms-auto gap-1">
+            <span class="header-divider"></span>
+            <button class="btn btn-sm btn-outline-light nav-header-btn btn-about" id="aboutBtn"
+                    title="关于 & 版本信息">
+                <i class="bi bi-info-circle"></i> 关于
+                <span class="red-dot" id="aboutRedDot"></span>
+            </button>
+            <button class="btn btn-sm btn-outline-light nav-header-btn" id="licenseBtn"
+                    title="License 信息">
+                <i class="bi bi-shield-check"></i> License
+            </button>
+            <a class="btn btn-sm btn-outline-light nav-header-btn" href="http://10.111.36.3:2029"
                target="_blank" title="打开 RDM 管理平台">
                 <i class="bi bi-box-arrow-up-right"></i> RDM
             </a>
-            <button class="btn btn-outline-light btn-sm me-2" id="systemInfoBtn"
-                    title="系统信息">
-                <i class="bi bi-gear"></i> 系统
-            </button>
-            <button class="btn btn-outline-light btn-sm" id="logoutBtn">
-                <i class="bi bi-box-arrow-right"></i> 退出
-            </button>
+            <span class="header-divider"></span>
+            <div class="d-flex align-items-center" id="userGroup">
+                <span class="nav-username" id="navUsername">{{ username|default('-') }}</span>
+                <button class="btn btn-sm btn-outline-light nav-logout-btn" id="logoutBtn"
+                        title="退出登录">
+                    <i class="bi bi-box-arrow-right"></i>
+                </button>
+            </div>
         </div>
     </div>
 </nav>
@@ -325,82 +337,145 @@
     </div>
 </div>
 
-<!-- 系统信息弹窗 -->
-<div class="modal fade" id="systemInfoModal" tabindex="-1">
+<!-- 关于弹窗 -->
+<div class="modal fade" id="aboutModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">
-                    <i class="bi bi-gear"></i> 系统信息
-                </h5>
+        <div class="modal-content modal-custom">
+            <div class="modal-header modal-custom-header">
+                <h5 class="modal-title"><i class="bi bi-info-circle"></i> 关于 IEI Timer Faster</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body">
-                <!-- 加载中 -->
-                <div id="sysInfoLoading" class="text-center py-4">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                    <p class="mt-2 text-muted">正在加载...</p>
-                </div>
-                <!-- 错误 -->
-                <div id="sysInfoError" class="text-center py-4" style="display:none;">
-                    <i class="bi bi-exclamation-triangle text-warning" style="font-size:36px;"></i>
-                    <p id="sysInfoErrorMsg" class="mt-2 text-muted"></p>
-                </div>
-                <!-- 信息内容 -->
-                <div id="sysInfoContent" style="display:none;">
-
-                    <!-- 版本信息区 -->
-                    <div class="border rounded p-3 mb-3">
-                        <h6 class="d-flex align-items-center mb-2">
-                            <i class="bi bi-info-circle me-2"></i> 版本信息
-                            <span class="badge bg-secondary ms-2" id="sysVersion">-</span>
-                        </h6>
-                        <div id="sysUpdateStatus" class="small text-muted mb-2"></div>
-                        <button class="btn btn-outline-primary btn-sm" id="checkUpdateBtn">
-                            <i class="bi bi-arrow-repeat"></i> 检查更新
+            <div class="modal-body modal-custom-body">
+                <!-- 产品信息 -->
+                <div class="version-info-card">
+                    <h6>产品信息</h6>
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <span style="color:#888;">当前版本</span>
+                            <span class="badge ms-2 version-badge" id="aboutVersion">V -</span>
+                        </div>
+                        <button class="btn btn-outline-primary btn-sm" id="aboutReleaseNoteBtn1">
+                            <i class="bi bi-journal-text"></i> Release Note
                         </button>
-                        <button class="btn btn-primary btn-sm" id="downloadUpdateBtn" style="display:none;">
-                            <i class="bi bi-download"></i> 下载更新
-                        </button>
-                        <div id="sysUpdateProgress" style="display:none;" class="mt-2"></div>
                     </div>
+                </div>
 
-                    <!-- License 信息区 -->
-                    <div class="border rounded p-3">
-                        <h6 class="mb-2"><i class="bi bi-shield-check me-2"></i> License</h6>
-                        <table class="table table-borderless mb-0" style="font-size:13px;">
-                            <tbody>
-                                <tr>
-                                    <td style="width:80px;color:#888;">激活状态</td>
-                                    <td><span id="licStatus"></span></td>
-                                </tr>
-                                <tr>
-                                    <td style="color:#888;">授权类型</td>
-                                    <td id="licType">-</td>
-                                </tr>
-                                <tr id="licExpRow">
-                                    <td style="color:#888;">过期时间</td>
-                                    <td id="licExp">-</td>
-                                </tr>
-                                <tr id="licActivatedRow">
-                                    <td style="color:#888;">激活时间</td>
-                                    <td id="licActivatedAt">-</td>
-                                </tr>
-                                <tr>
-                                    <td style="color:#888;">SN 码</td>
-                                    <td>
-                                        <code id="licSn" style="font-size:12px;word-break:break-all;">-</code>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
+                <!-- 更新检查 -->
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <div>
+                        <span class="text-muted" id="aboutUpdateIdle" style="font-size:13px;">
+                            <i class="bi bi-arrow-repeat"></i> 点击右侧按钮检查是否有新版本
+                        </span>
+                        <span class="text-success" id="aboutUpdateLatest" style="display:none;font-size:13px;">
+                            <i class="bi bi-check-circle-fill"></i> 已是最新版本
+                        </span>
+                        <span class="text-success" id="aboutUpdateAvailable" style="display:none;font-size:13px;">
+                            <i class="bi bi-arrow-up-circle"></i> <span id="aboutNewVerLabel">发现新版本</span>
+                        </span>
                     </div>
+                    <button class="btn btn-outline-primary btn-sm" id="aboutCheckUpdateBtn">
+                        <i class="bi bi-arrow-repeat"></i> 检查更新
+                    </button>
+                </div>
 
+                <!-- 发现新版本后的介绍区域 -->
+                <div class="version-info-card" id="aboutNewVerBox" style="display:none;background:#fff8e1;border-color:#ffe082;">
+                    <h6 style="color:#f57c00;"><i class="bi bi-rocket-takeoff"></i> <span id="aboutNewVerTitle">新版本</span></h6>
+                    <p style="font-size:12px;color:#666;margin:0 0 8px;" id="aboutNewVerDesc">-</p>
+                    <button class="btn btn-outline-primary btn-sm" id="aboutReleaseNoteBtn2">
+                        <i class="bi bi-eye"></i> 查看更新内容
+                    </button>
+                    <button class="btn btn-primary btn-sm ms-2" id="aboutDownloadBtn" style="display:none;">
+                        <i class="bi bi-download"></i> 下载更新
+                    </button>
+                    <div class="mt-2" id="aboutDlProgress" style="display:none;">
+                        <div class="progress" style="height:8px;border-radius:4px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated"
+                                 style="width:0%;" id="aboutDlBar"></div>
+                        </div>
+                        <small class="text-muted mt-1" id="aboutDlText"></small>
+                    </div>
                 </div>
             </div>
-            <div class="modal-footer">
+            <div class="modal-footer" style="border:none;">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Release Note 弹窗 -->
+<div class="modal fade" id="releaseNoteModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content modal-custom">
+            <div class="modal-header modal-custom-header">
+                <h5 class="modal-title"><i class="bi bi-journal-text"></i> Release Note</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body modal-custom-body">
+                <div id="releaseNoteLoading" class="text-center py-3">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <p class="mt-2 text-muted">加载中...</p>
+                </div>
+                <div id="releaseNoteContent" style="display:none;"></div>
+            </div>
+            <div class="modal-footer" style="border:none;">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- License 信息弹窗 -->
+<div class="modal fade" id="licenseModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content modal-custom">
+            <div class="modal-header modal-custom-header">
+                <h5 class="modal-title"><i class="bi bi-shield-check"></i> License 信息</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body modal-custom-body">
+                <div id="licLoading" class="text-center py-3">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <p class="mt-2 text-muted">加载中...</p>
+                </div>
+                <div id="licContent" style="display:none;">
+                    <table class="table table-borderless lic-table">
+                        <tbody>
+                            <tr>
+                                <td>激活状态</td>
+                                <td id="licStatus"></td>
+                            </tr>
+                            <tr>
+                                <td>授权类型</td>
+                                <td id="licType">-</td>
+                            </tr>
+                            <tr id="licExpRow">
+                                <td>过期时间</td>
+                                <td id="licExp">-</td>
+                            </tr>
+                            <tr id="licActivatedAtRow">
+                                <td>激活时间</td>
+                                <td id="licActivatedAt">-</td>
+                            </tr>
+                            <tr>
+                                <td>SN 码</td>
+                                <td>
+                                    <code id="licSn" style="font-size:12px;word-break:break-all;">-</code>
+                                    <button class="btn btn-link btn-sm py-0" id="copySnBtn" title="复制 SN 码">
+                                        <i class="bi bi-clipboard"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="lic-protocol" style="font-size:12px;color:#999;margin-top:12px;padding:10px;background:#f8f9ff;border-radius:8px;border:1px solid #e0e4ff;">
+                        <strong>License 协议说明：</strong>
+                        <br>本软件需要有效的 License 才能使用。如需申请或续期，请联系管理员并提供您的 SN 码。
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" style="border:none;">
                 <a href="/activate" class="btn btn-outline-success btn-sm">
                     <i class="bi bi-arrow-repeat"></i> 重新激活
                 </a>
@@ -568,7 +643,13 @@
 
         document.getElementById('teamLogsBtn').addEventListener('click', showTeamLogs);
 
-        document.getElementById('systemInfoBtn').addEventListener('click', showSystemInfo);
+        // 关于 / License / Release Note 按钮
+        document.getElementById('aboutBtn').addEventListener('click', openAboutModal);
+        document.getElementById('licenseBtn').addEventListener('click', openLicenseModal);
+        document.getElementById('aboutReleaseNoteBtn1').addEventListener('click', openReleaseNote);
+        document.getElementById('aboutReleaseNoteBtn2').addEventListener('click', openReleaseNote);
+        document.getElementById('aboutCheckUpdateBtn').addEventListener('click', aboutCheckUpdate);
+        document.getElementById('copySnBtn').addEventListener('click', copySn);
 
         document.getElementById('logoutBtn').addEventListener('click', async () => {
             await apiCall('/api/logout', { method: 'POST' });
@@ -723,15 +804,11 @@
         const syncBtn = document.getElementById('syncBtn');
 
         if (state.tasksCached && state.tasksCachedAt) {
-            info.style.display = '';
             info.textContent = '更新时间：' + (state.tasksCachedAt ? formatCachedTime(state.tasksCachedAt) : '');
-            syncBtn.style.display = '';
             syncBtn.disabled = false;
         } else {
-            info.style.display = '';
-            info.textContent = '实时数据';
-            syncBtn.style.display = '';
-            syncBtn.disabled = true;
+            info.textContent = '点击同步获取任务';
+            syncBtn.disabled = false;
         }
     }
 
@@ -765,6 +842,21 @@
             await refreshMonth();
         }
         toast('已从 RDM 同步 ' + (resp.tasks ? resp.tasks.length : 0) + ' 个任务', 'success');
+
+        // 同步节假日（静默）
+        syncHolidaysSilent();
+    }
+
+    /** 静默同步节假日（同步按钮调用，不弹 toast） */
+    async function syncHolidaysSilent() {
+        try {
+            const year = parseYearMonth(state.yearMonth).year;
+            const resp = await apiCall('/api/holidays?year=' + year + '&refresh=true');
+            if (resp && resp.success) {
+                state.holidays = resp.holidays || {};
+                refreshMonth();
+            }
+        } catch (e) { /* 静默失败 */ }
     }
 
     // ===== 月份数据加载 =====
@@ -1678,77 +1770,278 @@
         document.getElementById('teamLogsTableWrap').style.display = 'block';
     }
 
-    // ===== 系统信息弹窗 =====
-    let systemModalInst = null;
-    let _sysUpdateResult = null;  // 缓存的更新检查结果
+    init();
 
-    async function showSystemInfo() {
-        if (!systemModalInst) {
-            systemModalInst = new bootstrap.Modal(document.getElementById('systemInfoModal'));
+    // ===== 在线更新检查（全局） =====
+    let _globalUpdateData = null;  // 缓存的更新检查结果
+
+    // ===== 关于弹窗 =====
+    let aboutModalInst = null;
+
+    async function openAboutModal() {
+        // 关闭更新 toast
+        const toast = document.getElementById('updateToast');
+        if (toast) toast.style.display = 'none';
+
+        if (!aboutModalInst) {
+            aboutModalInst = new bootstrap.Modal(document.getElementById('aboutModal'));
         }
-        systemModalInst.show();
+        aboutModalInst.show();
 
         // 重置 UI
-        document.getElementById('sysInfoLoading').style.display = 'block';
-        document.getElementById('sysInfoError').style.display = 'none';
-        document.getElementById('sysInfoContent').style.display = 'none';
-        // 重置更新区
-        document.getElementById('sysUpdateStatus').textContent = '';
-        document.getElementById('checkUpdateBtn').style.display = '';
-        document.getElementById('downloadUpdateBtn').style.display = 'none';
-        document.getElementById('sysUpdateProgress').style.display = 'none';
+        document.getElementById('aboutUpdateIdle').style.display = '';
+        document.getElementById('aboutUpdateLatest').style.display = 'none';
+        document.getElementById('aboutUpdateAvailable').style.display = 'none';
+        document.getElementById('aboutNewVerBox').style.display = 'none';
+        document.getElementById('aboutDownloadBtn').style.display = 'none';
+        document.getElementById('aboutDlProgress').style.display = 'none';
+        document.getElementById('aboutCheckUpdateBtn').disabled = false;
+        document.getElementById('aboutCheckUpdateBtn').innerHTML = '<i class="bi bi-arrow-repeat"></i> 检查更新';
 
+        // 获取版本号
         try {
             const r = await fetch('/api/system-info');
             const data = await r.json();
+            if (data && data.version) {
+                document.getElementById('aboutVersion').textContent = 'V ' + data.version;
+            }
+            // 如果已缓存更新信息，直接显示
+            if (data && data.update && data.update.has_update) {
+                _globalUpdateData = data.update;
+                showAboutUpdateAvailable(data.update);
+            }
+        } catch (_) {
+            document.getElementById('aboutVersion').textContent = 'V -';
+        }
 
-            document.getElementById('sysInfoLoading').style.display = 'none';
+        // 加载 Release Note 内容
+        preloadReleaseNote();
+    }
 
-            if (!data || !data.success) {
-                document.getElementById('sysInfoError').style.display = 'block';
-                document.getElementById('sysInfoErrorMsg').textContent =
-                    (data && data.message) || '无法获取系统信息';
+    function showAboutUpdateAvailable(data) {
+        if (!data) return;
+        document.getElementById('aboutUpdateIdle').style.display = 'none';
+        document.getElementById('aboutUpdateLatest').style.display = 'none';
+        document.getElementById('aboutUpdateAvailable').style.display = '';
+        document.getElementById('aboutNewVerLabel').textContent = '发现新版本 V' + escapeHtml(data.version || '');
+        document.getElementById('aboutNewVerBox').style.display = 'block';
+        document.getElementById('aboutNewVerTitle').textContent = 'V' + escapeHtml(data.version || '');
+        document.getElementById('aboutNewVerDesc').textContent = data.release_notes || '暂无更新内容';
+        document.getElementById('aboutDownloadBtn').style.display = data.download_url ? '' : 'none';
+        // 显示小红点
+        document.getElementById('aboutRedDot').classList.add('show');
+        document.getElementById('aboutCheckUpdateBtn').innerHTML = '<i class="bi bi-arrow-repeat"></i> 重新检查';
+    }
+
+    async function aboutCheckUpdate() {
+        const btn = document.getElementById('aboutCheckUpdateBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 检查中...';
+
+        document.getElementById('aboutUpdateIdle').style.display = 'none';
+        document.getElementById('aboutUpdateLatest').style.display = 'none';
+        document.getElementById('aboutUpdateAvailable').style.display = 'none';
+        document.getElementById('aboutNewVerBox').style.display = 'none';
+        document.getElementById('aboutDownloadBtn').style.display = 'none';
+
+        try {
+            const r = await fetch('/api/update/check?check_now=1');
+            const data = await r.json();
+            if (data && data.has_update) {
+                _globalUpdateData = data;
+                showAboutUpdateAvailable(data);
+            } else {
+                document.getElementById('aboutUpdateLatest').style.display = '';
+                btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> 检查更新';
+            }
+        } catch (_) {
+            document.getElementById('aboutUpdateIdle').style.display = '';
+            document.getElementById('aboutUpdateIdle').textContent = '检查失败，请稍后重试';
+            document.getElementById('aboutUpdateIdle').className = 'text-danger';
+            btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> 检查更新';
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    // ---- 下载更新（关于弹窗内） ----
+    document.getElementById('aboutDownloadBtn').addEventListener('click', async function() {
+        if (!_globalUpdateData) return;
+        const btn = this;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 准备下载...';
+        try {
+            await fetch('/api/update/download', { method: 'POST' });
+            const progDiv = document.getElementById('aboutDlProgress');
+            progDiv.style.display = 'block';
+            pollAboutDlProgress();
+        } catch (_) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-x-circle"></i> 启动失败，请重试';
+        }
+    });
+
+    function pollAboutDlProgress() {
+        const interval = setInterval(async () => {
+            try {
+                const r = await fetch('/api/update/status');
+                const s = await r.json();
+                if (s.downloading) {
+                    const pct = s.progress_percent || 0;
+                    document.getElementById('aboutDlBar').style.width = pct + '%';
+                    document.getElementById('aboutDlText').textContent = '下载中 ' + pct + '%';
+                    return;
+                }
+                if (s.error) {
+                    clearInterval(interval);
+                    document.getElementById('aboutDlText').textContent = '下载失败: ' + s.error;
+                    document.getElementById('aboutDlText').className = 'text-danger mt-1';
+                    return;
+                }
+                if (s.downloaded) {
+                    clearInterval(interval);
+                    doAboutInstall();
+                    return;
+                }
+            } catch (_) { clearInterval(interval); }
+        }, 500);
+    }
+
+    async function doAboutInstall() {
+        const el = document.getElementById('aboutDlText');
+        const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+        if (isMac) {
+            el.textContent = '下载完成，请打开 DMG 安装新版本';
+            el.className = 'text-success mt-1';
+            try { await fetch('/api/update/install', { method: 'POST' }); } catch (_) {}
+            return;
+        }
+        el.textContent = '正在准备安装...';
+        el.className = 'text-primary mt-1';
+        try {
+            const r = await fetch('/api/update/install', { method: 'POST' });
+            const data = await r.json();
+            if (!data.success) {
+                el.textContent = '安装失败: ' + (data.message || '未知错误');
+                el.className = 'text-danger mt-1';
                 return;
             }
+            el.textContent = '正在安装新版本...';
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            el.textContent = '安装完成，程序即将重启...';
+            el.className = 'text-success mt-1';
+            try { await fetch('/api/update/restart', { method: 'POST' }); } catch (_) {}
+        } catch (_) {}
+    }
 
-            // ---- 版本信息 ----
-            document.getElementById('sysVersion').textContent = 'V ' + (data.version || '-');
+    // ===== Release Note 弹窗 =====
+    let releaseNoteModalInst = null;
+    let _releaseNotesCache = null;
 
-            // 更新状态
-            if (data.update && data.update.has_update) {
-                _sysUpdateResult = data.update;
-                document.getElementById('sysUpdateStatus').innerHTML =
-                    '<span class="text-success">' +
-                    '<i class="bi bi-arrow-up-circle"></i> 有新版本 V' +
-                    escapeHtml(data.update.version) + '</span>';
-                document.getElementById('checkUpdateBtn').textContent = ' 重新检查';
-                document.getElementById('downloadUpdateBtn').style.display = '';
-            } else {
-                _sysUpdateResult = null;
-                document.getElementById('sysUpdateStatus').textContent = '暂无更新信息，可手动检查';
+    async function preloadReleaseNote() {
+        if (_releaseNotesCache) return;
+        try {
+            const r = await fetch('/api/release-notes');
+            const data = await r.json();
+            if (data && data.release_notes && data.release_notes.length > 0) {
+                _releaseNotesCache = data.release_notes;
             }
+        } catch (_) {}
+    }
 
-            // ---- License 信息 ----
-            const lic = data.license || {};
+    function openReleaseNote() {
+        if (!releaseNoteModalInst) {
+            releaseNoteModalInst = new bootstrap.Modal(document.getElementById('releaseNoteModal'));
+        }
+        releaseNoteModalInst.show();
+
+        document.getElementById('releaseNoteLoading').style.display = 'block';
+        document.getElementById('releaseNoteContent').style.display = 'none';
+
+        if (_releaseNotesCache && _releaseNotesCache.length > 0) {
+            renderReleaseNoteContent(_releaseNotesCache);
+        } else {
+            // 异步加载
+            fetch('/api/release-notes').then(r => r.json()).then(data => {
+                if (data && data.release_notes && data.release_notes.length > 0) {
+                    _releaseNotesCache = data.release_notes;
+                    renderReleaseNoteContent(data.release_notes);
+                } else {
+                    document.getElementById('releaseNoteLoading').style.display = 'none';
+                    document.getElementById('releaseNoteContent').style.display = 'block';
+                    document.getElementById('releaseNoteContent').innerHTML =
+                        '<p class="text-muted text-center py-3">暂无发布日志</p>';
+                }
+            }).catch(() => {
+                document.getElementById('releaseNoteLoading').style.display = 'none';
+                document.getElementById('releaseNoteContent').style.display = 'block';
+                document.getElementById('releaseNoteContent').innerHTML =
+                    '<p class="text-muted text-center py-3">无法获取发布日志</p>';
+            });
+        }
+    }
+
+    function renderReleaseNoteContent(notes) {
+        document.getElementById('releaseNoteLoading').style.display = 'none';
+        document.getElementById('releaseNoteContent').style.display = 'block';
+        if (!notes || notes.length === 0) {
+            document.getElementById('releaseNoteContent').innerHTML =
+                '<p class="text-muted">暂无更新日志</p>';
+            return;
+        }
+        let html = '';
+        notes.forEach(function(note) {
+            html += '<div class="version-info-card mb-2">' +
+                '<h6>' + escapeHtml(note.version || '') + '</h6>' +
+                '<ul class="changelog">' +
+                (note.changes || []).map(function(c) {
+                    return '<li>' + escapeHtml(c) + '</li>';
+                }).join('') +
+                '</ul></div>';
+        });
+        document.getElementById('releaseNoteContent').innerHTML = html;
+    }
+
+    // ===== License 弹窗 =====
+    let licenseModalInst = null;
+
+    async function openLicenseModal() {
+        if (!licenseModalInst) {
+            licenseModalInst = new bootstrap.Modal(document.getElementById('licenseModal'));
+        }
+        licenseModalInst.show();
+
+        document.getElementById('licLoading').style.display = 'block';
+        document.getElementById('licContent').style.display = 'none';
+
+        try {
+            const r = await fetch('/api/license/info');
+            const data = await r.json();
+
+            document.getElementById('licLoading').style.display = 'none';
+            document.getElementById('licContent').style.display = '';
+
+            // 激活状态
             const statusEl = document.getElementById('licStatus');
-            if (lic.activated) {
+            if (data.activated) {
                 statusEl.innerHTML = '<span class="badge bg-success">已激活</span>';
             } else {
-                const isExpired = !lic.activated && lic.type && lic.exp;
+                const isExpired = !data.activated && data.type && data.exp;
                 statusEl.innerHTML = isExpired
                     ? '<span class="badge bg-danger">已过期</span>'
                     : '<span class="badge bg-warning text-dark">未激活</span>';
             }
 
+            // 授权类型
             const typeMap = { '1年': '1年授权', '永久': '永久授权' };
-            document.getElementById('licType').textContent =
-                typeMap[lic.type] || lic.type || '-';
+            document.getElementById('licType').textContent = typeMap[data.type] || data.type || '-';
 
+            // 过期时间
             const expRow = document.getElementById('licExpRow');
             const expEl = document.getElementById('licExp');
-            if (lic.exp) {
+            if (data.exp) {
                 expRow.style.display = '';
-                const expDate = lic.exp.slice(0, 10);
+                const expDate = data.exp.slice(0, 10);
                 const now = new Date();
                 const expD = new Date(expDate + 'T23:59:59');
                 if (expD < now) {
@@ -1758,136 +2051,40 @@
                     expEl.textContent = expDate;
                 }
             } else {
-                expRow.style.display = lic.type === '永久' ? 'none' : '';
+                expRow.style.display = data.type === '永久' ? 'none' : '';
                 expEl.textContent = '永久有效';
             }
 
-            const atRow = document.getElementById('licActivatedRow');
+            // 激活时间
+            const atRow = document.getElementById('licActivatedAtRow');
             const atEl = document.getElementById('licActivatedAt');
-            if (lic.activated_at) {
+            if (data.activated_at) {
                 atRow.style.display = '';
-                atEl.textContent = lic.activated_at.slice(0, 19).replace('T', ' ');
+                atEl.textContent = data.activated_at.slice(0, 19).replace('T', ' ');
             } else {
                 atRow.style.display = 'none';
             }
 
-            document.getElementById('licSn').textContent = lic.sn || '-';
+            // SN 码
+            document.getElementById('licSn').textContent = data.sn || '-';
 
-            document.getElementById('sysInfoContent').style.display = '';
-
-        } catch (e) {
-            document.getElementById('sysInfoLoading').style.display = 'none';
-            document.getElementById('sysInfoError').style.display = 'block';
-            document.getElementById('sysInfoErrorMsg').textContent = '网络异常，请稍后重试';
+        } catch (_) {
+            document.getElementById('licLoading').style.display = 'none';
+            document.getElementById('licContent').style.display = '';
+            document.getElementById('licContent').innerHTML =
+                '<p class="text-muted text-center py-3">无法获取 License 信息</p>';
         }
     }
 
-    // "检查更新" 按钮
-    document.getElementById('checkUpdateBtn').addEventListener('click', async function() {
-        const btn = this;
-        btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 检查中...';
-        try {
-            const r = await fetch('/api/update/check?check_now=1');
-            const data = await r.json();
-            if (data && data.has_update) {
-                _sysUpdateResult = data;
-                document.getElementById('sysUpdateStatus').innerHTML =
-                    '<span class="text-success"><i class="bi bi-arrow-up-circle"></i> 有新版本 V' +
-                    escapeHtml(data.version) + '</span>';
-                document.getElementById('checkUpdateBtn').textContent = ' 重新检查';
-                document.getElementById('downloadUpdateBtn').style.display = '';
-            } else {
-                _sysUpdateResult = null;
-                document.getElementById('sysUpdateStatus').innerHTML =
-                    '<span class="text-success"><i class="bi bi-check-circle"></i> 已是最新版本</span>';
-                document.getElementById('downloadUpdateBtn').style.display = 'none';
-            }
-        } catch (_) {
-            document.getElementById('sysUpdateStatus').textContent = '检查失败，请稍后重试';
-        } finally {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> 检查更新';
-        }
-    });
-
-    // "下载更新" 按钮
-    document.getElementById('downloadUpdateBtn').addEventListener('click', async function() {
-        if (!_sysUpdateResult || !_sysUpdateResult.version) return;
-        const btn = this;
-        btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 准备下载...';
-        try {
-            await fetch('/api/update/download', { method: 'POST' });
-            // 轮询下载进度
-            const progressEl = document.getElementById('sysUpdateProgress');
-            progressEl.style.display = 'block';
-            pollSysDownloadProgress(progressEl);
-        } catch (_) {
-            btn.disabled = false;
-            btn.textContent = '下载失败，点击重试';
-        }
-    });
-
-    function pollSysDownloadProgress(el) {
-        const interval = setInterval(async () => {
-            try {
-                const r = await fetch('/api/update/status');
-                const s = await r.json();
-                if (s.downloading) {
-                    el.innerHTML =
-                        '<div class="progress" style="height:6px;"><div class="progress-bar" style="width:' +
-                        s.progress_percent + '%"></div></div>' +
-                        '<small class="text-muted">下载中 ' + s.progress_percent + '%</small>';
-                    return;
-                }
-                if (s.error) {
-                    el.innerHTML = '<small class="text-danger">下载失败: ' + s.error + '</small>';
-                    clearInterval(interval);
-                    return;
-                }
-                if (s.downloaded) {
-                    clearInterval(interval);
-                    doInstallInModal(el);
-                    return;
-                }
-            } catch (_) { clearInterval(interval); }
-        }, 500);
+    function copySn() {
+        const snText = document.getElementById('licSn').textContent.trim();
+        if (!snText || snText === '-') return;
+        navigator.clipboard.writeText(snText)
+            .then(function() { toast('SN 码已复制到剪贴板', 'success'); })
+            .catch(function() { toast('复制失败，请手动复制', 'error'); });
     }
 
-    async function doInstallInModal(el) {
-        const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-        if (isMac) {
-            el.innerHTML = '<small class="text-success"><i class="bi bi-check-circle-fill"></i> 下载完成，请打开 DMG 安装新版本</small>';
-            try { await fetch('/api/update/install', { method: 'POST' }); } catch (_) {}
-            return;
-        }
-
-        // ---- Windows 安装流程 ----
-        el.innerHTML = '<small class="text-primary"><span class="spinner-border spinner-border-sm" role="status"></span> 正在准备安装...</small>';
-
-        try {
-            const r = await fetch('/api/update/install', { method: 'POST' });
-            const data = await r.json();
-            if (!data.success) {
-                el.innerHTML = '<small class="text-danger">安装失败: ' + (data.message || '未知错误') + '</small>';
-                return;
-            }
-
-            el.innerHTML = '<small class="text-primary"><span class="spinner-border spinner-border-sm" role="status"></span> 正在安装新版本...</small>';
-            await new Promise(resolve => setTimeout(resolve, 1500));
-
-            el.innerHTML = '<small class="text-success"><span class="spinner-border spinner-border-sm" role="status"></span> 安装完成，程序即将重启...</small>';
-
-            try { await fetch('/api/update/restart', { method: 'POST' }); } catch (_) {}
-        } catch (_) {
-            // 连接断开是预期行为（进程退出）
-        }
-    }
-
-    init();
-
-    // ===== 在线更新检查 =====
+    // ===== 新版本提示 Toast（绿色渐变+点击打开关于弹窗） =====
     (function checkForUpdates() {
         // 延迟 3 秒检查，不阻塞主页面
         setTimeout(async () => {
@@ -1896,7 +2093,10 @@
                 const data = await r.json();
                 if (!data || !data.has_update) return;
 
+                _globalUpdateData = data;
                 showUpdateToast(data.version, data.download_url, data.release_notes);
+                // 显示关于按钮红点
+                document.getElementById('aboutRedDot').classList.add('show');
             } catch (_) {
                 // 静默忽略（非桌面模式无此 API 或无网络）
             }
@@ -1911,143 +2111,38 @@
         wrapper.id = 'updateToast';
         wrapper.className = 'update-toast-wrapper';
         wrapper.innerHTML =
-            '<div class="update-toast">' +
-            '<div class="update-toast-header">' +
-            '<i class="bi bi-cloud-download"></i>' +
-            '<strong>发现新版本 V' + escapeHtml(version) + '</strong>' +
+            '<div class="update-toast" id="updateToastInner">' +
+            '<div class="update-toast-header-green">' +
+            '<i class="bi bi-rocket-takeoff"></i>' +
+            '<strong>发现新版本</strong>' +
             '<button class="update-toast-close" id="updateToastClose">&times;</button>' +
             '</div>' +
-            (releaseNotes ? '<div class="update-toast-body">' + escapeHtml(releaseNotes.substring(0, 200)) + '</div>' : '') +
-            '<div class="update-toast-footer" id="updateToastFooter">' +
-            (downloadUrl
-                ? '<button class="btn btn-sm btn-primary" id="updateDownloadBtn"><i class="bi bi-download"></i> 下载更新</button>'
-                : '<span class="text-muted">当前平台无对应安装包</span>'
-            ) +
+            '<div class="update-toast-body">' +
+            '<span class="version-tag">V' + escapeHtml(version) + '</span>' +
+            (releaseNotes ? escapeHtml(releaseNotes.substring(0, 120)) : '本次更新包含功能优化和体验提升。') +
+            '</div>' +
+            '<div class="update-toast-footer">' +
+            '<span style="font-size:12px;color:#999;">点击查看详情</span>' +
+            '<span class="click-hint"><i class="bi bi-hand-index"></i> 打开关于</span>' +
             '</div>' +
             '</div>';
         document.body.appendChild(wrapper);
 
-        document.getElementById('updateToastClose').addEventListener('click', () => wrapper.remove());
+        // 点击整体打开关于弹窗
+        document.getElementById('updateToastInner').addEventListener('click', function() {
+            wrapper.remove();
+            openAboutModal();
+        });
 
-        if (downloadUrl) {
-            document.getElementById('updateDownloadBtn').addEventListener('click', async () => {
-                const btn = document.getElementById('updateDownloadBtn');
-                btn.disabled = true;
-                btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> 下载中...';
-
-                try {
-                    await fetch('/api/update/download', { method: 'POST' });
-                    pollDownloadProgress();
-                } catch (_) {
-                    btn.innerHTML = '<i class="bi bi-x-circle"></i> 启动失败，请重试';
-                    btn.disabled = false;
-                }
-            });
-        }
+        document.getElementById('updateToastClose').addEventListener('click', function(e) {
+            e.stopPropagation();
+            wrapper.remove();
+        });
     }
 
-    function pollDownloadProgress() {
-        const interval = setInterval(async () => {
-            try {
-                const r = await fetch('/api/update/status');
-                const s = await r.json();
-                if (!s) return;
-
-                const btn = document.getElementById('updateDownloadBtn');
-                const footer = document.getElementById('updateToastFooter');
-
-                if (s.error) {
-                    clearInterval(interval);
-                    if (btn) {
-                        btn.innerHTML = '<i class="bi bi-x-circle"></i> 下载失败';
-                        btn.className = 'btn btn-sm btn-danger';
-                        btn.disabled = false;
-                    }
-                    return;
-                }
-
-                if (s.downloaded) {
-                    clearInterval(interval);
-                    // 触发安装
-                    doInstall(footer);
-                    return;
-                }
-
-                if (btn && s.downloading) {
-                    btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> 下载中 ' + s.progress_percent + '%';
-                }
-            } catch (_) {
-                clearInterval(interval);
-            }
-        }, 500);
-    }
-
-    async function doInstall(footer) {
-        const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-        if (isMac) {
-            // macOS：调用安装 API，提示用户手动打开 DMG
-            if (footer) {
-                footer.innerHTML =
-                    '<span class="update-done-text">' +
-                    '<i class="bi bi-check-circle-fill text-success"></i> 下载完成，请打开 DMG 安装新版本' +
-                    '</span>';
-            }
-            try {
-                await fetch('/api/update/install', { method: 'POST' });
-            } catch (_) { /* macOS 上预期行为 */ }
-            return;
-        }
-
-        // ---- Windows 安装流程 ----
-
-        // 步骤 1：标记安装中，开始轮询
-        if (footer) {
-            footer.innerHTML =
-                '<span class="update-done-text">' +
-                '<span class="spinner-border spinner-border-sm text-primary" role="status"></span> 正在准备安装...' +
-                '</span>';
-        }
-
-        try {
-            const r = await fetch('/api/update/install', { method: 'POST' });
-            const data = await r.json();
-            if (!data.success) {
-                if (footer) {
-                    footer.innerHTML =
-                        '<span class="update-done-text text-danger">' +
-                        '<i class="bi bi-x-circle-fill"></i> 安装失败: ' + (data.message || '未知错误') +
-                        '</span>';
-                }
-                return;
-            }
-
-            // 步骤 2：显示"正在安装..."
-            if (footer) {
-                footer.innerHTML =
-                    '<span class="update-done-text">' +
-                    '<span class="spinner-border spinner-border-sm text-primary" role="status"></span> 正在安装新版本...' +
-                    '</span>';
-            }
-
-            // 步骤 3：等待 1.5 秒让用户看到提示，然后触发重启安装
-            await new Promise(resolve => setTimeout(resolve, 1500));
-
-            // 步骤 4：调用重启 API（服务端会生成安装脚本并退出进程）
-            if (footer) {
-                footer.innerHTML =
-                    '<span class="update-done-text">' +
-                    '<span class="spinner-border spinner-border-sm text-success" role="status"></span> 安装完成，程序即将重启...' +
-                    '</span>';
-            }
-
-            try {
-                await fetch('/api/update/restart', { method: 'POST' });
-            } catch (_) {
-                // 服务端退出进程后连接断开，预期行为
-            }
-        } catch (_) {
-            // 连接断开是预期行为（进程退出）
-        }
+    function closeUpdateToast() {
+        const toast = document.getElementById('updateToast');
+        if (toast) toast.remove();
     }
 })();
 </script>

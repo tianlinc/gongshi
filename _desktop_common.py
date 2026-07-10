@@ -378,6 +378,50 @@ class UpdateChecker:
                 return (0, 0, 0)
         return _parse(remote) > _parse(current)
 
+    def get_all_release_notes(self):
+        """获取所有版本发布日志列表，供 Release Note 弹窗使用。
+
+        调用 GitHub Releases API（非 /latest），返回所有 release 的摘要。
+
+        Returns
+        -------
+        list of dict
+            [{version: "v1.0.2", changes: ["变更1", "变更2"], ...}, ...]
+        """
+        import urllib.request
+        import urllib.error
+        import logging
+        _log = logging.getLogger(__name__)
+
+        url = 'https://api.github.com/repos/tianlinc/gongshi/releases'
+        try:
+            req = urllib.request.Request(
+                url,
+                headers={'User-Agent': 'gongshi-updater/1.0'}
+            )
+            ssl_ctx = self._get_ssl_context()
+            with urllib.request.urlopen(req, timeout=self.TIMEOUT, context=ssl_ctx) as resp:
+                releases = json.loads(resp.read().decode('utf-8'))
+        except Exception:
+            _log.exception("[X] 发布日志获取失败")
+            return []
+
+        result = []
+        for rel in releases:
+            tag = rel.get('tag_name', '')
+            version = tag.lstrip('v')
+            body = (rel.get('body') or '').strip()
+            # 将 body 按行拆分，过滤空行
+            changes = [line.strip() for line in body.split('\n') if line.strip()]
+            if not changes:
+                changes = ['版本 ' + tag]
+            result.append({
+                'version': version,
+                'changes': changes,
+                'published_at': rel.get('published_at', ''),
+            })
+        return result
+
     @staticmethod
     def _get_ssl_context():
         """获取 SSL context，优先 certifi，fallback 到系统证书。

@@ -220,3 +220,159 @@ function formatCachedTime(isoStr) {
         return isoStr;
     }
 }
+
+/* ============================================================
+ * RDM 全局地址配置（文件持久化，通过后端 API 读写）
+ * ============================================================ */
+
+const RDM_DEFAULT_URL = 'http://10.111.36.3:2029';
+let _rdmBaseUrlCache = RDM_DEFAULT_URL;
+
+/** 从后端拉取 RDM 地址并缓存（异步），返回地址字符串 */
+async function getRdmBaseUrl() {
+    try {
+        const resp = await fetch('/api/rdm-config', { method: 'GET', credentials: 'same-origin' });
+        const data = await resp.json();
+        if (data.success && data.url) {
+            _rdmBaseUrlCache = data.url;
+            return data.url;
+        }
+    } catch (e) { /* 网络异常时用缓存兜底 */ }
+    return _rdmBaseUrlCache;
+}
+
+/** getRdmBaseUrl 的同步版本（优先用缓存，不发起网络请求） */
+function getRdmBaseUrlSync() {
+    return _rdmBaseUrlCache;
+}
+
+/** 保存 RDM 地址到后端文件 */
+async function setRdmBaseUrl(url) {
+    try {
+        const resp = await fetch('/api/rdm-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: url }),
+            credentials: 'same-origin',
+        });
+        const data = await resp.json();
+        if (data.success) {
+            _rdmBaseUrlCache = url;
+            return true;
+        }
+    } catch (e) { }
+    return false;
+}
+
+/** 打开 RDM 配置弹窗 */
+function openRdmConfig() {
+    getRdmBaseUrl().then(function (url) {
+        const el = document.getElementById('rdmUrl');
+        if (el) el.value = url;
+    });
+    const modal = new bootstrap.Modal(document.getElementById('rdmConfigModal'));
+    modal.show();
+    // 自动检测连通性
+    setTimeout(checkRdmConnection, 500);
+}
+
+/** 真实连通性检测：通过后端 API 向 RDM 服务发起 HTTP GET */
+function checkRdmConnection() {
+    const status = document.getElementById('connectStatus');
+    if (!status) return;
+    status.className = 'connect-status checking';
+    status.style.display = 'flex';
+    status.innerHTML = '<i class="bi bi-arrow-repeat"></i><span>正在检测 RDM 服务连通性...</span>';
+
+    const el = document.getElementById('rdmUrl');
+    const url = el ? el.value.trim() : _rdmBaseUrlCache;
+
+    fetch('/api/rdm-config/check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: url }),
+        credentials: 'same-origin',
+    })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            const ok = data.reachable;
+            status.className = 'connect-status ' + (ok ? 'ok' : 'fail');
+            status.innerHTML = ok
+                ? '<i class="bi bi-check-circle-fill"></i><span>' + escapeHtml(data.message) + '</span>'
+                : '<i class="bi bi-x-circle-fill"></i><span>' + escapeHtml(data.message) + '</span>';
+            updateRdmStatus(ok);
+        })
+        .catch(function () {
+            status.className = 'connect-status fail';
+            status.innerHTML = '<i class="bi bi-x-circle-fill"></i><span>网络异常，检测失败</span>';
+        });
+}
+
+/** 检测连通性按钮 */
+function testRdmConnection() {
+    checkRdmConnection();
+}
+
+/** 恢复默认 RDM 地址 */
+async function resetRdmConfig() {
+    try {
+        const resp = await fetch('/api/rdm-config/reset', {
+            method: 'POST',
+            credentials: 'same-origin',
+        });
+        const data = await resp.json();
+        if (data.success) {
+            const el = document.getElementById('rdmUrl');
+            if (el) el.value = data.url;
+            _rdmBaseUrlCache = data.url;
+            checkRdmConnection();
+            if (typeof toast === 'function') {
+                toast('已恢复默认 RDM 地址', 'info');
+            }
+        }
+    } catch (e) { }
+}
+
+/** 保存 RDM 配置 */
+async function saveRdmConfig() {
+    const el = document.getElementById('rdmUrl');
+    const url = el ? el.value.trim() : RDM_DEFAULT_URL;
+    const ok = await setRdmBaseUrl(url);
+    if (ok) {
+        if (typeof toast === 'function') {
+            toast('RDM 地址已保存', 'success');
+        }
+        const modal = bootstrap.Modal.getInstance(document.getElementById('rdmConfigModal'));
+        if (modal) modal.hide();
+    } else {
+        if (typeof toast === 'function') {
+            toast('保存失败，请重试', 'error');
+        }
+    }
+}
+
+/** 更新登录页 RDM 连通状态显示 */
+function updateRdmStatus(ok) {
+    const el = document.getElementById('rdmStatus');
+    if (!el) return;
+    if (ok) {
+        el.innerHTML = '<span class="status-ok"><i class="bi bi-check-circle-fill"></i> 已连接</span>';
+    } else {
+        el.innerHTML = '<span class="status-fail"><i class="bi bi-x-circle-fill"></i> 未连接</span>';
+    }
+}
+
+/** 登录页自动检测连通性（真实检测，通过后端 API 发起） */
+function autoCheckRdm() {
+    fetch('/api/rdm-config/check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+        credentials: 'same-origin',
+    })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            updateRdmStatus(data.reachable);
+        })
+        .catch(function () { });
+}
