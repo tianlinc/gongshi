@@ -213,6 +213,8 @@ class UpdateChecker:
         self._downloaded = False
         self._file_path = None
         self._error = None
+        self._install_status = 'idle'  # idle / installing / done / failed
+        self._install_error = None
 
     # ---- 版本检查 ----
 
@@ -377,6 +379,8 @@ class UpdateChecker:
             self._downloaded = False
             self._file_path = None
             self._error = None
+            self._install_status = 'idle'
+            self._install_error = None
 
     def _do_download(self, url, save_dir):
         """后台下载，更新进度状态。"""
@@ -424,13 +428,15 @@ class UpdateChecker:
     # ---- 状态查询（线程安全） ----
 
     def get_status(self):
-        """获取当前下载状态。"""
+        """获取当前下载/安装状态。"""
         with self._lock:
             return {
                 'downloading': self._downloading,
                 'progress_percent': self._progress_percent,
                 'downloaded': self._downloaded,
                 'error': self._error,
+                'install_status': self._install_status,
+                'install_error': self._install_error,
             }
 
     def get_file_path(self):
@@ -439,9 +445,9 @@ class UpdateChecker:
             return self._file_path
 
     def install_update(self):
-        """安装已下载的更新包。
+        """检查安装包是否就绪，并标记安装进行中。
 
-        Windows: subprocess 启动静默安装，然后退出当前进程
+        Windows: 返回成功状态，等待前端调用 restart_and_install 完成安装
         macOS:   open 命令打开 DMG，弹出 Finder
 
         返回 (success: bool, message: str)
@@ -451,15 +457,90 @@ class UpdateChecker:
             downloaded = self._downloaded
 
         if not downloaded or not file_path or not os.path.isfile(file_path):
+            with self._lock:
+                self._install_status = 'failed'
+                self._install_error = '安装包文件不存在'
             return False, '安装包文件不存在'
+
         print(f"[OK] 安装模式: platform={sys.platform}, file={file_path}")  # noqa: W503
 
         if sys.platform == 'win32':
-            return self._install_windows(file_path)
+            with self._lock:
+                self._install_status = 'installing'
+            return True, 'installing'
         elif sys.platform == 'darwin':
             return self._install_mac(file_path)
         else:
+            with self._lock:
+                self._install_status = 'failed'
+                self._install_error = f'不支持的平台: {sys.platform}'
             return False, f'不支持的平台: {sys.platform}'
+
+    def restart_and_install(self):
+        """执行安装并重启应用（Windows 平台）。
+
+        生成批处理脚本，以 detached 进程启动安装程序，
+        安装完成后自动启动新版本应用。
+
+        返回 (success: bool, message: str)
+        """
+        with self._lock:
+            file_path = self._file_path
+            downloaded = self._downloaded
+
+        if not downloaded or not file_path or not os.path.isfile(file_path):
+            with self._lock:
+                self._install_status = 'failed'
+                self._install_error = '安装包文件不存在'
+            return False, '安装包文件不存在'
+
+        import subprocess
+
+        install_dir = self._get_windows_install_dir()
+        default_dir = os.path.join(os.environ.get('LOCALAPPDATA', os.path.expanduser('~')),
+                                   'IEI Timer Faster')
+        target_dir = install_dir or default_dir
+        new_exe = os.path.join(target_dir, 'IEI Timer Faster.exe')
+
+        # 生成批处理脚本：等待旧进程退出 → 静默安装 → 启动新版本
+        bat_lines = [
+            '@echo off',
+            'echo IEI Timer Faster - 正在安装更新...',
+            # 等待旧进程退出（最多等 10 秒）
+            'timeout /t 2 /nobreak > nul',
+            # 运行静默安装
+            f'echo 正在安装...',
+            f'"{file_path}" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR="{target_dir}"',
+            'echo 安装完成，启动新版本...',
+            # 启动新版本应用
+            f'start "" "{new_exe}"',
+        ]
+        bat_path = os.path.join(os.path.dirname(file_path), '_install.bat')
+        try:
+            with open(bat_path, 'w', encoding='gbk') as f:
+                f.write('\r\n'.join(bat_lines))
+        except Exception as e:
+            with self._lock:
+                self._install_status = 'failed'
+                self._install_error = f'创建安装脚本失败: {e}'
+            return False, f'创建安装脚本失败: {e}'
+
+        try:
+            print(f"[OK] 启动安装脚本: {bat_path}")
+            subprocess.Popen(
+                f'cmd /c "{bat_path}"',
+                shell=True,
+                creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS,
+            )
+        except Exception as e:
+            with self._lock:
+                self._install_status = 'failed'
+                self._install_error = f'启动安装失败: {e}'
+            return False, f'启动安装失败: {e}'
+
+        with self._lock:
+            self._install_status = 'done'
+        return True, '安装已启动，应用即将重启'
 
     @staticmethod
     def _get_windows_install_dir():
@@ -488,31 +569,6 @@ class UpdateChecker:
         except Exception:
             pass
         return None
-
-    @staticmethod
-    def _install_windows(file_path):
-        """Windows 平台：用 subprocess 启动 Inno Setup 静默安装。"""
-        import subprocess
-
-        # 尝试读取现有安装目录
-        install_dir = UpdateChecker._get_windows_install_dir()
-
-        cmd = [file_path, '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART']
-        if install_dir:
-            cmd.append(f'/DIR={install_dir}')
-            print(f"[OK] 安装目录: {install_dir}")
-        else:
-            print("[!] 未找到现有安装目录，使用默认目录")
-
-        try:
-            print(f"[OK] 静默安装命令: {' '.join(cmd)}")
-            subprocess.Popen(cmd, shell=True)
-        except Exception as e:
-            return False, f'启动安装失败: {e}'
-
-        # 退出当前进程，让安装程序替换文件
-        print("[OK] 更新安装已启动，退出当前进程")
-        os._exit(0)
 
     @staticmethod
     def _install_mac(file_path):

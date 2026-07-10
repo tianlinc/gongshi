@@ -1857,17 +1857,31 @@
 
     async function doInstallInModal(el) {
         const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-        el.innerHTML = '<small class="text-success"><i class="bi bi-check-circle-fill"></i> 下载完成，' +
-            (isMac ? '请打开 DMG 安装新版本' : '正在安装新版本...') + '</small>';
+        if (isMac) {
+            el.innerHTML = '<small class="text-success"><i class="bi bi-check-circle-fill"></i> 下载完成，请打开 DMG 安装新版本</small>';
+            try { await fetch('/api/update/install', { method: 'POST' }); } catch (_) {}
+            return;
+        }
+
+        // ---- Windows 安装流程 ----
+        el.innerHTML = '<small class="text-primary"><span class="spinner-border spinner-border-sm" role="status"></span> 正在准备安装...</small>';
+
         try {
             const r = await fetch('/api/update/install', { method: 'POST' });
             const data = await r.json();
             if (!data.success) {
-                el.innerHTML = '<small class="text-danger">安装失败: ' +
-                    (data.message || '未知错误') + '</small>';
+                el.innerHTML = '<small class="text-danger">安装失败: ' + (data.message || '未知错误') + '</small>';
+                return;
             }
+
+            el.innerHTML = '<small class="text-primary"><span class="spinner-border spinner-border-sm" role="status"></span> 正在安装新版本...</small>';
+            await new Promise(resolve => setTimeout(resolve, 1500));
+
+            el.innerHTML = '<small class="text-success"><span class="spinner-border spinner-border-sm" role="status"></span> 安装完成，程序即将重启...</small>';
+
+            try { await fetch('/api/update/restart', { method: 'POST' }); } catch (_) {}
         } catch (_) {
-            // Windows 上 os._exit(0) 后连接断开，正常
+            // 连接断开是预期行为（进程退出）
         }
     }
 
@@ -1969,30 +1983,70 @@
     }
 
     async function doInstall(footer) {
-        // 显示安装提示
         const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+        if (isMac) {
+            // macOS：调用安装 API，提示用户手动打开 DMG
+            if (footer) {
+                footer.innerHTML =
+                    '<span class="update-done-text">' +
+                    '<i class="bi bi-check-circle-fill text-success"></i> 下载完成，请打开 DMG 安装新版本' +
+                    '</span>';
+            }
+            try {
+                await fetch('/api/update/install', { method: 'POST' });
+            } catch (_) { /* macOS 上预期行为 */ }
+            return;
+        }
+
+        // ---- Windows 安装流程 ----
+
+        // 步骤 1：标记安装中，开始轮询
         if (footer) {
             footer.innerHTML =
                 '<span class="update-done-text">' +
-                (isMac
-                    ? '<i class="bi bi-check-circle-fill text-success"></i> 下载完成，请打开 DMG 安装新版本'
-                    : '<i class="bi bi-arrow-repeat"></i> 下载完成，正在安装新版本...'
-                ) +
+                '<span class="spinner-border spinner-border-sm text-primary" role="status"></span> 正在准备安装...' +
                 '</span>';
         }
 
         try {
             const r = await fetch('/api/update/install', { method: 'POST' });
             const data = await r.json();
-            if (!data.success && footer) {
+            if (!data.success) {
+                if (footer) {
+                    footer.innerHTML =
+                        '<span class="update-done-text text-danger">' +
+                        '<i class="bi bi-x-circle-fill"></i> 安装失败: ' + (data.message || '未知错误') +
+                        '</span>';
+                }
+                return;
+            }
+
+            // 步骤 2：显示"正在安装..."
+            if (footer) {
                 footer.innerHTML =
-                    '<span class="update-done-text text-danger">' +
-                    '<i class="bi bi-x-circle-fill"></i> 安装失败: ' + (data.message || '未知错误') +
+                    '<span class="update-done-text">' +
+                    '<span class="spinner-border spinner-border-sm text-primary" role="status"></span> 正在安装新版本...' +
                     '</span>';
             }
+
+            // 步骤 3：等待 1.5 秒让用户看到提示，然后触发重启安装
+            await new Promise(resolve => setTimeout(resolve, 1500));
+
+            // 步骤 4：调用重启 API（服务端会生成安装脚本并退出进程）
+            if (footer) {
+                footer.innerHTML =
+                    '<span class="update-done-text">' +
+                    '<span class="spinner-border spinner-border-sm text-success" role="status"></span> 安装完成，程序即将重启...' +
+                    '</span>';
+            }
+
+            try {
+                await fetch('/api/update/restart', { method: 'POST' });
+            } catch (_) {
+                // 服务端退出进程后连接断开，预期行为
+            }
         } catch (_) {
-            // Windows 上 install_update 调用 os._exit(0) 后会断开连接
-            // 这是预期行为，不视为错误
+            // 连接断开是预期行为（进程退出）
         }
     }
 })();

@@ -15,7 +15,7 @@ RDM 工时填报系统 v2 - 单文件后端
 约定：UI 字符串中文；print 用 [OK]/[X]；GBK 编码统一处理。
 """
 
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, after_this_request
 from flask_cors import CORS
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad
@@ -2097,7 +2097,7 @@ def api_update_status():
 
 @app.route('/api/update/install', methods=['POST'])
 def api_update_install():
-    """安装已下载的更新包。Windows 会退出当前进程，macOS 会打开 DMG。"""
+    """安装已下载的更新包。标记安装状态，等待前端调用 /api/update/restart。"""
     try:
         from _desktop_common import get_update_checker
     except ImportError:
@@ -2105,7 +2105,34 @@ def api_update_install():
 
     checker = get_update_checker()
     success, msg = checker.install_update()
-    return jsonify({'success': success, 'message': msg})
+    return jsonify({'success': success, 'message': msg,
+                    'install_status': checker.get_status().get('install_status', 'idle')})
+
+
+@app.route('/api/update/restart', methods=['POST'])
+def api_update_restart():
+    """启动安装脚本并重启应用（Windows 平台）。"""
+    try:
+        from _desktop_common import get_update_checker
+    except ImportError:
+        return jsonify({'success': False, 'message': '桌面模式下才支持在线更新'})
+
+    checker = get_update_checker()
+    success, msg = checker.restart_and_install()
+    if not success:
+        return jsonify({'success': False, 'message': msg})
+
+    # 注册一个延迟退出的回调，让响应先返回给前端
+    @after_this_request
+    def _schedule_exit(response):
+        import threading
+        def _delayed_exit():
+            time.sleep(0.5)
+            os._exit(0)
+        threading.Thread(target=_delayed_exit, daemon=True).start()
+        return response
+
+    return jsonify({'success': True, 'message': msg})
 
 
 # ===========================================================================
