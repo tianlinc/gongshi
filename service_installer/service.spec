@@ -129,7 +129,7 @@ coll = COLLECT(
 if _sys.platform == 'darwin':
     _icon = 'iei_timer.icns' if _os.path.exists('iei_timer.icns') else None
     # INSPUR-82: 从 VERSION 文件读取版本号用于 macOS Bundle
-    _ver_path = _os.path.join(_os.path.dirname(__file__), '..', 'VERSION')
+    _ver_path = _os.path.join(_os.path.dirname(SPECPATH), '..', 'VERSION')
     try:
         with open(_os.path.normpath(_ver_path), 'r', encoding='utf-8') as _vf:
             _bundle_ver = _vf.read().strip()
