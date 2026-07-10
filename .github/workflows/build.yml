@@ -41,6 +41,21 @@ jobs:
       - name: Install Inno Setup 6
         run: choco install innosetup --no-progress -y
 
+      - name: Install Chinese language for ISCC
+        shell: cmd
+        run: |
+          for %%d in (
+            "%LOCALAPPDATA%\Programs\Inno Setup 6"
+            "%ProgramFiles%\Inno Setup 6"
+            "C:\Program Files (x86)\Inno Setup 6"
+          ) do if exist "%%~d\ISCC.exe" (
+            curl -sSL -o "%%~d\Languages\ChineseSimplified.isl" "https://raw.githubusercontent.com/jrsoftware/issrc/main/Files/Languages/ChineseSimplified.isl"
+            echo [OK] Installed ChineseSimplified.isl to %%~d\Languages
+            goto :done_isl
+          )
+          echo [X] Could not find Inno Setup to install language
+          :done_isl
+
       - name: Build (PyInstaller)
         shell: cmd
         working-directory: service_installer
@@ -49,6 +64,7 @@ jobs:
           python --version
           echo === PyInstaller check ===
           python -m pip show pyinstaller
+          if exist "dist\IEI Timer Faster" rmdir /s /q "dist\IEI Timer Faster"
           echo === Build start ===
           python -m PyInstaller --noconfirm service.spec
           echo === Build done ===
@@ -65,10 +81,6 @@ jobs:
           if not defined ISCC (echo [X] ISCC not found & exit /b 1)
           echo [OK] ISCC: %ISCC%
           "%ISCC%" /O"service_installer\dist" /F"IEI_Timer_Faster_Setup" "service_installer\installer\setup.iss"
-
-      - name: Cleanup intermediate
-        shell: cmd
-        run: rmdir /s /q "service_installer\dist\IEI Timer Faster" 2>nul || ver>nul
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -109,6 +121,7 @@ jobs:
         run: |
           python3 --version
           pip show pyinstaller
+          rm -rf dist 2>/dev/null || true
           python3 -m PyInstaller --noconfirm service.spec
 
       - name: Package (DMG)
