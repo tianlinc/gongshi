@@ -252,7 +252,8 @@ class UpdateChecker:
                 self.GITHUB_API,
                 headers={'User-Agent': 'gongshi-updater/1.0'}
             )
-            with urllib.request.urlopen(req, timeout=self.TIMEOUT) as resp:
+            ssl_ctx = self._get_ssl_context()
+            with urllib.request.urlopen(req, timeout=self.TIMEOUT, context=ssl_ctx) as resp:
                 data = json.loads(resp.read().decode('utf-8'))
         except Exception:
             _log.exception("[X] 更新检查失败（网络异常），api=%s", self.GITHUB_API)
@@ -307,7 +308,8 @@ class UpdateChecker:
                 self.APPCASAT_URL,
                 headers={'User-Agent': 'gongshi-updater/1.0'}
             )
-            with urllib.request.urlopen(req, timeout=self.TIMEOUT) as resp:
+            ssl_ctx = self._get_ssl_context()
+            with urllib.request.urlopen(req, timeout=self.TIMEOUT, context=ssl_ctx) as resp:
                 xml_text = resp.read().decode('utf-8')
         except Exception:
             _log.exception("[X] 更新检查失败（网络异常），appcast_url=%s", self.APPCASAT_URL)
@@ -375,6 +377,32 @@ class UpdateChecker:
             except (ValueError, TypeError):
                 return (0, 0, 0)
         return _parse(remote) > _parse(current)
+
+    @staticmethod
+    def _get_ssl_context():
+        """获取 SSL context，优先 certifi，fallback 到系统证书。
+
+        macOS 上 Python 不带 certifi，urllib 默认 verify 会因
+        CERTIFICATE_VERIFY_FAILED 失败。此方法提供三层 fallback：
+        1. certifi.where()（PyInstaller 打包后 cacert.pem 在 _MEIPASS）
+        2. macOS 系统证书 /etc/ssl/cert.pem
+        3. 默认 verify mode（可能失败）
+        """
+        import ssl
+        try:
+            import certifi
+            cafile = certifi.where()
+            if cafile and os.path.isfile(cafile):
+                return ssl.create_default_context(cafile=cafile)
+        except Exception:
+            pass
+
+        # macOS 系统证书 fallback
+        system_cert = '/etc/ssl/cert.pem'
+        if sys.platform == 'darwin' and os.path.isfile(system_cert):
+            return ssl.create_default_context(cafile=system_cert)
+
+        return ssl.create_default_context()
 
     def get_last_check(self):
         """返回最近一次检查结果（线程安全）。"""
@@ -936,6 +964,10 @@ check();
             result = checker.check_update(_read_version())
             if result:
                 print(f"[OK] 发现新版本 V{result['version']}")
+            elif checker.get_last_check() is None:
+                # check_update 返回 None 且 _last_check 为 None：
+                # 可能网络异常或 XML 解析失败，已在 _check_* 方法中记录详情
+                print("[!] 更新检查失败，无法确定是否有新版本（详见上方日志）")
             else:
                 print("[OK] 已是最新版本")
 

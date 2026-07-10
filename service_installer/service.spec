@@ -22,6 +22,20 @@ INSPUR-74: 从 Windows 后台服务（NSSM）改造为独立桌面应用。
 import os as _os
 import sys as _sys
 
+# INSPUR-81: 打包 certifi 证书文件，解决 macOS SSL CERTIFICATE_VERIFY_FAILED
+_certifi_datas = []
+try:
+    import certifi
+    _cafile = certifi.where()
+    if _os.path.isfile(_cafile):
+        _cert_dir = _os.path.dirname(_cafile)
+        _certifi_datas.append((_cafile, 'certifi'))
+        print(f"[OK] certifi cacert.pem found: {_cafile}")
+    else:
+        print(f"[!] certifi.where() returned non-existent path: {_cafile}")
+except Exception as _e:
+    print(f"[!] certifi not available, SSL may fail on macOS: {_e}")
+
 # -------------------- Analysis --------------------
 a = Analysis(
     ['service_launcher.py'],
@@ -32,7 +46,7 @@ a = Analysis(
         ('../static', 'static'),
         ('../cache', 'cache'),
         ('../VERSION', '.'),  # INSPUR-82: VERSION 文件打包到产物根目录
-    ],
+    ] + _certifi_datas,
     hiddenimports=[
         # Flask 全家
         'flask',
@@ -62,6 +76,8 @@ a = Analysis(
         'logging',
         'threading',
         'urllib.parse',
+        # SSL 证书（macOS 必需）
+        'certifi',
     ],
     hookspath=[],
     hooksconfig={},
