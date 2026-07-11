@@ -205,6 +205,9 @@ class UpdateChecker:
     APPCASAT_URL = 'https://tianlinc.github.io/gongshi/appcast.xml'
     TIMEOUT = 5  # API 请求超时（秒）
 
+    # 系统代理配置（类变量，只读一次注册表，避免重复查询）
+    _system_proxies_cache = None
+
     def __init__(self):
         self._lock = threading.Lock()
         self._last_check = None       # 最近一次 check_update 结果 dict 或 None（无更新/未检查）
@@ -215,6 +218,75 @@ class UpdateChecker:
         self._error = None
         self._install_status = 'idle'  # idle / installing / done / failed
         self._install_error = None
+
+    @classmethod
+    def _get_system_proxies(cls):
+        """读取 Windows 系统代理配置，供 requests 使用。
+
+        requests 库不会自动读取 Windows 注册表中的代理设置
+        （它只读 HTTP_PROXY/HTTPS_PROXY 环境变量）。
+        但 Chrome 等浏览器会自动使用系统代理。
+
+        在中文企业网络环境（浪潮等），常见的配置是系统代理指向
+        本地代理工具（Clash/V2Ray 等，如 127.0.0.1:7897），
+        不通过代理时到 GitHub CDN 的吞吐可能只有几十 KB/s，
+        通过代理可达数 MB/s。
+
+        Returns
+        -------
+        dict or None
+            有代理时返回 {'https': 'http://127.0.0.1:7897', ...}
+            无代理或读取失败时返回 None（requests 走直连）
+        """
+        if cls._system_proxies_cache is not None:
+            return cls._system_proxies_cache
+
+        proxies = None
+        if sys.platform == 'win32':
+            try:
+                import winreg
+                key = winreg.OpenKey(
+                    winreg.HKEY_CURRENT_USER,
+                    r'Software\Microsoft\Windows\CurrentVersion\Internet Settings'
+                )
+                try:
+                    proxy_enable, _ = winreg.QueryValueEx(key, 'ProxyEnable')
+                    if proxy_enable:
+                        proxy_server, _ = winreg.QueryValueEx(key, 'ProxyServer')
+                        # ProxyServer 格式: "127.0.0.1:7897" 或 "http=1.2.3.4:8080;https=1.2.3.4:8080"
+                        if '=' in proxy_server:
+                            # 多协议格式: http=1.2.3.4:8080;https=1.2.3.4:8080
+                            proxies = {}
+                            for part in proxy_server.split(';'):
+                                part = part.strip()
+                                if '=' in part:
+                                    scheme, addr = part.split('=', 1)
+                                    scheme = scheme.strip()
+                                    addr = addr.strip()
+                                    if scheme in ('http', 'https') and not addr.startswith('http'):
+                                        addr = 'http://' + addr
+                                    proxies[scheme] = addr
+                        else:
+                            # 单地址格式: 127.0.0.1:7897（所有协议共用）
+                            proxy_url = proxy_server if proxy_server.startswith('http') else 'http://' + proxy_server
+                            proxies = {
+                                'http': proxy_url,
+                                'https': proxy_url,
+                            }
+                        # 补全 no_proxy
+                        try:
+                            proxy_override = winreg.QueryValueEx(key, 'ProxyOverride')[0]
+                            if proxy_override:
+                                proxies['no'] = proxy_override
+                        except Exception:
+                            pass
+                finally:
+                    winreg.CloseKey(key)
+            except Exception:
+                pass
+
+        cls._system_proxies_cache = proxies  # None 也缓存（无代理时不需要重复查）
+        return proxies
 
     # ---- 版本检查 ----
 
@@ -242,19 +314,19 @@ class UpdateChecker:
 
     def _check_windows_update(self, current_version):
         """Windows 平台：从 GitHub Releases API 检查更新。"""
-        import urllib.request
-        import urllib.error
+        import requests
         import logging
         _log = logging.getLogger(__name__)
 
         try:
-            req = urllib.request.Request(
+            resp = requests.get(
                 self.GITHUB_API,
-                headers={'User-Agent': 'gongshi-updater/1.0'}
+                headers={'User-Agent': 'gongshi-updater/1.0'},
+                timeout=self.TIMEOUT,
+                proxies=self._get_system_proxies(),
             )
-            ssl_ctx = self._get_ssl_context()
-            with urllib.request.urlopen(req, timeout=self.TIMEOUT, context=ssl_ctx) as resp:
-                data = json.loads(resp.read().decode('utf-8'))
+            resp.raise_for_status()
+            data = resp.json()
         except Exception:
             _log.exception("[X] 更新检查失败（网络异常），api=%s", self.GITHUB_API)
             self._last_check = None
@@ -286,31 +358,40 @@ class UpdateChecker:
 
         _log.info("[OK] 发现新版本 V%s (current=%s), url=%s", remote_version, current_version, download_url)
 
+        # Release notes: 优先使用 Release body，为空时用 published_at 生成兜底
+        release_notes = (body or '').strip()
+        if not release_notes:
+            pub = data.get('published_at', '')
+            if pub:
+                release_notes = '版本发布日期：' + pub[:10]
+            else:
+                release_notes = '新版本 V' + remote_version
+
         result = {
             'has_update': True,
             'version': remote_version,
             'download_url': download_url,
-            'release_notes': body or '',
+            'release_notes': release_notes,
         }
         self._last_check = result
         return result
 
     def _check_mac_update(self, current_version):
         """macOS 平台：从 appcast.xml（Sparkle 协议）检查更新。"""
-        import urllib.request
-        import urllib.error
+        import requests
         import xml.etree.ElementTree as ET
         import logging
         _log = logging.getLogger(__name__)
 
         try:
-            req = urllib.request.Request(
+            resp = requests.get(
                 self.APPCASAT_URL,
-                headers={'User-Agent': 'gongshi-updater/1.0'}
+                headers={'User-Agent': 'gongshi-updater/1.0'},
+                timeout=self.TIMEOUT,
+                proxies=self._get_system_proxies(),
             )
-            ssl_ctx = self._get_ssl_context()
-            with urllib.request.urlopen(req, timeout=self.TIMEOUT, context=ssl_ctx) as resp:
-                xml_text = resp.read().decode('utf-8')
+            resp.raise_for_status()
+            xml_text = resp.text
         except Exception:
             _log.exception("[X] 更新检查失败（网络异常），appcast_url=%s", self.APPCASAT_URL)
             self._last_check = None
@@ -388,20 +469,20 @@ class UpdateChecker:
         list of dict
             [{version: "v1.0.2", changes: ["变更1", "变更2"], ...}, ...]
         """
-        import urllib.request
-        import urllib.error
+        import requests
         import logging
         _log = logging.getLogger(__name__)
 
         url = 'https://api.github.com/repos/tianlinc/gongshi/releases'
         try:
-            req = urllib.request.Request(
+            resp = requests.get(
                 url,
-                headers={'User-Agent': 'gongshi-updater/1.0'}
+                headers={'User-Agent': 'gongshi-updater/1.0'},
+                timeout=self.TIMEOUT,
+                proxies=self._get_system_proxies(),
             )
-            ssl_ctx = self._get_ssl_context()
-            with urllib.request.urlopen(req, timeout=self.TIMEOUT, context=ssl_ctx) as resp:
-                releases = json.loads(resp.read().decode('utf-8'))
+            resp.raise_for_status()
+            releases = resp.json()
         except Exception:
             _log.exception("[X] 发布日志获取失败")
             return []
@@ -411,42 +492,23 @@ class UpdateChecker:
             tag = rel.get('tag_name', '')
             version = tag.lstrip('v')
             body = (rel.get('body') or '').strip()
-            # 将 body 按行拆分，过滤空行
-            changes = [line.strip() for line in body.split('\n') if line.strip()]
+            # 将 body 按行拆分，过滤空行和 markdown header
+            changes = [line.strip() for line in body.split('\n') if line.strip()
+                       and not line.strip().startswith('#')]
             if not changes:
-                changes = ['版本 ' + tag]
+                # Release body 为空时的兜底（CI 创建 Release 未开启 generate_release_notes）
+                pub = rel.get('published_at', '')
+                if pub:
+                    pub_short = pub[:10]  # 只取日期部分 YYYY-MM-DD
+                    changes = ['版本发布（' + pub_short + '）']
+                else:
+                    changes = ['版本 ' + tag]
             result.append({
                 'version': version,
                 'changes': changes,
                 'published_at': rel.get('published_at', ''),
             })
         return result
-
-    @staticmethod
-    def _get_ssl_context():
-        """获取 SSL context，优先 certifi，fallback 到系统证书。
-
-        macOS 上 Python 不带 certifi，urllib 默认 verify 会因
-        CERTIFICATE_VERIFY_FAILED 失败。此方法提供三层 fallback：
-        1. certifi.where()（PyInstaller 打包后 cacert.pem 在 _MEIPASS）
-        2. macOS 系统证书 /etc/ssl/cert.pem
-        3. 默认 verify mode（可能失败）
-        """
-        import ssl
-        try:
-            import certifi
-            cafile = certifi.where()
-            if cafile and os.path.isfile(cafile):
-                return ssl.create_default_context(cafile=cafile)
-        except Exception:
-            pass
-
-        # macOS 系统证书 fallback
-        system_cert = '/etc/ssl/cert.pem'
-        if sys.platform == 'darwin' and os.path.isfile(system_cert):
-            return ssl.create_default_context(cafile=system_cert)
-
-        return ssl.create_default_context()
 
     def get_last_check(self):
         """返回最近一次检查结果（线程安全）。"""
@@ -481,33 +543,42 @@ class UpdateChecker:
             self._install_error = None
 
     def _do_download(self, url, save_dir):
-        """后台下载，更新进度状态。"""
-        import urllib.request
-        import urllib.error
+        """后台下载，更新进度状态。
+
+        使用 requests（urllib3）代替 urllib.request：
+        - urllib3 连接池复用 + keep-alive，跨 redirect 复用 TCP+TLS 连接
+        - GitHub Releases URL 经 302 重定向到 objects.githubusercontent.com，
+          requests 的 Session 可复用连接，比 urllib 每次新开连接更快
+        - stream=True + iter_content 64KB chunk，比 urllib.read(8KB) 吞吐更高
+        """
+        import requests
 
         os.makedirs(save_dir, exist_ok=True)
-        filename = url.rsplit('/', 1)[-1] or 'update.exe'
+        # 从 URL 路径提取文件名（去掉 query string）
+        url_path = url.rsplit('?', 1)[0] if '?' in url else url
+        filename = url_path.rsplit('/', 1)[-1] or 'update.exe'
         filepath = os.path.join(save_dir, filename)
 
         try:
-            req = urllib.request.Request(
+            with requests.get(
                 url,
-                headers={'User-Agent': 'gongshi-updater/1.0'}
-            )
-            with urllib.request.urlopen(req, timeout=300) as resp:
+                headers={'User-Agent': 'gongshi-updater/1.0'},
+                timeout=(30, 300),  # (connect_timeout, read_timeout)
+                stream=True,
+                proxies=self._get_system_proxies(),
+            ) as resp:
+                resp.raise_for_status()
                 total = int(resp.headers.get('Content-Length', 0))
                 so_far = 0
                 with open(filepath, 'wb') as f:
-                    while True:
-                        chunk = resp.read(8192)
-                        if not chunk:
-                            break
-                        f.write(chunk)
-                        so_far += len(chunk)
-                        if total > 0:
-                            pct = int(so_far * 100 / total)
-                            with self._lock:
-                                self._progress_percent = pct
+                    for chunk in resp.iter_content(chunk_size=65536):
+                        if chunk:
+                            bytes_written = f.write(chunk)
+                            so_far += bytes_written
+                            if total > 0:
+                                pct = int(so_far * 100 / total)
+                                with self._lock:
+                                    self._progress_percent = pct
 
             with self._lock:
                 self._downloading = False

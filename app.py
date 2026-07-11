@@ -2007,7 +2007,7 @@ def api_system_info():
             'activated_at': '',
         }
 
-    # 3. 更新信息（仅桌面模式）
+    # 3. 更新信息（仅桌面模式，含下载状态）
     update_data = {'has_update': False}
     try:
         from _desktop_common import get_update_checker
@@ -2018,7 +2018,14 @@ def api_system_info():
                 'has_update': True,
                 'version': result.get('version', ''),
                 'release_notes': result.get('release_notes', ''),
+                'download_url': result.get('download_url', ''),
             }
+        # 合并下载/安装状态（下载中、已下载等）
+        try:
+            dl_status = checker.get_status()
+            update_data['dl_status'] = dl_status
+        except Exception:
+            pass
     except Exception as _e:
         log.warning("[!] 更新信息获取失败: %s", _e)
 

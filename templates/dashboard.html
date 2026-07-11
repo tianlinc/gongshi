@@ -33,12 +33,8 @@
                 </div>
             </div>
             <button class="btn btn-sm btn-outline-light nav-header-btn" id="syncBtn"
-                    title="同步 RDM 任务列表 + 节假日">
+                    title="从 RDM 同步任务列表，并自动更新节假日数据">
                 <i class="bi bi-arrow-repeat"></i> 同步
-            </button>
-            <button class="btn btn-sm btn-outline-light nav-header-btn" id="holidaySyncBtn"
-                    title="同步中国法定节假日" style="display:none;">
-                <i class="bi bi-calendar-heart"></i> 同步节假日
             </button>
             <span id="cacheInfo" style="color:rgba(255,255,255,0.65);font-size:11px;white-space:nowrap;"></span>
         </div>
@@ -524,7 +520,6 @@
         await loadTasks();
         await holidaysReady;                    // 等节假日数据就绪再渲染
         await refreshMonth();
-        document.getElementById('holidaySyncBtn').style.display = '';
     }
 
     // ===== 工具函数 =====
@@ -567,13 +562,8 @@
         } catch (e) { /* 静默失败，按钮手动重试 */ }
     }
 
-    /** 手动同步节假日（按钮触发，有 UI 反馈） */
+    /** 仅同步节假日数据（可被外部调用，有 toast 反馈） */
     async function syncHolidays() {
-        const btn = document.getElementById('holidaySyncBtn');
-        const origHtml = btn.innerHTML;
-        btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
-
         try {
             const year = parseYearMonth(state.yearMonth).year;
             const resp = await apiCall('/api/holidays?year=' + year + '&refresh=true');
@@ -592,9 +582,6 @@
         } catch (e) {
             toast('节假日同步失败：网络异常', 'error', 5000);
         }
-
-        btn.disabled = false;
-        btn.innerHTML = origHtml;
     }
 
     /** 判断 dateStr (YYYY-MM-DD) 是否为工作日（含调休） */
@@ -638,8 +625,6 @@
 
         // 初始化阶梯比例 tooltip
         new bootstrap.Tooltip(document.getElementById('ladderHelpIcon'));
-
-        document.getElementById('holidaySyncBtn').addEventListener('click', syncHolidays);
 
         document.getElementById('teamLogsBtn').addEventListener('click', showTeamLogs);
 
@@ -1774,6 +1759,7 @@
 
     // ===== 在线更新检查（全局） =====
     let _globalUpdateData = null;  // 缓存的更新检查结果
+    let _dlPollInterval = null;    // 下载进度轮询 timer
 
     // ===== 关于弹窗 =====
     let aboutModalInst = null;
@@ -1798,7 +1784,7 @@
         document.getElementById('aboutCheckUpdateBtn').disabled = false;
         document.getElementById('aboutCheckUpdateBtn').innerHTML = '<i class="bi bi-arrow-repeat"></i> 检查更新';
 
-        // 获取版本号
+        // 获取版本号 + 更新信息 + 下载状态
         try {
             const r = await fetch('/api/system-info');
             const data = await r.json();
@@ -1810,12 +1796,42 @@
                 _globalUpdateData = data.update;
                 showAboutUpdateAvailable(data.update);
             }
+            // 恢复下载进度（如果正在下载或已下载）
+            if (data && data.update && data.update.dl_status) {
+                restoreDownloadStatus(data.update.dl_status);
+            }
         } catch (_) {
             document.getElementById('aboutVersion').textContent = 'V -';
         }
 
         // 加载 Release Note 内容
         preloadReleaseNote();
+    }
+
+    function restoreDownloadStatus(dl) {
+        if (dl.downloading) {
+            // 下载中：显示进度条并重新开始轮询
+            document.getElementById('aboutNewVerBox').style.display = 'block';
+            document.getElementById('aboutDownloadBtn').style.display = 'none';
+            document.getElementById('aboutDlProgress').style.display = 'block';
+            document.getElementById('aboutDlBar').style.width = (dl.progress_percent || 0) + '%';
+            document.getElementById('aboutDlText').textContent = '下载中 ' + (dl.progress_percent || 0) + '%';
+            document.getElementById('aboutDlText').className = 'text-muted mt-1';
+            pollAboutDlProgress();
+        } else if (dl.downloaded) {
+            // 已下载完成：提示安装
+            document.getElementById('aboutNewVerBox').style.display = 'block';
+            document.getElementById('aboutDownloadBtn').style.display = 'none';
+            document.getElementById('aboutDlProgress').style.display = 'block';
+            document.getElementById('aboutDlBar').style.width = '100%';
+            document.getElementById('aboutDlText').textContent = '下载完成，点击安装';
+            document.getElementById('aboutDlText').className = 'text-success mt-1';
+            doAboutInstall();
+        } else if (dl.error) {
+            // 下载失败
+            document.getElementById('aboutDlText').textContent = '下载失败: ' + dl.error;
+            document.getElementById('aboutDlText').className = 'text-danger mt-1';
+        }
     }
 
     function showAboutUpdateAvailable(data) {
@@ -1882,7 +1898,9 @@
     });
 
     function pollAboutDlProgress() {
-        const interval = setInterval(async () => {
+        // 先清除旧的轮询 timer（如果弹窗关闭再打开会重新调用）
+        if (_dlPollInterval) clearInterval(_dlPollInterval);
+        _dlPollInterval = setInterval(async () => {
             try {
                 const r = await fetch('/api/update/status');
                 const s = await r.json();
@@ -1893,17 +1911,22 @@
                     return;
                 }
                 if (s.error) {
-                    clearInterval(interval);
+                    clearInterval(_dlPollInterval);
+                    _dlPollInterval = null;
                     document.getElementById('aboutDlText').textContent = '下载失败: ' + s.error;
                     document.getElementById('aboutDlText').className = 'text-danger mt-1';
                     return;
                 }
                 if (s.downloaded) {
-                    clearInterval(interval);
+                    clearInterval(_dlPollInterval);
+                    _dlPollInterval = null;
                     doAboutInstall();
                     return;
                 }
-            } catch (_) { clearInterval(interval); }
+            } catch (_) {
+                clearInterval(_dlPollInterval);
+                _dlPollInterval = null;
+            }
         }, 500);
     }
 

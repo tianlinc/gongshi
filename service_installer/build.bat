@@ -152,7 +152,13 @@ if not exist "!ISCC_DIR!Languages\ChineseSimplified.isl" (
 echo [OK] 正在编译安装包...
 echo.
 
-"%ISCC%" /O"dist" /F"IEI_Timer_Faster_Setup" "installer\setup.iss"
+REM 从 VERSION 文件读取版本号
+set VERSION=
+for /f "usebackq delims=" %%v in ("..\VERSION") do set "VERSION=%%v"
+echo [DBG] VERSION=%VERSION%
+if "%VERSION%"=="" set "VERSION=unknown"
+
+"%ISCC%" /O"dist" /F"IEI_Timer_Faster_Setup_v%VERSION%" "installer\setup.iss"
 if errorlevel 1 (
     echo.
     echo [X] 安装包编译失败，请检查上方错误信息
@@ -172,7 +178,7 @@ echo.
 echo ============================================
 echo   全流程构建完成!
 echo.
-echo   安装包: dist\IEI_Timer_Faster_Setup.exe
+echo   安装包: dist\IEI_Timer_Faster_Setup_v%VERSION%.exe
 echo.
 echo   安装包使用说明:
 echo     1. 运行 IEI_Timer_Faster_Setup.exe
