@@ -48,6 +48,7 @@ PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 DisableProgramGroupPage=yes
 DisableDirPage=auto
+CloseApplications=force
 VersionInfoVersion={#MyAppVersion}
 
 [Languages]
@@ -121,7 +122,7 @@ begin
     if IsSilentInstall then
     begin
       sUnInstallString := RemoveQuotes(sUnInstallString);
-      if not Exec(ExpandConstant('{cmd}'), '/C ' + sUnInstallString + ' /VERYSILENT /SUPPRESSMSGBOXES /NORESTART',
+      if not Exec(ExpandConstant('{cmd}'), '/C ' + '"' + sUnInstallString + '" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART',
         '', SW_HIDE, ewWaitUntilTerminated, iResultCode) then
       begin
         Log('静默卸载旧版本失败，继续安装覆盖');

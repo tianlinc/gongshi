@@ -663,10 +663,10 @@ class UpdateChecker:
             return False, f'不支持的平台: {sys.platform}'
 
     def restart_and_install(self):
-        """执行安装并重启应用（Windows 平台）。
+        """执行后台静默安装并自动重启应用（Windows 平台）。
 
-        生成批处理脚本，以 detached 进程启动安装程序，
-        安装完成后自动启动新版本应用。
+        使用隐蔽进程启动安装脚本和 Inno Setup 静默安装程序。
+        全程无 cmd 弹窗，安装完成后自动启动新版本，用户端无感知。
 
         返回 (success: bool, message: str)
         """
@@ -688,20 +688,49 @@ class UpdateChecker:
         target_dir = install_dir or default_dir
         new_exe = os.path.join(target_dir, 'IEI Timer Faster.exe')
 
-        # 生成批处理脚本：等待旧进程退出 → 静默安装 → 启动新版本
+        # 升级日志文件（与安装包同目录）
+        log_file = os.path.join(os.path.dirname(file_path), '_update.log')
+        # 安装包和批处理文件路径（安装完成后清理）
+        bat_path = os.path.join(os.path.dirname(file_path), '_install.bat')
+
+        # 生成批处理脚本：终止旧进程 → 静默安装 → 启动新版本 → 清理
+        # start /B 在父 cmd（已通过 CREATE_NO_WINDOW 隐藏）中启动 exe，不创建新控制台窗口
         bat_lines = [
             '@echo off',
-            'echo IEI Timer Faster - 正在安装更新...',
-            # 等待旧进程退出（最多等 10 秒）
-            'timeout /t 2 /nobreak > nul',
+            'setlocal enabledelayedexpansion',
+            f'set LOG={log_file}',
+            '',
+            f'echo [!date! !time!] 开始更新... >> "!LOG!"',
+            '',
+            # 强制终止旧进程
+            'taskkill /f /im "IEI Timer Faster.exe" >nul 2>&1',
+            f'echo [!date! !time!] 已终止旧进程 >> "!LOG!"',
+            '',
+            # 等待旧进程完全退出 + 文件锁释放（ping 5次 = 约5秒）
+            'ping 127.0.0.1 -n 6 >nul',
+            '',
             # 运行静默安装
-            f'echo 正在安装...',
+            f'echo [!date! !time!] 运行安装程序... >> "!LOG!"',
             f'"{file_path}" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR="{target_dir}"',
-            'echo 安装完成，启动新版本...',
-            # 启动新版本应用
-            f'start "" "{new_exe}"',
+            'set SETUP_ERR=!ERRORLEVEL!',
+            '',
+            # 检查安装结果
+            'if !SETUP_ERR! neq 0 (',
+            f'    echo [!date! !time!] [X] 安装失败, 错误码=!SETUP_ERR! >> "!LOG!"',
+            '    exit /b !SETUP_ERR!',
+            ')',
+            '',
+            f'echo [!date! !time!] [OK] 安装成功 >> "!LOG!"',
+            f'echo [!date! !time!] 启动新版本... >> "!LOG!"',
+            # start /B 启动 GUI exe：不创建新窗口，立即返回控制权（不阻塞后续清理）
+            f'start "" /B "{new_exe}"',
+            '',
+            # 清理安装包和安装脚本
+            f'echo [!date! !time!] 清理临时文件... >> "!LOG!"',
+            f'del /f /q "{file_path}" >nul 2>&1',
+            f'del /f /q "{bat_path}" >nul 2>&1',
+            f'echo [!date! !time!] 更新流程完成 >> "!LOG!"',
         ]
-        bat_path = os.path.join(os.path.dirname(file_path), '_install.bat')
         try:
             with open(bat_path, 'w', encoding='gbk') as f:
                 f.write('\r\n'.join(bat_lines))
@@ -712,11 +741,16 @@ class UpdateChecker:
             return False, f'创建安装脚本失败: {e}'
 
         try:
-            print(f"[OK] 启动安装脚本: {bat_path}")
+            print(f"[OK] 启动后台静默安装脚本: {bat_path}")
+            # 使用 STARTUPINFO + CREATE_NO_WINDOW 确保完全无窗口闪现
+            # shell=False 避免额外的 cmd.exe 壳进程
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            startupinfo.wShowWindow = subprocess.SW_HIDE
             subprocess.Popen(
-                f'cmd /c "{bat_path}"',
-                shell=True,
-                creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS,
+                ['cmd.exe', '/c', bat_path],
+                startupinfo=startupinfo,
+                creationflags=subprocess.CREATE_NO_WINDOW,
             )
         except Exception as e:
             with self._lock:
