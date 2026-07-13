@@ -218,6 +218,8 @@ class UpdateChecker:
         self._error = None
         self._install_status = 'idle'  # idle / installing / done / failed
         self._install_error = None
+        self._release_notes_cache = None  # Release Note 缓存（TTL 1h）
+        self._release_notes_cache_ts = 0.0
 
     @classmethod
     def _get_system_proxies(cls):
@@ -463,6 +465,7 @@ class UpdateChecker:
         """获取所有版本发布日志列表，供 Release Note 弹窗使用。
 
         调用 GitHub Releases API（非 /latest），返回所有 release 的摘要。
+        结果缓存 1 小时，避免每次打开弹窗都请求 API 触发限流。
 
         Returns
         -------
@@ -473,7 +476,14 @@ class UpdateChecker:
         import logging
         _log = logging.getLogger(__name__)
 
+        # 缓存命中：TTL 1 小时内直接返回
+        now = time.time()
+        if self._release_notes_cache is not None and \
+           (now - self._release_notes_cache_ts) < 3600:
+            return self._release_notes_cache
+
         url = 'https://api.github.com/repos/tianlinc/gongshi/releases'
+        fallback = self._release_notes_cache  # 网络故障时回退到旧缓存
         try:
             resp = requests.get(
                 url,
@@ -485,6 +495,9 @@ class UpdateChecker:
             releases = resp.json()
         except Exception:
             _log.exception("[X] 发布日志获取失败")
+            if fallback is not None:
+                _log.warning("[!] 使用缓存的发布日志（已过期或网络不通）")
+                return fallback
             return []
 
         result = []
@@ -508,6 +521,10 @@ class UpdateChecker:
                 'changes': changes,
                 'published_at': rel.get('published_at', ''),
             })
+
+        # 更新缓存
+        self._release_notes_cache = result
+        self._release_notes_cache_ts = now
         return result
 
     def get_last_check(self):

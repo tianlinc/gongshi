@@ -419,6 +419,7 @@
                         <div class="release-detail-empty">请选择左侧版本查看详情</div>
                     </div>
                 </div>
+                <div id="releaseNoteEmpty" style="display:none;padding:40px 20px;text-align:center;" class="text-muted"></div>
             </div>
             <div class="modal-footer" style="border:none;">
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">关闭</button>
@@ -2027,6 +2028,7 @@
 
         document.getElementById('releaseNoteLoading').style.display = 'block';
         document.getElementById('releaseNoteContent').style.display = 'none';
+        document.getElementById('releaseNoteEmpty').style.display = 'none';
 
         if (_releaseNotesCache && _releaseNotesCache.length > 0) {
             renderReleaseNoteContent(_releaseNotesCache);
@@ -2037,26 +2039,27 @@
                     _releaseNotesCache = data.release_notes;
                     renderReleaseNoteContent(data.release_notes);
                 } else {
-                    document.getElementById('releaseNoteLoading').style.display = 'none';
-                    document.getElementById('releaseNoteContent').style.display = 'block';
-                    document.getElementById('releaseNoteContent').innerHTML =
-                        '<p class="text-muted text-center py-3">暂无发布日志</p>';
+                    showReleaseNoteFallback('暂无发布日志');
                 }
-            }).catch(() => {
-                document.getElementById('releaseNoteLoading').style.display = 'none';
-                document.getElementById('releaseNoteContent').style.display = 'block';
-                document.getElementById('releaseNoteContent').innerHTML =
-                    '<p class="text-muted text-center py-3">无法获取发布日志</p>';
+            }).catch(function() {
+                showReleaseNoteFallback('无法获取发布日志，请检查网络连接');
             });
         }
     }
 
+    function showReleaseNoteFallback(message) {
+        document.getElementById('releaseNoteLoading').style.display = 'none';
+        document.getElementById('releaseNoteContent').style.display = 'none';
+        document.getElementById('releaseNoteEmpty').style.display = 'block';
+        document.getElementById('releaseNoteEmpty').textContent = message;
+    }
+
     function renderReleaseNoteContent(notes) {
         document.getElementById('releaseNoteLoading').style.display = 'none';
+        document.getElementById('releaseNoteEmpty').style.display = 'none';
         document.getElementById('releaseNoteContent').style.display = '';
         if (!notes || notes.length === 0) {
-            document.getElementById('releaseNoteContent').innerHTML =
-                '<p class="text-muted text-center py-3">暂无更新日志</p>';
+            showReleaseNoteFallback('暂无更新日志');
             return;
         }
 
