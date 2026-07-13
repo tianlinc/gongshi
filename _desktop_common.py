@@ -205,6 +205,12 @@ class UpdateChecker:
     APPCASAT_URL = 'https://tianlinc.github.io/gongshi/appcast.xml'
     TIMEOUT = 5  # API 请求超时（秒）
 
+    # GitHub Personal Access Token（环境变量 GITHUB_TOKEN）
+    # 设置后 API 请求使用认证身份，限流从 60→5000 req/hour
+    # 创建方式：https://github.com/settings/tokens → Generate new token (classic)
+    # 权限：公开仓库无需勾选任何 scope
+    GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN', '')
+
     # 系统代理配置（类变量，只读一次注册表，避免重复查询）
     _system_proxies_cache = None
 
@@ -292,6 +298,18 @@ class UpdateChecker:
 
     # ---- 版本检查 ----
 
+    @staticmethod
+    def _github_headers():
+        """构建 GitHub API 请求头（含可选认证 Token）。
+
+        GITHUB_TOKEN 环境变量设置时使用 Bearer 认证（5000 req/hour），
+        否则匿名访问（60 req/hour per IP，企业内网共享 IP 极易耗尽）。
+        """
+        headers = {'User-Agent': 'gongshi-updater/1.0'}
+        if UpdateChecker.GITHUB_TOKEN:
+            headers['Authorization'] = 'Bearer ' + UpdateChecker.GITHUB_TOKEN
+        return headers
+
     def check_update(self, current_version):
         """检查是否有新版本。
 
@@ -323,7 +341,7 @@ class UpdateChecker:
         try:
             resp = requests.get(
                 self.GITHUB_API,
-                headers={'User-Agent': 'gongshi-updater/1.0'},
+                headers=self._github_headers(),
                 timeout=self.TIMEOUT,
                 proxies=self._get_system_proxies(),
             )
@@ -487,7 +505,7 @@ class UpdateChecker:
         try:
             resp = requests.get(
                 url,
-                headers={'User-Agent': 'gongshi-updater/1.0'},
+                headers=self._github_headers(),
                 timeout=self.TIMEOUT,
                 proxies=self._get_system_proxies(),
             )
