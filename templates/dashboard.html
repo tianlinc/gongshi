@@ -247,7 +247,7 @@
 
 <!-- 失败弹窗 -->
 <div class="modal fade fail-modal" id="failModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title"><i class="bi bi-x-circle-fill fail-icon"></i> 提交失败</h5>
@@ -335,7 +335,7 @@
 
 <!-- 关于弹窗 -->
 <div class="modal fade" id="aboutModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content modal-custom">
             <div class="modal-header modal-custom-header">
                 <h5 class="modal-title"><i class="bi bi-info-circle"></i> 关于 IEI Timer Faster</h5>
@@ -402,18 +402,23 @@
 
 <!-- Release Note 弹窗 -->
 <div class="modal fade" id="releaseNoteModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content modal-custom">
             <div class="modal-header modal-custom-header">
                 <h5 class="modal-title"><i class="bi bi-journal-text"></i> Release Note</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body modal-custom-body">
-                <div id="releaseNoteLoading" class="text-center py-3">
+            <div class="modal-body modal-custom-body p-2">
+                <div id="releaseNoteLoading" class="text-center py-4">
                     <div class="spinner-border text-primary" role="status"></div>
                     <p class="mt-2 text-muted">加载中...</p>
                 </div>
-                <div id="releaseNoteContent" style="display:none;"></div>
+                <div id="releaseNoteContent" style="display:none;" class="release-split">
+                    <div class="release-sidebar" id="releaseSidebar"></div>
+                    <div class="release-detail" id="releaseDetail">
+                        <div class="release-detail-empty">请选择左侧版本查看详情</div>
+                    </div>
+                </div>
             </div>
             <div class="modal-footer" style="border:none;">
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">关闭</button>
@@ -424,7 +429,7 @@
 
 <!-- License 信息弹窗 -->
 <div class="modal fade" id="licenseModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content modal-custom">
             <div class="modal-header modal-custom-header">
                 <h5 class="modal-title"><i class="bi bi-shield-check"></i> License 信息</h5>
@@ -472,10 +477,49 @@
                 </div>
             </div>
             <div class="modal-footer" style="border:none;">
-                <a href="/activate" class="btn btn-outline-success btn-sm">
+                <button class="btn btn-outline-success btn-sm" id="reActivateBtn" type="button">
                     <i class="bi bi-arrow-repeat"></i> 重新激活
-                </a>
+                </button>
                 <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 重新激活弹窗 -->
+<div class="modal fade" id="reActivateModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content modal-custom">
+            <div class="modal-header modal-custom-header">
+                <h5 class="modal-title"><i class="bi bi-arrow-repeat"></i> 重新激活 License</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body modal-custom-body">
+                <!-- SN 码 -->
+                <div class="mb-2" style="font-size:13px;color:#888;">
+                    <i class="bi bi-upc-scan"></i> 我的 SN 码
+                    <button class="btn btn-link btn-sm py-0" id="reActivateCopySn" title="复制 SN 码">
+                        <i class="bi bi-clipboard"></i>
+                    </button>
+                </div>
+                <div class="reactivate-sn" id="reActivateSn">加载中...</div>
+
+                <!-- License 输入 -->
+                <label for="reActivateInput" class="form-label fw-bold" style="font-size:14px;">
+                    <i class="bi bi-key"></i> License 激活码
+                </label>
+                <textarea class="form-control" id="reActivateInput" rows="3"
+                          placeholder="请输入管理员提供的 License 字符串"
+                          style="font-size:13px; resize: vertical; min-height: 80px;"></textarea>
+
+                <!-- 提示 -->
+                <div class="reactivate-alert" id="reActivateAlert"></div>
+            </div>
+            <div class="modal-footer" style="border:none;">
+                <button class="btn btn-primary btn-sm" id="reActivateSubmitBtn">
+                    <i class="bi bi-check-circle"></i> 激活
+                </button>
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
             </div>
         </div>
     </div>
@@ -635,6 +679,9 @@
         document.getElementById('aboutReleaseNoteBtn2').addEventListener('click', openReleaseNote);
         document.getElementById('aboutCheckUpdateBtn').addEventListener('click', aboutCheckUpdate);
         document.getElementById('copySnBtn').addEventListener('click', copySn);
+
+        // 重新激活按钮
+        document.getElementById('reActivateBtn').addEventListener('click', openReActivateModal);
 
         document.getElementById('logoutBtn').addEventListener('click', async () => {
             await apiCall('/api/logout', { method: 'POST' });
@@ -2006,23 +2053,46 @@
 
     function renderReleaseNoteContent(notes) {
         document.getElementById('releaseNoteLoading').style.display = 'none';
-        document.getElementById('releaseNoteContent').style.display = 'block';
+        document.getElementById('releaseNoteContent').style.display = '';
         if (!notes || notes.length === 0) {
             document.getElementById('releaseNoteContent').innerHTML =
-                '<p class="text-muted">暂无更新日志</p>';
+                '<p class="text-muted text-center py-3">暂无更新日志</p>';
             return;
         }
-        let html = '';
-        notes.forEach(function(note) {
-            html += '<div class="version-info-card mb-2">' +
-                '<h6>' + escapeHtml(note.version || '') + '</h6>' +
-                '<ul class="changelog">' +
-                (note.changes || []).map(function(c) {
-                    return '<li>' + escapeHtml(c) + '</li>';
-                }).join('') +
-                '</ul></div>';
+
+        var sidebar = document.getElementById('releaseSidebar');
+        // 渲染左侧版本列表
+        var sidebarHtml = '';
+        notes.forEach(function(note, idx) {
+            sidebarHtml += '<button class="release-ver-item' + (idx === 0 ? ' active' : '') + '"' +
+                ' data-idx="' + idx + '">' + escapeHtml(note.version || '') + '</button>';
         });
-        document.getElementById('releaseNoteContent').innerHTML = html;
+        sidebar.innerHTML = sidebarHtml;
+
+        // 绑定点击事件
+        sidebar.querySelectorAll('.release-ver-item').forEach(function(item) {
+            item.addEventListener('click', function() {
+                sidebar.querySelectorAll('.release-ver-item').forEach(function(s) {
+                    s.classList.remove('active');
+                });
+                item.classList.add('active');
+                showReleaseDetail(notes[parseInt(item.dataset.idx)]);
+            });
+        });
+
+        // 默认显示第一个（最新）版本
+        showReleaseDetail(notes[0]);
+    }
+
+    function showReleaseDetail(note) {
+        var detail = document.getElementById('releaseDetail');
+        detail.innerHTML = '<h6 style="color:#667eea;font-weight:600;margin:0 0 4px;">' +
+            escapeHtml(note.version || '') + '</h6>' +
+            '<ul class="changelog">' +
+            (note.changes || []).map(function(c) {
+                return '<li>' + escapeHtml(c) + '</li>';
+            }).join('') +
+            '</ul>';
     }
 
     // ===== License 弹窗 =====
@@ -2106,6 +2176,102 @@
             .then(function() { toast('SN 码已复制到剪贴板', 'success'); })
             .catch(function() { toast('复制失败，请手动复制', 'error'); });
     }
+
+    // ===== 重新激活弹窗 =====
+    let reActivateModalInst = null;
+
+    async function openReActivateModal() {
+        // 隐藏 License 弹窗
+        if (licenseModalInst) licenseModalInst.hide();
+
+        if (!reActivateModalInst) {
+            reActivateModalInst = new bootstrap.Modal(document.getElementById('reActivateModal'));
+        }
+        reActivateModalInst.show();
+
+        // 重置 UI
+        document.getElementById('reActivateInput').value = '';
+        document.getElementById('reActivateAlert').className = 'reactivate-alert';
+        document.getElementById('reActivateSubmitBtn').disabled = false;
+
+        // 加载 SN 码
+        try {
+            const r = await fetch('/api/license/sn');
+            const data = await r.json();
+            document.getElementById('reActivateSn').textContent = data.success ? data.sn : '获取失败';
+        } catch (_) {
+            document.getElementById('reActivateSn').textContent = '网络异常，无法获取 SN 码';
+        }
+    }
+
+    // 复制 SN 码（重新激活弹窗）
+    document.getElementById('reActivateCopySn').addEventListener('click', function() {
+        const sn = document.getElementById('reActivateSn').textContent.trim();
+        if (!sn || sn === '加载中...' || sn.includes('失败') || sn.includes('异常')) return;
+        navigator.clipboard.writeText(sn)
+            .then(function() { toast('SN 码已复制到剪贴板', 'success'); })
+            .catch(function() { toast('复制失败，请手动复制', 'error'); });
+    });
+
+    // 提交激活
+    document.getElementById('reActivateSubmitBtn').addEventListener('click', async function() {
+        const license = document.getElementById('reActivateInput').value.trim();
+        const alertEl = document.getElementById('reActivateAlert');
+        const btn = this;
+
+        if (!license) {
+            alertEl.className = 'reactivate-alert error';
+            alertEl.innerHTML = '<i class="bi bi-exclamation-triangle"></i> 请输入 License 激活码';
+            return;
+        }
+
+        alertEl.className = 'reactivate-alert';
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 激活中...';
+
+        try {
+            const r = await fetch('/api/license/activate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ license: license })
+            });
+            const data = await r.json();
+
+            if (data.success) {
+                alertEl.className = 'reactivate-alert success';
+                alertEl.innerHTML = '<i class="bi bi-check-circle-fill"></i> 激活成功！'
+                    + (data.type ? (' 授权类型：' + data.type) : '');
+                btn.innerHTML = '<i class="bi bi-check-circle"></i> 激活';
+                btn.disabled = true;
+
+                // 成功后延迟关闭并刷新 License 信息
+                setTimeout(function() {
+                    reActivateModalInst.hide();
+                    // 重新打开 License 弹窗以刷新信息
+                    openLicenseModal();
+                }, 1500);
+            } else {
+                alertEl.className = 'reactivate-alert error';
+                alertEl.innerHTML = '<i class="bi bi-exclamation-triangle"></i> '
+                    + (data.message || '激活失败，请检查 License 是否正确');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-check-circle"></i> 激活';
+            }
+        } catch (_) {
+            alertEl.className = 'reactivate-alert error';
+            alertEl.innerHTML = '<i class="bi bi-exclamation-triangle"></i> 网络错误，请检查网络连接后重试';
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-check-circle"></i> 激活';
+        }
+    });
+
+    // 回车键触发激活
+    document.getElementById('reActivateInput').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            document.getElementById('reActivateSubmitBtn').click();
+        }
+    });
 
     // ===== 新版本提示 Toast（绿色渐变+点击打开关于弹窗） =====
     (function checkForUpdates() {
