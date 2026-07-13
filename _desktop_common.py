@@ -312,6 +312,43 @@ class UpdateChecker:
             headers['Authorization'] = 'Bearer ' + UpdateChecker.GITHUB_TOKEN
         return headers
 
+    @staticmethod
+    def _github_get(url, timeout=TIMEOUT, proxies=None):
+        """GitHub API GET 请求（企业网络容错版）。
+
+        企业网络环境常见问题：
+        1. MITM 代理使用自签名证书 → verify=False 跳过证书校验
+        2. 代理/防火墙中断 SSL 连接 → 最多重试 2 次
+        3. 网络不稳定 → 连接超时自动重试
+
+        注意：GitHub Releases API 只读公开数据，verify=False 无安全风险。
+        """
+        import requests
+        import urllib3
+        import logging
+        _log = logging.getLogger(__name__)
+        # 关闭 SSL 证书校验告警（企业环境常见，属预期行为）
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+        for attempt in range(3):
+            try:
+                resp = requests.get(
+                    url,
+                    headers=UpdateChecker._github_headers(),
+                    timeout=timeout,
+                    proxies=proxies,
+                    verify=False,
+                )
+                resp.raise_for_status()
+                return resp.json()
+            except (requests.exceptions.SSLError, requests.exceptions.ConnectionError) as e:
+                if attempt < 2:
+                    _log.warning("[!] GitHub API 请求失败（第%d次重试）: %s", attempt + 1, e)
+                    time.sleep(0.5)
+                    continue
+                raise
+        raise
+
     def check_update(self, current_version):
         """检查是否有新版本。
 
@@ -336,19 +373,15 @@ class UpdateChecker:
 
     def _check_windows_update(self, current_version):
         """Windows 平台：从 GitHub Releases API 检查更新。"""
-        import requests
         import logging
         _log = logging.getLogger(__name__)
 
         try:
-            resp = requests.get(
+            data = self._github_get(
                 self.GITHUB_API,
-                headers=self._github_headers(),
                 timeout=self.TIMEOUT,
                 proxies=self._get_system_proxies(),
             )
-            resp.raise_for_status()
-            data = resp.json()
         except Exception:
             _log.exception("[X] 更新检查失败（网络异常），api=%s", self.GITHUB_API)
             self._last_check = None
@@ -492,7 +525,6 @@ class UpdateChecker:
         list of dict
             [{version: "v1.0.2", changes: ["变更1", "变更2"], ...}, ...]
         """
-        import requests
         import logging
         _log = logging.getLogger(__name__)
 
@@ -505,14 +537,11 @@ class UpdateChecker:
         url = 'https://api.github.com/repos/tianlinc/gongshi/releases'
         fallback = self._release_notes_cache  # 网络故障时回退到旧缓存
         try:
-            resp = requests.get(
+            releases = self._github_get(
                 url,
-                headers=self._github_headers(),
                 timeout=self.TIMEOUT,
                 proxies=self._get_system_proxies(),
             )
-            resp.raise_for_status()
-            releases = resp.json()
         except Exception:
             _log.exception("[X] 发布日志获取失败")
             if fallback is not None:
