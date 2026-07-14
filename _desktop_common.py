@@ -136,12 +136,17 @@ _SINGLE_INSTANCE_PORT = 54322
 def _acquire_instance_lock():
     """尝试获取单实例锁。
 
+    注意：故意不使用 SO_REUSEADDR。
+    在 Windows Vista+ 上，两个进程都设置 SO_REUSEADDR 并绑定同一端口时，
+    内核允许端口共享（multi-process server 特性），导致第二个实例的 bind()
+    也成功——两个实例都误认为自己是"第一个"，双双创建窗口。
+    去掉 SO_REUSEADDR 后，第二个实例的 bind() 会正确返回 EADDRINUSE。
+
     Returns
     -------
     (is_first: bool, lock_socket: socket.socket | None)
     """
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     try:
         s.bind(('127.0.0.1', _SINGLE_INSTANCE_PORT))
         s.listen(1)
@@ -155,7 +160,8 @@ def _acquire_instance_lock():
 def _notify_existing_and_exit():
     """尝试连接已有实例，发送 FOCUS 信号通知置前。
 
-    成功连接到已有 gongshi 实例时通过 sys.exit(0) 直接退出。
+    成功连接到已有 gongshi 实例时通过 os._exit(0) 直接退出。
+    使用 os._exit 而非 sys.exit，避免 atexit 钩子或 finally 块干扰退出。
     连接失败（如端口被其他程序占用）时返回 False，由调用方决定是否继续。
     """
     try:
@@ -164,7 +170,7 @@ def _notify_existing_and_exit():
         sock.connect(('127.0.0.1', _SINGLE_INSTANCE_PORT))
         sock.send(b'FOCUS')
         sock.close()
-        sys.exit(0)
+        os._exit(0)
     except Exception:
         return False
 
