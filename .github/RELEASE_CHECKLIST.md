@@ -62,20 +62,21 @@ git push origin v1.1.8
 
 **修复**（`setup.iss`）：使用 `[InstallDelete]` 在文件复制前删除旧 `VERSION` 文件，配合 `ignoreversion` 的"目标不存在即复制"逻辑，新 VERSION 总能写入。此修复已于 V1.1.7 加入。
 
-### 2. AppId 使用 `{GUID}` 单花括号 → Inno Setup 常量解析失败编译中断
+### 2. AppId 使用花括号 → `ExpandConstant({GUID})` 未知常量吞并 → 安装目录跳变
 
-**现象**：ISCC 编译 abort，错误消息：
-```
-Error on line 33: Unknown constant "A8F3C2B1-..."
-Use two consecutive "{" characters if you are trying to embed a single "{" and not a constant.
-Compile aborted.
-```
+**现象**：升级安装后目录改变，不是旧安装目录。
 
-**根因**：Inno Setup 将 `{...}` 解析为内置常量。`AppId={GUID}` 中的 `{` 被当作常量起始符，`GUID` 字符串不是已知常量名 → 编译失败。
+**根因（两阶段转义链）**：
+1. ISPP 阶段：`{#emit SetupSetting("AppId")}` 读取 `{{GUID}}` → ISPP 处理 `{{` 转义 → 发射 `{GUID}`（含花括号）
+2. Inno Setup 运行时：`ExpandConstant('...\Uninstall\{GUID}_is1')` → `{GUID}` 不是已知常量 → **替换为空字符串**
+3. 注册表路径变成 `...\Uninstall\__is1`（GUID 被吞）→ `RegQueryStringValue` 失败 → `IsUpgrade` 返回 False → 走全新安装路径
 
-**修复**（`setup.iss`）：必须使用**双花括号 `{{GUID}}`**——Inno Setup 自己的转义语法，`{{` 表示字面量 `{`，不触发常量查找。解析后 `AppId` 值为字符串 `{A8F3C2B1-...}`。
+**修复**（`setup.iss`）：
+1. AppId 使用**纯字符串 `A8F3C2B1-...`**（无花括号），消除 Inno Setup 常量解析
+2. `GetUninstallString` 中注册表路径用**字面量字符串**（无 `ExpandConstant`、无 `{#emit}`）
+3. `_desktop_common.py` 的 `KNOWN_APP_ID` 同步更新为无花括号纯字符串
 
-> **`{{...}}` 不是 ISPP 的"随机 GUID 生成指令"**——这是早期误判。ISPP 只处理 `{#...}` 开头的指令，`{{` 完全是 Inno Setup 自身的转义语法。此修复已于 V1.1.7 加入。
+> **历史教训**：原始的 `{{}}` 双花括号方案在编译时通过了 ISCC（`{{` → `{` 是正常的 Inno Setup 转义），但在 Pascal 代码的 `ExpandConstant` 中使用 `{#emit}` 会触发二次转义链，导致注册表查找静默失败。这不是编译错误，是运行时逻辑错误。
 
 ### 3. 忘记推送 Tag → CI 不触发
 

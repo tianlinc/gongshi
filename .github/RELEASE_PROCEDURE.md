@@ -197,6 +197,45 @@ assert target_dir == frozen_dir  # 不走注册表 fallback
 
 ---
 
+### 坑 9：`ExpandConstant({GUID})` → 未知常量替换为空字符串 → 注册表查找失败 → 安装目录跳变
+
+**现象**：安装 v1.1.9 后安装目录仍然变化，不是期望的旧目录。这已经是第五次。
+
+**根因**：`setup.iss` 的 `GetUninstallString()` 用了 `ExpandConstant` + `{#emit SetupSetting("AppId")}` 组合：
+```pascal
+sUnInstPath := ExpandConstant('...\Uninstall\{#emit SetupSetting("AppId")}_is1');
+```
+
+这形成了一个**两阶段转义链**：
+1. ISPP 阶段：`SetupSetting("AppId")` 返回 `{{A8F3C2B1-...}}` → `{#emit}` 处理 `{{` 为 ISPP 转义 → 发射 `{A8F3C2B1-...}`（含花括号）
+2. Inno Setup 运行时：`ExpandConstant` 遇到 `{A8F3C2B1-...}` → 不是已知常量（`{app}`、`{src}` 等）→ **替换为空字符串**
+3. 注册表路径变成 `Software\...\Uninstall\__is1`（GUID 被吞）
+4. `RegQueryStringValue` 找不到 → `GetUninstallString` 返回 `''`
+5. `IsUpgrade` 返回 `False` → 安装器走全新安装路径 → 默认目录
+
+**修复**（commit 未定）：AppId 改为纯字符串（无花括号）、Pascal 代码用字面量路径（无 ExpandConstant + #emit）：
+
+```iss
+; setup.iss
+AppId=A8F3C2B1-9D4E-5F6A-7B8C-0D1E2F3A4B5C       ; ← 纯字符串，无花括号
+sUnInstPath := '...\Uninstall\A8F3C2B1-..._is1';  ; ← 字面量路径，无 ExpandConstant
+```
+
+```python
+# _desktop_common.py
+KNOWN_APP_ID = 'A8F3C2B1-9D4E-5F6A-7B8C-0D1E2F3A4B5C'  # ← 无花括号
+```
+
+**教训**：
+- `ExpandConstant` + `{#emit SetupSetting("AppId")}` 组合是危险的——会经过 ISPP 转义 → Inno Setup 常量解析两层处理，任一层出错都会导致注册表查找失败
+- AppId 应使用纯字符串（无花括号），既避免 `[Setup]` 段的常量查找，也避免 `ExpandConstant` 的未知常量吞并
+- 当 AppId 出现在 Pascal 代码的注册表路径中时，直接用字面量字符串，不要用 `ExpandConstant` 或 `{#emit}`
+- 原始 AppId `{{A8F3C2B1-...}`（缺失一个 `}`）从初始 commit 起就存在，不同 ISCC 版本处理方式不同，长期不一致
+
+**验证方法**：安装包编译后检查 `setup.iss` 中 `AppId` 是纯字符串 `A8F3C2B1-...`（无花括号），`GetUninstallString` 中是字面量路径（无 `ExpandConstant`、无 `{#emit}`）。
+
+---
+
 ## 二、发布标准流程
 
 以下步骤应**逐条执行，不可跳过**。每条标有 **[必须]** 的是强制性检查。
@@ -232,7 +271,7 @@ grep -n "AppId\|AppVersion\|AppName\|\#define MyApp" service_installer/installer
 
 | # | 检查项 | ✓ |
 |---|--------|---|
-| 1 | `AppId` 使用双花括号 `{{GUID}}`（Inno Setup 转义，不是 ISPP 随机 GUID） | |
+| 1 | `AppId` 使用纯字符串 `A8F3C2B1-...`（无花括号，无 `{{}}` 转义，无 ISPP/IS 处理） | |
 | 2 | `AppVersion` 读取自 `VERSION` 文件（`{#MyAppVersion}` 宏），无硬编码 | |
 | 3 | `AppName` = `{#MyAppName}`，无硬编码 | |
 | 4 | `[InstallDelete]` 段包含 `{app}\VERSION` 条目 | |
@@ -280,7 +319,7 @@ curl -o "C:\Program Files (x86)\Inno Setup 6\Languages\ChineseSimplified.isl" ht
 | `File not found: ..\dist\IEI Timer Faster\*` | PyInstaller 还没构建 | 先跑 `pyinstaller service.spec` 再跑 ISCC |
 | `Duplicate identifier` / `undeclared identifier` | setup.iss 语法错误 | 检查 `#define`、`[Code]` 段语法 |
 | `SaveStringToFile` undefined | 用了 ISCC 6.0+ 函数 | 删除该调用，改用 `[InstallDelete]` |
-| `AppId` 相关警告 / `Unknown constant` 错误 | 用了单花括号 `{GUID}` 触发 Inno Setup 常量查找 | 改为双花括号 `{{GUID}}`（转义为字面量 `{`） |
+| `AppId` 相关警告 / `Unknown constant` 错误 / 安装目录变化 | 使用了花括号 `{`/`{{...}}` 触发 Inno Setup/ISPP 转义链 | 改为纯字符串 `A8F3C2B1-...`（无花括号），`GetUninstallString` 用字面量路径 |
 
 **此步骤验证通过后才能继续下一步。** 如果在后续 push 后 CI 仍失败，这步必须重新执行。
 
@@ -446,7 +485,8 @@ grep -n "SaveStringToFile" service_installer\installer\setup.iss
 ```
 
 期望结果：
-- `AppId={{A8F3C2B1-9D4E-5F6A-7B8C-0D1E2F3A4B5C}}`（双花括号 = Inno Setup 对字面量 `{` 的转义，不是 ISPP 随机 GUID）
+- `AppId=A8F3C2B1-9D4E-5F6A-7B8C-0D1E2F3A4B5C`（**纯字符串，无花括号**——消除 ISPP/Inno Setup 转义链）
 - `AppVersion={#MyAppVersion}`（编译时宏）
 - `[InstallDelete]` 段存在，含 `{app}\VERSION`
 - `SaveStringToFile` **不应出现**（如出现需删除并改为 `[InstallDelete]`）
+- `[Code]` 段 `GetUninstallString` 中注册表路径为字面量字符串（无 `ExpandConstant`、无 `{#emit}`）

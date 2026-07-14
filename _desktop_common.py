@@ -891,7 +891,7 @@ class UpdateChecker:
             (winreg.HKEY_LOCAL_MACHINE,
              r'Software\Microsoft\Windows\CurrentVersion\Uninstall'),
         )
-        KNOWN_APP_ID = '{A8F3C2B1-9D4E-5F6A-7B8C-0D1E2F3A4B5C}'
+        KNOWN_APP_ID = 'A8F3C2B1-9D4E-5F6A-7B8C-0D1E2F3A4B5C'
         APP_DISPLAY_NAME = 'IEI Timer Faster'
 
         def _read_install_location(root, subkey_path):

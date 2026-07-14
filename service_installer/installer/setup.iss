@@ -28,10 +28,12 @@
 #define MyAppExe "IEI Timer Faster.exe"
 
 [Setup]
-; INSPUR-93: AppId 使用双花括号 {{...}}——ISPP 将 {{ 转义为字面量 {，
-; Inno Setup 运行时得到 {GUID} 字符串（不被当作常量解析）。
-; 单花括号 {GUID} 会触发 Inno Setup 常量查找 → unknown constant 编译失败。
-AppId={{A8F3C2B1-9D4E-5F6A-7B8C-0D1E2F3A4B5C}}
+; INSPUR-93: AppId 使用纯字符串（无花括号）——消除 ISPP #emit 和
+; Inno Setup ExpandConstant 的转义链问题。
+; 双花括号 {{GUID}} 经 ISPP #emit 处理后变成 {GUID}（含花括号），
+; 再经 ExpandConstant 时 {GUID} 被当作未知常量替换为空字符串，
+; 导致注册表查找路径错误 → IsUpgrade 返回 False → 安装器走全新安装。
+AppId=A8F3C2B1-9D4E-5F6A-7B8C-0D1E2F3A4B5C
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
@@ -92,7 +94,7 @@ var
   sUnInstPath: String;
   sUnInstallString: String;
 begin
-  sUnInstPath := ExpandConstant('Software\Microsoft\Windows\CurrentVersion\Uninstall\{#emit SetupSetting("AppId")}_is1');
+  sUnInstPath := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\A8F3C2B1-9D4E-5F6A-7B8C-0D1E2F3A4B5C_is1';
   sUnInstallString := '';
   if not RegQueryStringValue(HKCU, sUnInstPath, 'UninstallString', sUnInstallString) then
     RegQueryStringValue(HKLM, sUnInstPath, 'UninstallString', sUnInstallString);
