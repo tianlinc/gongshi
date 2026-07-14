@@ -28,7 +28,7 @@
 #define MyAppExe "IEI Timer Faster.exe"
 
 [Setup]
-AppId={{A8F3C2B1-9D4E-5F6A-7B8C-0D1E2F3A4B5C}
+AppId={{A8F3C2B1-9D4E-5F6A-7B8C-0D1E2F3A4B5C}}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}

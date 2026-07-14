@@ -60,12 +60,18 @@ git push origin v1.1.8
 
 **根因**：Inno Setup 的 `ignoreversion` 标志会在升级时跳过已存在的同名文件，导致旧版 `VERSION` 文件不被覆盖。
 
-**修复**（`setup.iss:163-168`）：在 `ssPostInstall` 步骤中使用 `SaveStringToFile` 强制写入最新版本号。此修复已于 V1.1.7 加入，新版本不会再出现此问题。
+**修复**（`setup.iss`）：使用 `[InstallDelete]` 在文件复制前删除旧 `VERSION` 文件，配合 `ignoreversion` 的"目标不存在即复制"逻辑，新 VERSION 总能写入。此修复已于 V1.1.7 加入。
 
-### 2. 忘记推送 Tag → CI 不触发
+### 2. AppId 缺少闭合 `}}` → 升级时安装目录变化
+
+**根因**：Inno Setup 的 `AppId={{GUID}}` 需要 `}}` 闭合。如果只写了 `}` (如 `AppId={{XXX}`)，ISCC 无法正确解析 GUID 常量，不同版本/不同次编译可能生成不同的有效 AppId，导致新安装包不识别旧版本。
+
+**修复**：确保 `AppId` 使用完整闭合语法 `{{GUID}}`。此修复已于 V1.1.7 加入。
+
+### 3. 忘记推送 Tag → CI 不触发
 
 `build.yml` 的触发条件是 `push tags v*`，不是 `push branch main`。Commit 推送到 main 后**必须另外创建并推送 tag**。
 
-### 3. VERSION 文件带有 BOM 或多余换行
+### 4. VERSION 文件带有 BOM 或多余换行
 
 确保 `VERSION` 文件内容为纯文本单行（如 `1.1.7`），末尾可以有换行。`_read_version()` 和 `_read_app_version()` 均使用 `.strip()` 处理，可容忍尾部空白。
