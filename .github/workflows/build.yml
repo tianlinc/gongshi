@@ -67,8 +67,13 @@ jobs:
           python -m pip show pyinstaller
           if exist "dist\IEI Timer Faster" rmdir /s /q "dist\IEI Timer Faster"
           echo === Build start ===
-          python -m PyInstaller --noconfirm service.spec
+          python -m PyInstaller --noconfirm service.spec || exit /b %errorlevel%
           echo === Build done ===
+          if not exist "dist\IEI Timer Faster\IEI Timer Faster.exe" (
+            echo [X] PyInstaller build failed: IEI Timer Faster.exe not found
+            dir dist 2>nul || echo "(dist/ does not exist)"
+            exit /b 1
+          )
 
       - name: Build (Inno Setup installer)
         shell: cmd
@@ -82,14 +87,25 @@ jobs:
           if not defined ISCC where iscc 2>nul && set "ISCC=iscc"
           if not defined ISCC (echo [X] ISCC not found & exit /b 1)
           echo [OK] ISCC: %ISCC%
-          "%ISCC%" /O"service_installer\dist" /F"IEI_Timer_Faster_Setup_v%VERSION%" "service_installer\installer\setup.iss" || exit /b %errorlevel%
-          dir service_installer\dist\*.exe
+          echo [OK] ISCC flags: /Oservice_installer\dist /FIEI_Timer_Faster_Setup_v%VERSION%
+          "%ISCC%" ^
+            /Oservice_installer\dist ^
+            /FIEI_Timer_Faster_Setup_v%VERSION% ^
+            "service_installer\installer\setup.iss" || exit /b %errorlevel%
+          echo [OK] ISCC compilation finished
+          echo === Verifying output ===
+          dir service_installer\dist\IEI_Timer_Faster_Setup*.exe || (
+            echo [X] ISCC output not found — listing service_installer\dist for diagnosis
+            dir service_installer\dist\*.exe 2>nul || echo "(no .exe files in dist/)"
+            dir service_installer\dist 2>nul || echo "(dist/ directory does not exist)"
+            exit /b 1
+          )
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: windows-installer
-          path: service_installer/dist/IEI_Timer_Faster_Setup_*.exe
+          path: service_installer/dist/IEI_Timer_Faster_Setup*.exe
           if-no-files-found: error
 
   # ==========================================================
@@ -217,7 +233,7 @@ jobs:
           name: ${{ github.ref_name }}
           generate_release_notes: true
           files: |
-            ./release/IEI_Timer_Faster_Setup_*.exe
+            ./release/IEI_Timer_Faster_Setup*.exe
             ./release/IEI_Timer_Faster_Setup_*.dmg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

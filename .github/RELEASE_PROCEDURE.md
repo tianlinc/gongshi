@@ -126,6 +126,38 @@ Windows Vista+ 和 Unix 对 `SO_REUSEADDR` 语义不同：
 
 ---
 
+### 坑 7：ISCC 参数引号 + PyInstaller 无错误检查 → 错误被 upload-artifact 多层遮蔽
+
+**现象**：CI 的 upload-artifact 连续三次报 `No files were found: IEI_Timer_Faster_Setup_*.exe`，且每次被报告时已有"修复"。
+
+**根因**：存在三层问题嵌套，任何一层修复都会使第二层暴露：
+
+1. **PyInstaller 步骤无错误检查**：如果 PyInstaller 编译失败（如依赖缺失、spec 语法错误），`echo === Build done ===` 仍会打印，步骤标记为"成功"。ISCC 在下一步运行时找不到 `dist\IEI Timer Faster\*` 源文件。
+
+2. **ISCC `/F` 和 `/O` 参数被 CMD 引号拆分**：
+   ```
+   /F"IEI_Timer_Faster_Setup_v%VERSION%"
+   ```
+   CMD 将以上拆分为两个参数：`/F` 和 `IEI_Timer_Faster_Setup_v%VERSION%`。取决于 ISCC 版本如何解析，`/F` 可能生效也可能被忽略。如果 `/F` 被忽略，ISCC 使用脚本中的 `OutputBaseFilename`（`IEI_Timer_Faster_Setup`）作为输出名，这与 upload-artifact 的模式 `IEI_Timer_Faster_Setup_*.exe`（有下划线+版本号）不匹配。
+
+3. **upload-artifact 匹配模式过于严格**：`IEI_Timer_Faster_Setup_*.exe` 有下划线要求，默认文件名 `IEI_Timer_Faster_Setup.exe` 无法匹配。
+
+**修复（commit `xxxxxxxx`）**：
+
+- PyInstaller 步骤：加入 `|| exit /b %errorlevel%` + 输出文件存在性验证
+- ISCC `/O`/`/F` 参数：去掉引号，使用无空格值 `"/FIEI_Timer_Faster_Setup_v%VERSION%"` → `/FIEI_Timer_Faster_Setup_v%VERSION%`（CMD 不会拆分）
+- ISCC 步骤：编译后 `dir IEI_Timer_Faster_Setup*.exe` 确认输出存在，不存在则报错退出
+- upload-artifact：模式改为 `IEI_Timer_Faster_Setup*.exe`（无下划线要求，匹配两种名称）
+- create-release：同样更新文件模式
+
+**教训**：
+- CMD `|` block 中每条命令独立运行，前一条失败不等于步骤失败 —— 必须加 `|| exit /b %errorlevel%`
+- ISCC CLI 参数值如果无空格，不要加引号。CMD 的 `"flag"value"` 语法会产生两个独立参数
+- `upload-artifact` 的 `if-no-files-found: error` 只有在上游步骤成功时才触发 —— 它无法检测上游静默失败
+- 防御式设计：生产出 exe 后立即用 `dir` 验证文件存在，不依赖后续 upload-artifact 报错
+
+---
+
 ## 二、发布标准流程
 
 以下步骤应**逐条执行，不可跳过**。每条标有 **[必须]** 的是强制性检查。
@@ -166,6 +198,52 @@ grep -n "AppId\|AppVersion\|AppName\|\#define MyApp" service_installer/installer
 | 3 | `AppName` = `{#MyAppName}`，无硬编码 | |
 | 4 | `[InstallDelete]` 段包含 `{app}\VERSION` 条目 | |
 | 5 | `[Code]` 段**没有** `SaveStringToFile`（ISCC 6.0+ 函数，Chocolatey 不兼容） | |
+| 6 | ISCC `/O` 和 `/F` 参数值**不带引号**（如 `/Opath` 非 `/O"path"`），避免 CMD 参数拆分 | |
+
+---
+
+### 第 2b 步：本地验证 ISCC 编译通过
+
+**[必须]** 在 push 前，本地执行 ISCC 编译确认配置无误：
+
+```bash
+# 1. 切换到 setup.iss 所在目录执行（保证相对路径正确）
+cd service_installer\installer
+
+# 2. 运行 ISCC 编译（调试模式，输出详细日志）
+ISCC.exe setup.iss
+
+# 3. 检查编译结果
+echo %errorlevel%    # 必须为 0
+dir ..\dist\IEI_Timer_Faster_Setup*.exe  # 确认 exe 已产出
+```
+
+**编译通过的标准**：
+- 返回码 `%errorlevel%` = 0
+- `service_installer\dist\` 下有 `IEI_Timer_Faster_Setup.exe` 或 `IEI_Timer_Faster_Setup_v*.exe`
+- 日志中无 `Error` 或 `[FAIL]` 字样
+
+**如果本地没有 ISCC**：
+1. 安装 Inno Setup 6：`choco install innosetup`（模拟 CI 的 Chocolatey 安装方式）
+2. 或从 [jrsoftware.org](https://jrsoftware.org/isdl.php) 官网下载安装
+3. 安装后在 `C:\Program Files (x86)\Inno Setup 6\` 找到 `ISCC.exe`，加入 PATH 或使用完整路径
+
+**如果首次编译缺少中文语言包**：
+```bash
+curl -o "C:\Program Files (x86)\Inno Setup 6\Languages\ChineseSimplified.isl" https://raw.githubusercontent.com/jrsoftware/issrc/main/Files/Languages/ChineseSimplified.isl
+```
+
+**编译不过的常见原因排查**：
+
+| 错误 | 可能原因 | 解决 |
+|------|----------|------|
+| `File not found: ..\..\VERSION` | ISPP 读取 VERSION 失败 | 检查 VERSION 文件是否存在、路径是否正确 |
+| `File not found: ..\dist\IEI Timer Faster\*` | PyInstaller 还没构建 | 先跑 `pyinstaller service.spec` 再跑 ISCC |
+| `Duplicate identifier` / `undeclared identifier` | setup.iss 语法错误 | 检查 `#define`、`[Code]` 段语法 |
+| `SaveStringToFile` undefined | 用了 ISCC 6.0+ 函数 | 删除该调用，改用 `[InstallDelete]` |
+| `AppId` 相关警告 | ISPP 无法解析 `{{}}` | 确认 AppId 为单层花括号 `{GUID}` |
+
+**此步骤验证通过后才能继续下一步。** 如果在后续 push 后 CI 仍失败，这步必须重新执行。
 
 ---
 
