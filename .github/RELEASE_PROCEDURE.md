@@ -47,28 +47,31 @@ iscc "service_installer\installer\setup.iss" || exit /b %errorlevel%
 
 ---
 
-### 坑 3：`{{GUID}}` → AppId 每次编译都不同
+### 坑 3：AppId 单花括号 `{GUID}` → Inno Setup 常量解析失败编译中断
 
-**现象**：从 v1.1.6 升级到 v1.1.7，安装目录变了，用户本地同时出现两个版本。
+**现象**：ISCC 编译 abort，错误消息：
 
-**根因**：`setup.iss` 的 `AppId` 使用了 ISPP 预处理器的 `{{...}}` 语法：
+```
+Error on line 33: Unknown constant "A8F3C2B1-9D4E-5F6A-7B8C-0D1E2F3A4B5C".
+Use two consecutive "{" characters if you are trying to embed a single "{" and not a constant.
+Compile aborted.
+```
+
+**根因**：Inno Setup 将 `{...}` 解析为**内置常量**（如 `{app}`、`{src}`）。`AppId={A8F3C2B1-...}` 中的 `{` 被当作常量起始符，`A8F3C2B1-...` 不是已知常量名 → 编译失败。
+
+**修复**：使用**双花括号 `{{...}}`**——这是 Inno Setup 的转义语法，"`{{`" 表示字面量 `{`，不触发常量查找：
 
 ```iss
 AppId={{A8F3C2B1-9D4E-5F6A-7B8C-0D1E2F3A4B5C}}
 ```
 
-**`{{...}}` 是 ISPP 的"随机 GUID 生成"指令**，花括号内写什么都会被忽略，每次编译 ISPP 替换成一个不同的 GUID。不同的 CI 构建 → 不同的 AppId → 新安装包不识别旧版本 → 当成全新应用安装到默认路径。
-
-**修复**：使用单层花括号 `{GUID}`，ISPP 不处理单层花括号，Inno Setup 将其视为未知常量原样保留：
-
-```iss
-AppId={A8F3C2B1-9D4E-5F6A-7B8C-0D1E2F3A4B5C}
-```
+经过 Inno Setup 解析后，`AppId` 的值是字符串 `{A8F3C2B1-9D4E-5F6A-7B8C-0D1E2F3A4B5C}`（含花括号）。
 
 **教训**：
-- **`{{}}` 不是"转义的花括号"或"Inno Setup 常量写法"**—它是 ISPP 的随机 GUID 生成指令
-- Inno Setup 的 `AppId` 必须是一个**在每次编译中都相同的固定值**，否则升级路径断裂
-- 常见误解："`{{}}` 里的内容就是 GUID" — 不对，`{{}}` 里的内容完全被忽略，每次生成的是随机的
+- **`{{...}}` 不是 ISPP 的"随机 GUID 生成指令"**——这是早期误判。ISPP 只处理 `{#...}` 开头的指令，不处理 `{{`
+- `{{` 是 Inno Setup **自身**的转义语法（类似 C 语言 `\\` 转义为 `\`）
+- 在 `[Setup]` 段等支持常量展开的区域，任何 `{Xxx}` 都会被当作常量查找。要用字面量花括号必须写 `{{`
+- 常见混淆：`{#...}` 是 ISPP 预处理器语法（编译时求值），`{{` 是 Inno Setup 转义语法（运行时字面量）
 
 ---
 
@@ -193,7 +196,7 @@ grep -n "AppId\|AppVersion\|AppName\|\#define MyApp" service_installer/installer
 
 | # | 检查项 | ✓ |
 |---|--------|---|
-| 1 | `AppId` 使用单层花括号 `{GUID}`，不是 `{{GUID}}` | |
+| 1 | `AppId` 使用双花括号 `{{GUID}}`（Inno Setup 转义，不是 ISPP 随机 GUID） | |
 | 2 | `AppVersion` 读取自 `VERSION` 文件（`{#MyAppVersion}` 宏），无硬编码 | |
 | 3 | `AppName` = `{#MyAppName}`，无硬编码 | |
 | 4 | `[InstallDelete]` 段包含 `{app}\VERSION` 条目 | |
@@ -241,7 +244,7 @@ curl -o "C:\Program Files (x86)\Inno Setup 6\Languages\ChineseSimplified.isl" ht
 | `File not found: ..\dist\IEI Timer Faster\*` | PyInstaller 还没构建 | 先跑 `pyinstaller service.spec` 再跑 ISCC |
 | `Duplicate identifier` / `undeclared identifier` | setup.iss 语法错误 | 检查 `#define`、`[Code]` 段语法 |
 | `SaveStringToFile` undefined | 用了 ISCC 6.0+ 函数 | 删除该调用，改用 `[InstallDelete]` |
-| `AppId` 相关警告 | ISPP 无法解析 `{{}}` | 确认 AppId 为单层花括号 `{GUID}` |
+| `AppId` 相关警告 / `Unknown constant` 错误 | 用了单花括号 `{GUID}` 触发 Inno Setup 常量查找 | 改为双花括号 `{{GUID}}`（转义为字面量 `{`） |
 
 **此步骤验证通过后才能继续下一步。** 如果在后续 push 后 CI 仍失败，这步必须重新执行。
 
@@ -407,7 +410,7 @@ grep -n "SaveStringToFile" service_installer\installer\setup.iss
 ```
 
 期望结果：
-- `AppId={A8F3C2B1-9D4E-5F6A-7B8C-0D1E2F3A4B5C}`（单层花括号，固定 GUID）
+- `AppId={{A8F3C2B1-9D4E-5F6A-7B8C-0D1E2F3A4B5C}}`（双花括号 = Inno Setup 对字面量 `{` 的转义，不是 ISPP 随机 GUID）
 - `AppVersion={#MyAppVersion}`（编译时宏）
 - `[InstallDelete]` 段存在，含 `{app}\VERSION`
 - `SaveStringToFile` **不应出现**（如出现需删除并改为 `[InstallDelete]`）

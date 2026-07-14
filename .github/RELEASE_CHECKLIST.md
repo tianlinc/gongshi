@@ -62,11 +62,20 @@ git push origin v1.1.8
 
 **修复**（`setup.iss`）：使用 `[InstallDelete]` 在文件复制前删除旧 `VERSION` 文件，配合 `ignoreversion` 的"目标不存在即复制"逻辑，新 VERSION 总能写入。此修复已于 V1.1.7 加入。
 
-### 2. AppId 使用 `{{}}` ISPP 语法 → 升级时安装目录变化
+### 2. AppId 使用 `{GUID}` 单花括号 → Inno Setup 常量解析失败编译中断
 
-**根因**：Inno Setup ISPP 预处理器中 `{{...}}` 是生成随机 GUID 的指令，**花括号内的内容完全被忽略**。每次编译都会产生不同的 GUID，导致每个 CI 构建产生不同的 AppId，安装包互不认识，升级时无法检测旧版本。
+**现象**：ISCC 编译 abort，错误消息：
+```
+Error on line 33: Unknown constant "A8F3C2B1-..."
+Use two consecutive "{" characters if you are trying to embed a single "{" and not a constant.
+Compile aborted.
+```
 
-**修复**（`setup.iss`）：`AppId` 必须使用固定的 GUID 字面值，不能走 ISPP 预处理器。使用单层花括号 `{GUID}`（Inno Setup 会将其视为未知常量原样保留）而不是 `{{GUID}}`。此修复已于 V1.1.7 加入。
+**根因**：Inno Setup 将 `{...}` 解析为内置常量。`AppId={GUID}` 中的 `{` 被当作常量起始符，`GUID` 字符串不是已知常量名 → 编译失败。
+
+**修复**（`setup.iss`）：必须使用**双花括号 `{{GUID}}`**——Inno Setup 自己的转义语法，`{{` 表示字面量 `{`，不触发常量查找。解析后 `AppId` 值为字符串 `{A8F3C2B1-...}`。
+
+> **`{{...}}` 不是 ISPP 的"随机 GUID 生成指令"**——这是早期误判。ISPP 只处理 `{#...}` 开头的指令，`{{` 完全是 Inno Setup 自身的转义语法。此修复已于 V1.1.7 加入。
 
 ### 3. 忘记推送 Tag → CI 不触发
 
