@@ -82,7 +82,7 @@ jobs:
           if not defined ISCC where iscc 2>nul && set "ISCC=iscc"
           if not defined ISCC (echo [X] ISCC not found & exit /b 1)
           echo [OK] ISCC: %ISCC%
-          "%ISCC%" /O"service_installer\dist" /F"IEI_Timer_Faster_Setup_v%VERSION%" "service_installer\installer\setup.iss"
+          "%ISCC%" /O"service_installer\dist" /F"IEI_Timer_Faster_Setup_v%VERSION%" "service_installer\installer\setup.iss" || exit /b %errorlevel%
           dir service_installer\dist\*.exe
 
       - name: Upload artifact

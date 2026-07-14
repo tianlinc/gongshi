@@ -59,12 +59,9 @@ Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: 
 
 [Files]
 ; PyInstaller 产物（onedir 目录）
-; INSPUR-93 注意：ignoreversion 会导致升级时同名文件不被覆盖。
-; VERSION 文件必须在每次升级时强制更新（见下方单独条目）。
+; INSPUR-93: ignoreversion 会在升级时跳过已存在的 VERSION 文件。
+; 配合 [InstallDelete] 在安装前删除旧 VERSION，确保每次安装后版本号正确。
 Source: "..\dist\IEI Timer Faster\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-; INSPUR-93: VERSION 文件单独声明，不使用 ignoreversion，
-; 确保升级安装时始终用新版本号覆盖旧文件。
-Source: "..\dist\IEI Timer Faster\VERSION"; DestDir: "{app}"
 ; 快捷方式图标
 Source: "iei_timer.ico"; DestDir: "{app}"; Flags: ignoreversion
 
@@ -74,6 +71,12 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"; IconFilename:
 ; 开始菜单
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"; IconFilename: "{app}\iei_timer.ico"
 Name: "{group}\卸载 {#MyAppName}"; Filename: "{uninstallexe}"
+
+; INSPUR-93: 安装前删除旧 VERSION 文件，确保升级后版本号更新。
+; ignoreversion 会跳过已存在的 VERSION，通过 InstallDelete 在复制前清除旧文件，
+; 这样 ignoreversion 检查时目标路径不存在同名文件，新 VERSION 一定能被复制。
+[InstallDelete]
+Type: files; Name: "{app}\VERSION"
 
 [Code]
 function IsSilentInstall: Boolean;
@@ -153,18 +156,9 @@ begin
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
-var
-  VersionFilePath: String;
 begin
   if CurStep = ssPostInstall then
   begin
     Log('安装完成: ' + ExpandConstant('{app}'));
-
-    { INSPUR-93: 强制写入 VERSION 文件，防止 ignoreversion 导致升级时版本号不更新 }
-    VersionFilePath := ExpandConstant('{app}\VERSION');
-    if SaveStringToFile(VersionFilePath, '{#MyAppVersion}', False) then
-      Log('[VERSION] 强制更新版本号: ' + '{#MyAppVersion}')
-    else
-      Log('[VERSION] 警告：无法写入 VERSION 文件');
   end;
 end;
