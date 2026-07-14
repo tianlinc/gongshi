@@ -142,7 +142,7 @@ Windows Vista+ 和 Unix 对 `SO_REUSEADDR` 语义不同：
 
 3. **upload-artifact 匹配模式过于严格**：`IEI_Timer_Faster_Setup_*.exe` 有下划线要求，默认文件名 `IEI_Timer_Faster_Setup.exe` 无法匹配。
 
-**修复（commit `xxxxxxxx`）**：
+**修复（commit `71d983e`）**：
 
 - PyInstaller 步骤：加入 `|| exit /b %errorlevel%` + 输出文件存在性验证
 - ISCC `/O`/`/F` 参数：去掉引号，使用无空格值 `"/FIEI_Timer_Faster_Setup_v%VERSION%"` → `/FIEI_Timer_Faster_Setup_v%VERSION%`（CMD 不会拆分）
