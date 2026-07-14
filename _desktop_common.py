@@ -126,6 +126,50 @@ def _find_available_port(start=5000, max_tries=3):
 
 
 # =========================================================================
+# 单实例锁（跨平台 socket 方案）
+# =========================================================================
+# 原理：第一个实例绑定固定端口作为锁，后续实例连接此端口通知已有实例
+# 将窗口置前，然后退出。Windows/macOS 均无需额外依赖。
+_SINGLE_INSTANCE_PORT = 54322
+
+
+def _acquire_instance_lock():
+    """尝试获取单实例锁。
+
+    Returns
+    -------
+    (is_first: bool, lock_socket: socket.socket | None)
+    """
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    try:
+        s.bind(('127.0.0.1', _SINGLE_INSTANCE_PORT))
+        s.listen(1)
+        s.settimeout(1.0)
+        return True, s
+    except OSError:
+        s.close()
+        return False, None
+
+
+def _notify_existing_and_exit():
+    """尝试连接已有实例，发送 FOCUS 信号通知置前。
+
+    成功连接到已有 gongshi 实例时通过 sys.exit(0) 直接退出。
+    连接失败（如端口被其他程序占用）时返回 False，由调用方决定是否继续。
+    """
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(2.0)
+        sock.connect(('127.0.0.1', _SINGLE_INSTANCE_PORT))
+        sock.send(b'FOCUS')
+        sock.close()
+        sys.exit(0)
+    except Exception:
+        return False
+
+
+# =========================================================================
 # 凭证管理
 # =========================================================================
 
@@ -920,6 +964,8 @@ check();
         self._port = port
         self._port_auto = port_auto
         self._enable_cef = enable_cef
+        self._lock_socket = None
+        self._window = None
 
     # =================================================================
     # 统一的启动入口
@@ -934,6 +980,17 @@ check();
 
         if is_frozen:
             log_path = _setup_logging(data_dir)
+
+        # 单实例锁（仅打包模式）：第二个实例通知已有窗口并退出
+        if is_frozen:
+            is_first, self._lock_socket = _acquire_instance_lock()
+            if not is_first:
+                print("[!] 检测到已有实例运行，通知已有窗口置前并退出")
+                _notify_existing_and_exit()
+                # 走到这里说明锁端口被其他程序占用（非 gongshi 实例），
+                # 放行本次启动但无单实例保护
+                print("[!] 无法通知已有实例，锁端口 %d 可能被占用，无单实例保护" %
+                      _SINGLE_INSTANCE_PORT)
 
         # 横幅
         _ver = _read_version()
@@ -1064,6 +1121,43 @@ check();
             return response
 
     # =================================================================
+    # 单实例锁服务
+    # =================================================================
+
+    def _serve_instance_lock(self):
+        """后台线程：监听 lock socket，收到 FOCUS 信号时置前窗口。"""
+        while self._lock_socket is not None:
+            try:
+                conn, _ = self._lock_socket.accept()
+                data = conn.recv(1024)
+                if data == b'FOCUS':
+                    self._focus_window()
+                conn.close()
+            except socket.timeout:
+                continue
+            except Exception:
+                break
+
+    def _focus_window(self):
+        """将 pywebview 窗口置前（跨平台）。"""
+        if self._window is None:
+            return
+        try:
+            self._window.restore()
+            self._window.on_top = True
+
+            def _reset_ontop():
+                time.sleep(0.5)
+                try:
+                    self._window.on_top = False
+                except Exception:
+                    pass
+
+            threading.Thread(target=_reset_ontop, daemon=True).start()
+        except Exception:
+            pass
+
+    # =================================================================
     # 运行模式
     # =================================================================
 
@@ -1191,7 +1285,7 @@ check();
         # ---- pywebview 桌面窗口 ----
         try:
             import webview
-            webview.create_window(
+            self._window = webview.create_window(
                 'IEI Timer Faster',
                 url,
                 width=1280,
@@ -1200,7 +1294,16 @@ check();
                 resizable=True,
                 text_select=True,
             )
-            print("[OK] 桌面窗口已打开，关闭窗口即可退出程序")
+            print("[OK] 桌面窗口已创建")
+
+            # 启动单实例锁服务线程（监听后续实例的置前请求）
+            if self._lock_socket is not None:
+                lock_thread = threading.Thread(
+                    target=self._serve_instance_lock, daemon=True)
+                lock_thread.start()
+                print("[OK] 单实例锁已激活")
+
+            print("[OK] 显示桌面窗口，关闭窗口即可退出程序")
 
             if gui_backend == 'cef' and cef_available:
                 webview.start(

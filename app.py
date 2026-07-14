@@ -298,7 +298,7 @@ class RDMClient:
                     'plan_start': t.get('plan_start', ''),
                     'plan_end': t.get('plan_end', ''),
                 })
-            elif st and st not in ('FN', 'TC', 'SP', 'FS', ''):
+            elif st and st not in ('FN', 'TC', 'SP', 'FS', 'FC', 'CL', ''):
                 print(f"[OK] 未知任务状态 status={st} name={t.get('name','')}")
 
         print(f"[OK] 获取任务 {len(result)} 条 user={self.username}")
@@ -377,7 +377,14 @@ class RDMClient:
 
         XML 结构：<div id="taskPanel"> → <table> → <tbody> → <tr class="body-row">
         task_id 来自 tr#id, status 来自 tr#status。
-        字段映射：td[5]=任务名, td[7]=项目名+project_id, td[9]=plan_start, td[10]=plan_end
+
+        INSPUR-93: 使用内容特征识别列，而非硬编码 td 索引。
+        RDM 允许用户自定义列（隐藏/排序），硬编码索引在自定义后会错位导致
+        任务名解析为日期。以下基于 HTML class/onclick 不变的识别策略：
+        - 任务名：<td> 内 <span class='item-span'> 中的 <a> 文字
+        - 父任务：<span class='item-span node-span'> → 跳过（无法填写工时）
+        - 项目名：<a onclick 包含 openEntity + PJT
+        - 日期：文本匹配 YYYY-MM-DD 格式
         """
         soup = BeautifulSoup(xml_text, 'html.parser')
         rows = soup.find_all('tr', class_='body-row')
@@ -393,24 +400,76 @@ class RDMClient:
             project_id = ''
             plan_start = ''
             plan_end = ''
+            is_parent = False
 
-            if len(tds) > 5:
-                a = tds[5].find('a')
-                name = (a.get_text(strip=True) if a
-                        else tds[5].get_text(strip=True))
+            # INSPUR-93: 遍历所有 td，按内容特征识别，而非固定索引
+            for td in tds:
+                # 1) 任务名列：<span class='item-span'> 内含 <a>
+                item_span = td.select_one('span.item-span')
+                if item_span:
+                    a = item_span.find('a')
+                    if a:
+                        name = a.get_text(strip=True)
+                    # 父任务检测：同时有 node-span class
+                    if 'node-span' in (item_span.get('class', []) or []):
+                        is_parent = True
+                    continue
 
-            if len(tds) > 7:
-                a = tds[7].find('a')
+                # 2) 项目列：<a> onclick 包含 openEntity 且参数为 PJT
+                a = td.find('a')
                 if a:
-                    project = a.get_text(strip=True)
                     onclick = a.get('onclick', '')
-                    m = re.search(r"openEntity\(['\"]([^'\"]+)['\"]", onclick)
-                    if m:
-                        project_id = m.group(1)
+                    if 'openEntity' in onclick and 'PJT' in onclick:
+                        project = a.get_text(strip=True)
+                        m = re.search(r"openEntity\(['\"]([^'\"]+)['\"]", onclick)
+                        if m:
+                            project_id = m.group(1)
+                        continue
 
-            if len(tds) > 10:
-                plan_start = tds[9].get_text(strip=True)
-                plan_end = tds[10].get_text(strip=True)
+                # 3) 日期列：文本格式 YYYY-MM-DD
+                text = td.get_text(strip=True)
+                if re.match(r'^\d{4}-\d{2}-\d{2}$', text):
+                    if not plan_start:
+                        plan_start = text
+                    elif not plan_end:
+                        plan_end = text
+
+            # INSPUR-93 回退：如果 span.item-span 未找到（列被隐藏），
+            # 尝试从链接模式中识别任务名。任务链接的 onclick 包含
+            # tableMain.table('selectRow' + closest('tr') 模式。
+            if not name and not is_parent:
+                for td in tds:
+                    a = td.find('a')
+                    if a:
+                        onclick = a.get('onclick', '')
+                        if 'tableMain' in onclick and 'selectRow' in onclick:
+                            name = a.get_text(strip=True)
+                            break
+                # 回退 2：用第一个非项目/非用户链接的文字
+                if not name:
+                    for td in tds:
+                        a = td.find('a')
+                        if a:
+                            onclick = a.get('onclick', '')
+                            text = a.get_text(strip=True)
+                            if text and 'openEntity' not in onclick and 'showUserDetail' not in onclick:
+                                if not re.match(r'^\d{4}-\d{2}-\d{2}', text) and '%' not in text:
+                                    name = text
+                                    break
+                # 回退 3：检查 td 文本（某些列可能不包裹 <a>）
+                if not name:
+                    for td in tds:
+                        text = td.get_text(strip=True)
+                        if text and len(text) > 3 and not re.match(r'^\d{4}-\d{2}-\d{2}', text) and '%' not in text:
+                            a = td.find('a')
+                            if not a:
+                                name = text
+                                break
+
+            # 跳过父任务（RDM 中节点/摘要行，无法填写工时）
+            if is_parent:
+                print(f"[OK] {label} 跳过父任务 name={name}")
+                continue
 
             tasks.append({
                 'task_id': tid,
