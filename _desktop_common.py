@@ -865,28 +865,88 @@ class UpdateChecker:
     def _get_windows_install_dir():
         """从注册表读取现有安装目录。
 
+        优先按当前 AppId 直接查找（v1.1.7+ 固定 GUID 快速路径），
+        查不到时遍历 Uninstall 注册表子键，匹配 DisplayName 回退查找
+        （兼容 v1.1.6 及更早版本——当时 AppId 使用 ISPP {{}} 随机生成）。
+
         Returns
         -------
         str or None
             安装目录路径，读取失败返回 None
         """
-        try:
-            import winreg
-            appid = '{A8F3C2B1-9D4E-5F6A-7B8C-0D1E2F3A4B5C}'
-            for root in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
+        import winreg
+
+        # 要搜索的注册表根键
+        _UNINSTALL_ROOTS = (
+            (winreg.HKEY_CURRENT_USER,
+             r'Software\Microsoft\Windows\CurrentVersion\Uninstall'),
+            (winreg.HKEY_LOCAL_MACHINE,
+             r'Software\Microsoft\Windows\CurrentVersion\Uninstall'),
+        )
+        KNOWN_APP_ID = '{A8F3C2B1-9D4E-5F6A-7B8C-0D1E2F3A4B5C}'
+        APP_DISPLAY_NAME = 'IEI Timer Faster'
+
+        def _read_install_location(root, subkey_path):
+            """读取单个注册表键的 InstallLocation。"""
+            try:
+                key = winreg.OpenKey(root, subkey_path)
                 try:
-                    key = winreg.OpenKey(
-                        root,
-                        f'Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{appid}_is1'
-                    )
-                    install_dir, _ = winreg.QueryValueEx(key, 'InstallLocation')
+                    val, _ = winreg.QueryValueEx(key, 'InstallLocation')
+                    if val and os.path.isdir(val):
+                        return val
+                finally:
                     winreg.CloseKey(key)
-                    if install_dir and os.path.isdir(install_dir):
-                        return install_dir
-                except OSError:
-                    continue
-        except Exception:
-            pass
+            except OSError:
+                pass
+            return None
+
+        # 第一步：按已知 AppId 直接查找（快速路径，v1.1.7+ 版本）
+        for root, base_path in _UNINSTALL_ROOTS:
+            result = _read_install_location(
+                root, fr'{base_path}\{KNOWN_APP_ID}_is1')
+            if result:
+                return result
+
+        # 第二步：回退——遍历所有子键，匹配 DisplayName
+        # 兼容 v1.1.6 等 AppId 使用 {{}} 随机生成的旧版本
+        for root, base_path in _UNINSTALL_ROOTS:
+            try:
+                uninstall_key = winreg.OpenKey(root, base_path)
+                try:
+                    idx = 0
+                    while True:
+                        try:
+                            subkey_name = winreg.EnumKey(uninstall_key, idx)
+                            idx += 1
+                        except OSError:
+                            break  # 枚举完毕
+
+                        subkey_path = fr'{base_path}\{subkey_name}'
+                        try:
+                            sk = winreg.OpenKey(root, subkey_path)
+                            try:
+                                display_name, _ = winreg.QueryValueEx(
+                                    sk, 'DisplayName')
+                                if display_name == APP_DISPLAY_NAME:
+                                    val, _ = winreg.QueryValueEx(
+                                        sk, 'InstallLocation')
+                                    winreg.CloseKey(sk)
+                                    if val and os.path.isdir(val):
+                                        return val
+                            except OSError:
+                                pass
+                            finally:
+                                try:
+                                    winreg.CloseKey(sk)
+                                except OSError:
+                                    pass
+                        except OSError:
+                            continue
+                finally:
+                    winreg.CloseKey(uninstall_key)
+            except OSError:
+                continue
+
         return None
 
     @staticmethod
