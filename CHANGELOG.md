@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## V1.1.8 (2026-07-14)
+
+V1.1.7 的修正重建版本，无逻辑变更，仅修复 CI 编译配置使其可正确构建安装包。
+
+### 修复
+
+- **Inno Setup `AppId` 常量解析错误**：将 `{GUID}` 改为 `{{GUID}}`（Inno Setup 对字面量 `{` 的转义语法），修复 ISCC 编译 `Unknown constant` 错误
+- **CI 错误遮蔽**：PyInstaller 和 ISCC 步骤增加 `|| exit /b %errorlevel%` 错误检查
+
 ## V1.1.7 (2026-07-14)
 
 ### 修复
