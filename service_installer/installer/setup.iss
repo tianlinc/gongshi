@@ -28,7 +28,9 @@
 #define MyAppExe "IEI Timer Faster.exe"
 
 [Setup]
-AppId={{A8F3C2B1-9D4E-5F6A-7B8C-0D1E2F3A4B5C}}
+; INSPUR-93: AppId 禁止使用 {{}} 格式——ISPP 预处理器会每次编译生成随机 GUID，
+; 导致不同 CI 构建产生不同 AppId，安装包互不认识。直接写固定 GUID 字符串。
+AppId={A8F3C2B1-9D4E-5F6A-7B8C-0D1E2F3A4B5C}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}

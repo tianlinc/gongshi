@@ -50,7 +50,7 @@ git push origin v1.1.8
 | `service_installer/service.spec:147` | 构建时读取 `VERSION` 文件 | macOS `.app` Bundle 版本号元数据 |
 | `service_installer/build.bat:155-161` | 构建时读取 `VERSION` 文件 | 安装包文件名 `IEI_Timer_Faster_Setup_vx.x.x.exe` |
 | `service_installer/installer/setup.iss:19-25` | 编译时读取 `VERSION` 文件 | Inno Setup 安装器版本号 `MyAppVersion` |
-| `service_installer/installer/setup.iss:163-168` | 运行时写入 `MyAppVersion` | `ssPostInstall` 强制写入 VERSION 文件 |
+| `service_installer/installer/setup.iss:78-79` | `[InstallDelete]` 在复制前删除旧 VERSION | 配合 `ignoreversion` 确保新 VERSION 总能写入 |
 | `tools/generate_appcast.py:32-34` | CI 构建时读取 `VERSION` | Sparkle 更新检测 appcast.xml |
 | `.github/workflows/build.yml:76` | CI 构建时读取 `VERSION` | 安装包命名 |
 
@@ -62,11 +62,11 @@ git push origin v1.1.8
 
 **修复**（`setup.iss`）：使用 `[InstallDelete]` 在文件复制前删除旧 `VERSION` 文件，配合 `ignoreversion` 的"目标不存在即复制"逻辑，新 VERSION 总能写入。此修复已于 V1.1.7 加入。
 
-### 2. AppId 缺少闭合 `}}` → 升级时安装目录变化
+### 2. AppId 使用 `{{}}` ISPP 语法 → 升级时安装目录变化
 
-**根因**：Inno Setup 的 `AppId={{GUID}}` 需要 `}}` 闭合。如果只写了 `}` (如 `AppId={{XXX}`)，ISCC 无法正确解析 GUID 常量，不同版本/不同次编译可能生成不同的有效 AppId，导致新安装包不识别旧版本。
+**根因**：Inno Setup ISPP 预处理器中 `{{...}}` 是生成随机 GUID 的指令，**花括号内的内容完全被忽略**。每次编译都会产生不同的 GUID，导致每个 CI 构建产生不同的 AppId，安装包互不认识，升级时无法检测旧版本。
 
-**修复**：确保 `AppId` 使用完整闭合语法 `{{GUID}}`。此修复已于 V1.1.7 加入。
+**修复**（`setup.iss`）：`AppId` 必须使用固定的 GUID 字面值，不能走 ISPP 预处理器。使用单层花括号 `{GUID}`（Inno Setup 会将其视为未知常量原样保留）而不是 `{{GUID}}`。此修复已于 V1.1.7 加入。
 
 ### 3. 忘记推送 Tag → CI 不触发
 
