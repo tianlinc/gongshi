@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## V1.1.9 (2026-07-14)
+
+V1.1.8 的修正版本，修复在线更新安装目录变化问题，更新发布流程文档。
+
+### 修复
+
+- **在线更新安装目录变化**：`restart_and_install()` 中 `target_dir` 改用 `sys.executable` 直接取当前进程目录，不再依赖注册表 AppId 查找。注册表查不到时 fallback 到硬编码默认路径导致安装目录改变（commit `07b07b0`）
+
+### 文档
+
+- **RELEASE_PROCEDURE.md**：新增踩坑 #8（在线更新 target_dir 来源），完整的现象/根因/修复/教训
+- **RELEASE_CHECKLIST.md**：新增第 5 项检查——在线更新 `target_dir` 是否来自 `sys.executable`
+
 ## V1.1.8 (2026-07-14)
 
 V1.1.7 的修正重建版本，无逻辑变更，仅修复 CI 编译配置使其可正确构建安装包。

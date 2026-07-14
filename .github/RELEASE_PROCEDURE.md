@@ -161,6 +161,42 @@ Windows Vista+ 和 Unix 对 `SO_REUSEADDR` 语义不同：
 
 ---
 
+### 坑 8：在线更新 `target_dir` 来自注册表查找 → AppId 不匹配时掉到硬编码默认路径
+
+**现象**：用户在 v1.1.7 安装目录（如 `D:\Tools\IEI Timer Faster`）点击在线更新升级到 v1.1.8，安装目录变成了 `%LOCALAPPDATA%\IEI Timer Faster`。
+
+**根因**：`_desktop_common.py` 的 `restart_and_install()` 虽然传了 `/DIR="{target_dir}"`，但 `target_dir` 的来源是 `_get_windows_install_dir()`（注册表查 InstallLocation）。注册表查找依赖 `KNOWN_APP_ID` 匹配，AppId 变更或权限问题导致查找失败时返回 None，`target_dir` 直接 fallback 到硬编码的 `LOCALAPPDATA\IEI Timer Faster`。
+
+**修复**（commit `07b07b0`）：在注册表查找前增加 `sys.executable` 作为最高优先级：
+
+```python
+import sys
+
+frozen_dir = None
+if getattr(sys, 'frozen', False):
+    frozen_dir = os.path.dirname(sys.executable)
+
+install_dir = frozen_dir or self._get_windows_install_dir()
+```
+
+在线更新时 PyInstaller frozen 进程的 `sys.executable` 就是 `IEI Timer Faster.exe` 的完整路径，`os.path.dirname()` 直接得到安装目录——**不依赖注册表、不依赖 AppId 历史、永远正确**。
+
+注册表兜底保留给开发调试（`python app.py` 非 frozen 模式）。
+
+**教训**：
+- `target_dir` 必须从**当前运行的进程路径**获取（`sys.executable`），而不是从外部注册表查询——更新进程自身所在目录就是最准确的目标路径
+- 注册表查找适合**首次安装**场景（安装器需要知道"以前装过没"），不适合**运行时更新**场景（进程已经在目标目录下运行了）
+- `/DIR=` 传了不代表传的是正确值——要查来源追溯链
+
+**验证方法**（commit `07b07b0` `_desktop_common.py:788-796`）：
+```python
+# frozen 模式下 frozen_dir 应非 None，且等于应用程序实际安装目录
+assert frozen_dir is not None  # PyInstaller 打包后运行
+assert target_dir == frozen_dir  # 不走注册表 fallback
+```
+
+---
+
 ## 二、发布标准流程
 
 以下步骤应**逐条执行，不可跳过**。每条标有 **[必须]** 的是强制性检查。

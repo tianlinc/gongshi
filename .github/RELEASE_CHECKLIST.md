@@ -84,3 +84,20 @@ Compile aborted.
 ### 4. VERSION 文件带有 BOM 或多余换行
 
 确保 `VERSION` 文件内容为纯文本单行（如 `1.1.7`），末尾可以有换行。`_read_version()` 和 `_read_app_version()` 均使用 `.strip()` 处理，可容忍尾部空白。
+
+### 5. 在线更新 `target_dir` 来自注册表查找 → 安装目录变化
+
+**现象**：在线更新升级后安装目录改变，切到了 `%LOCALAPPDATA%\IEI Timer Faster`。
+
+**根因**：`_desktop_common.py` `restart_and_install()` 的 `target_dir` 来自 `_get_windows_install_dir()`（注册表查 InstallLocation），注册表查不到时 fallback 到硬编码默认路径。
+
+**修复**（commit `07b07b0`）：使用 `sys.executable`（frozen 模式）作为最高优先级——更新进程本身就在安装目录下，不需要注册表。
+
+**验证**：检查 `_desktop_common.py` 的 `restart_and_install()` 中 `target_dir` 的确定逻辑：
+```python
+# 必须存在这段逻辑（commit 07b07b0+）
+frozen_dir = None
+if getattr(sys, 'frozen', False):
+    frozen_dir = os.path.dirname(sys.executable)
+install_dir = frozen_dir or self._get_windows_install_dir()
+```
