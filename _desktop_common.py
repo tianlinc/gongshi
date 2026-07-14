@@ -781,7 +781,15 @@ class UpdateChecker:
 
         import subprocess
 
-        install_dir = self._get_windows_install_dir()
+        # 获取安装目标目录：优先使用当前运行路径（frozen exe 目录），
+        # 其次查注册表（AppId 匹配），最后回退到默认路径。
+        # 直接使用 sys.executable 是最可靠的方式——更新进程本身就在安装目录下，
+        # 不依赖注册表 AppId 历史匹配。
+        frozen_dir = None
+        if getattr(sys, 'frozen', False):
+            frozen_dir = os.path.dirname(sys.executable)
+
+        install_dir = frozen_dir or self._get_windows_install_dir()
         default_dir = os.path.join(os.environ.get('LOCALAPPDATA', os.path.expanduser('~')),
                                    'IEI Timer Faster')
         target_dir = install_dir or default_dir
