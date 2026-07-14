@@ -59,7 +59,12 @@ Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: 
 
 [Files]
 ; PyInstaller 产物（onedir 目录）
+; INSPUR-93 注意：ignoreversion 会导致升级时同名文件不被覆盖。
+; VERSION 文件必须在每次升级时强制更新（见下方单独条目）。
 Source: "..\dist\IEI Timer Faster\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; INSPUR-93: VERSION 文件单独声明，不使用 ignoreversion，
+; 确保升级安装时始终用新版本号覆盖旧文件。
+Source: "..\dist\IEI Timer Faster\VERSION"; DestDir: "{app}"
 ; 快捷方式图标
 Source: "iei_timer.ico"; DestDir: "{app}"; Flags: ignoreversion
 
@@ -148,9 +153,18 @@ begin
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
+var
+  VersionFilePath: String;
 begin
   if CurStep = ssPostInstall then
   begin
     Log('安装完成: ' + ExpandConstant('{app}'));
+
+    { INSPUR-93: 强制写入 VERSION 文件，防止 ignoreversion 导致升级时版本号不更新 }
+    VersionFilePath := ExpandConstant('{app}\VERSION');
+    if SaveStringToFile(VersionFilePath, '{#MyAppVersion}', False) then
+      Log('[VERSION] 强制更新版本号: ' + '{#MyAppVersion}')
+    else
+      Log('[VERSION] 警告：无法写入 VERSION 文件');
   end;
 end;
