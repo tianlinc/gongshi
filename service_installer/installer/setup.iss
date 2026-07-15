@@ -115,7 +115,7 @@ begin
   sUnInstallString := '';
 
   { 1. 先查旧格式（v1.1.9 及之前，花括号 AppId → [GUID]_is1）→ 优先兼容存量 }
-  sUnInstPath := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{A8F3C2B1-9D4E-5F6A-7B8C-0D1E2F3A4B5C}_is1';
+  sUnInstPath := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{{A8F3C2B1-9D4E-5F6A-7B8C-0D1E2F3A4B5C}}_is1';
   sUnInstallString := GetUninstallStringForPath(sUnInstPath);
 
   { 2. 查新格式（v1.1.10，纯字符串 AppId → A8F3C2B1-..._is1） }
