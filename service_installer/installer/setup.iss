@@ -156,7 +156,7 @@ end;
   导致其文件和桌面快捷方式成为孤儿残留 —— 与 v1.1.11 新装的文件并存。
   TryUninstallOtherFormat() 在 InitializeSetup 中额外查找并运行另一方格式的
   uninstaller，无论 IsUpgrade 是否为 True 都执行（覆盖机器上仅存在另一方格式的边界场景）。}
-function TryUninstallOtherFormat;
+procedure TryUninstallOtherFormat;
 var
   sOtherPath: String;
   sOtherUninstall: String;
