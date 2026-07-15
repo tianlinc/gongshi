@@ -335,6 +335,20 @@ Old v1 of the same project — earlier `app.py`, CLI tool (`rdm_timesheet.py`), 
 - **The RDM base URL is hardcoded** to `http://10.111.36.3:2029` in `RDMClient.__init__`. Not configurable yet — change it there if needed.
 - **`docs/` has two Chinese guides** (`使用说明.md` technical, `完整说明-用户版.md` end-user). The README is the canonical English-ish overview; the two docs are for the user, not for navigating the code.
 
+## `setup.iss` 编辑规范（INSPUR-95 教训）
+
+Inno Setup 的 `[Code]` 段 Pascal 脚本中，`{` `}` 在注释和字符串字面量中都仍有语法意义——ISCC 编译器会把 `{` 当作注释开始、`}` 当作注释结束，GUID 的花括号 `{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}` 与这种语法直接冲突。同类 bug 已经在 INSPUR-95 中复发了 5 轮（Pascal 注释、字符串字面量、function 声明），每次修复一个 bug 都可能在别处引入同样的坑。
+
+**规则（任何 [Code] 段的 Pascal 上下文中必须遵守）：**
+
+1. **注释里用 `[[GUID]]` 方括号代替花括号** — 写 `AppId = [[A8F3C2B1-...]]`，不写 `AppId = {{A8F3C2B1-...}}`
+2. **字符串字面量用 `{{GUID}}` 双花括号转义** — 写 `'{{A8F3C2B1-...}}_is1'`（ISPP 转义语法）
+3. **永远不要在任何 Pascal 上下文（注释、字符串、代码）中使用单花括号 `{GUID}`**
+
+**强制检查：**
+- 修改 `setup.iss` 后，本地或 CI 必须过 ISCC 编译检查才可合并。
+- CI 的 `check-iscc` job（`.github/workflows/build.yml`）会在每次 push/PR 到 main 时自动运行：先跑 brace lint（正则扫描 `[Code]` 段内的花括号 GUID 模式，fast-fail 无需安装 ISCC），再跑完整 ISCC 编译。
+
 
 <!-- BEGIN MULTICA-RUNTIME (auto-managed; do not edit) -->
 # Multica Agent Runtime

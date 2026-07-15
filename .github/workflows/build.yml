@@ -38,6 +38,39 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Lint setup.iss (brace GUID check)
+        shell: bash
+        run: |
+          # Scan [Code] section for brace GUID patterns
+          # The { } in Pascal comments/literals cause ISCC Syntax error.
+          # Catch it early — no ISCC install needed for this scan.
+          # INSPUR-95: 5 rounds of the same bug class, scan proactively.
+          in_code=0
+          line_num=0
+          errors=0
+          while IFS= read -r line; do
+            line_num=$((line_num + 1))
+            if [[ "$line" =~ ^\[Code\] ]]; then
+              in_code=1
+              continue
+            fi
+            if [[ "$line" =~ ^\[ && ! "$line" =~ ^\[Code\] ]]; then
+              in_code=0
+            fi
+            if [ $in_code -eq 1 ] && echo "$line" | grep -qP '\{[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}'; then
+              echo "  [X] Line $line_num: potential brace GUID in [Code] section"
+              echo "      $line"
+              errors=$((errors + 1))
+            fi
+          done < service_installer/installer/setup.iss
+          if [ $errors -gt 0 ]; then
+            echo ""
+            echo "[X] Found $errors brace GUID issue(s) in [Code] Pascal context."
+            echo "    Replace {GUID} -> [[GUID]] in comments, or {{GUID}} in string literals."
+            exit 1
+          fi
+          echo "[OK] No brace GUID patterns in [Code] section."
+
       - name: Install Inno Setup 6
         run: choco install innosetup --no-progress -y
 
