@@ -162,7 +162,7 @@ var
   sOtherUninstall: String;
   iResultCode: Integer;
 begin
-  { 当前 AppId = {{A8F3C2B1-...}} → 花括号格式存入注册表。
+  { 当前 AppId = [[A8F3C2B1-...]] → 花括号格式存入注册表。
     因此"另一方"是 v1.1.10 的纯字符串格式（无花括号）。 }
   sOtherPath := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\A8F3C2B1-9D4E-5F6A-7B8C-0D1E2F3A4B5C_is1';
   if RegQueryStringValue(HKCU, sOtherPath, 'UninstallString', sOtherUninstall) or
