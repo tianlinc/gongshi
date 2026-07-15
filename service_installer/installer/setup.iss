@@ -88,6 +88,8 @@ Name: "{group}\卸载 {#MyAppName}"; Filename: "{uninstallexe}"
 Type: files; Name: "{app}\VERSION"
 
 [Code]
+procedure CleanupOrphanRegistryEntries; forward;
+
 function IsSilentInstall: Boolean;
 begin
   Result := Pos('/VERYSILENT', UpperCase(GetCmdTail)) > 0;
@@ -110,7 +112,7 @@ var
 begin
   sUnInstallString := '';
 
-  { 1. 先查旧格式（v1.1.9 及之前，花括号 AppId → {GUID}_is1）→ 优先兼容存量 }
+  { 1. 先查旧格式（v1.1.9 及之前，花括号 AppId → [GUID]_is1）→ 优先兼容存量 }
   sUnInstPath := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{A8F3C2B1-9D4E-5F6A-7B8C-0D1E2F3A4B5C}_is1';
   sUnInstallString := GetUninstallStringForPath(sUnInstPath);
 
@@ -194,14 +196,14 @@ begin
 end;
 
 { ---- 清理孤儿注册表项（v1.1.10 纯字符串 AppId 残留） ----
-  v1.1.10 的 AppId=A8F3C2B1-...（无花括号）与 v1.1.9 的 AppId={{GUID}}（花括号）
+  v1.1.10 的 AppId=A8F3C2B1-...（无花括号）与 v1.1.9 的 AppId=[[GUID]]（花括号）
   创建了不同的注册表项。本安装器优先卸载花括号格式的旧版本，但纯字符串格式的
   v1.1.10 遗留项也可能存在，需要一并清理，否则会导致重复快捷方式和升级检测异常。}
 procedure CleanupOrphanRegistryEntries;
 var
   sOtherPath: String;
 begin
-  { 本安装器使用花括号格式 {{GUID}}，因此纯字符串格式是"另一方" }
+  { 本安装器使用花括号格式 [[GUID]]，因此纯字符串格式是"另一方" }
   sOtherPath := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\A8F3C2B1-9D4E-5F6A-7B8C-0D1E2F3A4B5C_is1';
   if RegKeyExists(HKCU, sOtherPath) then
   begin
