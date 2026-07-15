@@ -57,10 +57,15 @@ jobs:
             if [[ "$line" =~ ^\[ && ! "$line" =~ ^\[Code\] ]]; then
               in_code=0
             fi
-            if [ $in_code -eq 1 ] && echo "$line" | grep -qP '\{[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}'; then
-              echo "  [X] Line $line_num: potential brace GUID in [Code] section"
-              echo "      $line"
-              errors=$((errors + 1))
+            if [ $in_code -eq 1 ] && echo "$line" | grep -qP '\{[A-Fa-f0-9]{8}-'; then
+              # Exclude properly-escaped {{GUID}} in string literals (ISPP syntax)
+              if echo "$line" | grep -qP '\{\{[A-Fa-f0-9]{8}-'; then
+                : # skip — {{GUID}} is correct ISPP double-brace escaping
+              else
+                echo "  [X] Line $line_num: potential brace GUID in [Code] section"
+                echo "      $line"
+                errors=$((errors + 1))
+              fi
             fi
           done < service_installer/installer/setup.iss
           if [ $errors -gt 0 ]; then
