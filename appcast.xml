@@ -3,10 +3,10 @@
   <channel>
     <title>IEI Timer Faster</title>
     <item>
-      <title>Version 1.1.12</title>
-      <description><![CDATA[IEI Timer Faster V1.1.12]]></description>
-      <pubDate>Wed, 15 Jul 2026 10:47:10 +0000</pubDate>
-      <enclosure url="https://github.com/tianlinc/gongshi/releases/latest/download/IEI_Timer_Faster_Setup_v1.1.12.dmg" sparkle:version="1.1.12" sparkle:shortVersionString="1.1.12" type="application/x-apple-diskimage" length="25389338"/>
+      <title>Version 1.1.13</title>
+      <description><![CDATA[IEI Timer Faster V1.1.13]]></description>
+      <pubDate>Wed, 15 Jul 2026 11:56:35 +0000</pubDate>
+      <enclosure url="https://github.com/tianlinc/gongshi/releases/latest/download/IEI_Timer_Faster_Setup_v1.1.12.dmg" sparkle:version="1.1.13" sparkle:shortVersionString="1.1.13" type="application/x-apple-diskimage" length="25381183"/>
     </item>
   </channel>
 </rss>
