@@ -5,8 +5,8 @@
     <item>
       <title>Version 1.1.12</title>
       <description><![CDATA[IEI Timer Faster V1.1.12]]></description>
-      <pubDate>Wed, 15 Jul 2026 08:04:33 +0000</pubDate>
-      <enclosure url="https://github.com/tianlinc/gongshi/releases/latest/download/IEI_Timer_Faster_Setup_v1.1.12.dmg" sparkle:version="1.1.12" sparkle:shortVersionString="1.1.12" type="application/x-apple-diskimage" length="25387876"/>
+      <pubDate>Wed, 15 Jul 2026 08:43:35 +0000</pubDate>
+      <enclosure url="https://github.com/tianlinc/gongshi/releases/latest/download/IEI_Timer_Faster_Setup_v1.1.12.dmg" sparkle:version="1.1.12" sparkle:shortVersionString="1.1.12" type="application/x-apple-diskimage" length="25387200"/>
     </item>
   </channel>
 </rss>
