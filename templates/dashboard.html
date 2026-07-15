@@ -1933,17 +1933,24 @@
         if (!_globalUpdateData) return;
         const btn = this;
         btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 准备下载...';
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 正在下载...';
         try {
             await fetch('/api/update/download', { method: 'POST' });
             const progDiv = document.getElementById('aboutDlProgress');
             progDiv.style.display = 'block';
+            btn.style.display = 'none';
             pollAboutDlProgress();
         } catch (_) {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-x-circle"></i> 启动失败，请重试';
+            resetAboutDownloadBtn();
         }
     });
+
+    function resetAboutDownloadBtn() {
+        const btn = document.getElementById('aboutDownloadBtn');
+        btn.style.display = '';
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-download"></i> 下载更新';
+    }
 
     function pollAboutDlProgress() {
         // 先清除旧的轮询 timer（如果弹窗关闭再打开会重新调用）
@@ -1961,8 +1968,10 @@
                 if (s.error) {
                     clearInterval(_dlPollInterval);
                     _dlPollInterval = null;
-                    document.getElementById('aboutDlText').textContent = '下载失败: ' + s.error;
+                    document.getElementById('aboutDlText').textContent = s.error;
                     document.getElementById('aboutDlText').className = 'text-danger mt-1';
+                    document.getElementById('aboutDlBar').style.width = '0%';
+                    resetAboutDownloadBtn();
                     return;
                 }
                 if (s.downloaded) {
@@ -1974,6 +1983,7 @@
             } catch (_) {
                 clearInterval(_dlPollInterval);
                 _dlPollInterval = null;
+                resetAboutDownloadBtn();
             }
         }, 500);
     }
@@ -1995,6 +2005,7 @@
             if (!data.success) {
                 el.textContent = '安装失败: ' + (data.message || '未知错误');
                 el.className = 'text-danger mt-1';
+                resetAboutDownloadBtn();
                 return;
             }
             el.textContent = '正在安装新版本...';
@@ -2002,7 +2013,11 @@
             el.textContent = '安装完成，程序即将重启...';
             el.className = 'text-success mt-1';
             try { await fetch('/api/update/restart', { method: 'POST' }); } catch (_) {}
-        } catch (_) {}
+        } catch (_) {
+            el.textContent = '安装失败，请重试';
+            el.className = 'text-danger mt-1';
+            resetAboutDownloadBtn();
+        }
     }
 
     // ===== Release Note 弹窗 =====

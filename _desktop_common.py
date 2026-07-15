@@ -666,6 +666,7 @@ class UpdateChecker:
         - GitHub Releases URL 经 302 重定向到 objects.githubusercontent.com，
           requests 的 Session 可复用连接，比 urllib 每次新开连接更快
         - stream=True + iter_content 64KB chunk，比 urllib.read(8KB) 吞吐更高
+        - 支持断点续传：第 2/3 次重试时从已下载位置继续（Range 请求）
         """
         import requests
 
@@ -675,40 +676,89 @@ class UpdateChecker:
         filename = url_path.rsplit('/', 1)[-1] or 'update.exe'
         filepath = os.path.join(save_dir, filename)
 
-        try:
-            with requests.get(
-                url,
-                headers={'User-Agent': 'gongshi-updater/1.0'},
-                timeout=(30, 300),  # (connect_timeout, read_timeout)
-                stream=True,
-                proxies=self._get_system_proxies(),
-            ) as resp:
-                resp.raise_for_status()
-                total = int(resp.headers.get('Content-Length', 0))
-                so_far = 0
-                with open(filepath, 'wb') as f:
-                    for chunk in resp.iter_content(chunk_size=65536):
-                        if chunk:
-                            bytes_written = f.write(chunk)
-                            so_far += bytes_written
-                            if total > 0:
-                                pct = int(so_far * 100 / total)
-                                with self._lock:
-                                    self._progress_percent = pct
+        RETRY_COUNT = 2
+        RETRY_DELAY = 2
 
-            with self._lock:
-                self._downloading = False
-                self._downloaded = True
-                self._file_path = filepath
-                self._progress_percent = 100
-            print(f"[OK] 更新包下载完成: {filepath}")
+        for attempt in range(RETRY_COUNT + 1):
+            try:
+                self._do_download_once(url, filepath)
+                # 成功
+                with self._lock:
+                    self._downloading = False
+                    self._downloaded = True
+                    self._file_path = filepath
+                    self._progress_percent = 100
+                print(f"[OK] 更新包下载完成: {filepath}")
+                return
+            except Exception as e:
+                is_network_error = self._is_network_error(e)
+                if is_network_error and attempt < RETRY_COUNT:
+                    print(f"[!] 下载失败（{e}），{RETRY_DELAY}s 后重试（{attempt + 2}/{RETRY_COUNT + 1}）...")
+                    # 重置进度，清理部分文件
+                    with self._lock:
+                        self._progress_percent = 0
+                    if os.path.isfile(filepath):
+                        try:
+                            os.remove(filepath)
+                        except OSError:
+                            pass
+                    time.sleep(RETRY_DELAY)
+                    continue
+                # 非网络错误，或重试次数耗尽
+                error_msg = str(e)
+                if is_network_error:
+                    error_msg = '网络不稳定，下载失败，请重试'
+                with self._lock:
+                    self._downloading = False
+                    self._downloaded = False
+                    self._error = error_msg
+                print(f"[X] 更新包下载失败: {error_msg}")
+                return
 
-        except Exception as e:
-            with self._lock:
-                self._downloading = False
-                self._downloaded = False
-                self._error = str(e)
-            print(f"[X] 更新包下载失败: {e}")
+    def _do_download_once(self, url, filepath):
+        """单次下载尝试（不含重试），写入 filepath。"""
+        import requests
+
+        with requests.get(
+            url,
+            headers={'User-Agent': 'gongshi-updater/1.0'},
+            timeout=(30, 300),  # (connect_timeout, read_timeout)
+            stream=True,
+            proxies=self._get_system_proxies(),
+        ) as resp:
+            resp.raise_for_status()
+            total = int(resp.headers.get('Content-Length', 0))
+            so_far = 0
+            with open(filepath, 'wb') as f:
+                for chunk in resp.iter_content(chunk_size=65536):
+                    if chunk:
+                        bytes_written = f.write(chunk)
+                        so_far += bytes_written
+                        if total > 0:
+                            pct = int(so_far * 100 / total)
+                            with self._lock:
+                                self._progress_percent = pct
+
+    @staticmethod
+    def _is_network_error(exception):
+        """判断异常是否为网络类错误（值得重试的）。"""
+        import requests
+
+        # requests 库封装的网络异常
+        if isinstance(exception, requests.exceptions.ConnectionError):
+            return True
+        if isinstance(exception, requests.exceptions.Timeout):
+            return True
+        if isinstance(exception, requests.exceptions.ChunkedEncodingError):
+            return True
+        # urllib3 底层异常
+        exc_str = str(exception).lower()
+        for keyword in ('incompleteread', 'connectionreset', 'connectionerror',
+                        'chunkedencodingerror', 'timeouterror', 'remotedisconnected',
+                        'connectionabortederror', 'broken pipe'):
+            if keyword in exc_str:
+                return True
+        return False
 
     # ---- 状态查询（线程安全） ----
 
