@@ -81,11 +81,13 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"; IconFilename:
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"; IconFilename: "{app}\iei_timer.ico"
 Name: "{group}\卸载 {#MyAppName}"; Filename: "{uninstallexe}"
 
-; INSPUR-93: 安装前删除旧 VERSION 文件，确保升级后版本号更新。
-; ignoreversion 会跳过已存在的 VERSION，通过 InstallDelete 在复制前清除旧文件，
-; 这样 ignoreversion 检查时目标路径不存在同名文件，新 VERSION 一定能被复制。
+; INSPUR-115: 安装前删除旧文件，确保升级后干净。
+; - ignoreversion 会跳过已存在的 VERSION，通过 InstallDelete 在复制前清除旧文件
+; - 旧桌面快捷方式：如果不同 AppId 格式的旧版本 uninstaller 未正确清理（如 GetUninstallString
+;   "先到先得"策略跳过了另一方格式的卸载），这里兜底删除，避免两份同名快捷方式共存
 [InstallDelete]
 Type: files; Name: "{app}\VERSION"
+Type: files; Name: "{autodesktop}\{#MyAppName}.lnk"
 
 [Code]
 function IsSilentInstall: Boolean;
@@ -143,6 +145,34 @@ begin
   Result := GetUninstallString <> '';
 end;
 
+{ ---- 双重卸载：防止两种 AppId 格式的旧版本同时存在 ----
+  GetUninstallString() 是"先到先得"策略——先查花括号格式 {GUID}_is1，
+  找不到才查纯字符串格式 A8F3C2B1-..._is1。
+  如果用户机器上两种 AppId 格式的注册表项同时存在（因为 v1.1.7-v1.1.9
+  和 v1.1.10 的 AppId 格式来回变化），第一个匹配到的会被卸载，
+  另一方（v1.1.10 纯字符串格式）的 uninstaller 从未被调用，
+  导致其文件和桌面快捷方式成为孤儿残留 —— 与 v1.1.11 新装的文件并存。
+  TryUninstallOtherFormat() 在 InitializeSetup 中额外查找并运行另一方格式的
+  uninstaller，无论 IsUpgrade 是否为 True 都执行（覆盖机器上仅存在另一方格式的边界场景）。}
+function TryUninstallOtherFormat;
+var
+  sOtherPath: String;
+  sOtherUninstall: String;
+  iResultCode: Integer;
+begin
+  { 当前 AppId = {{A8F3C2B1-...}} → 花括号格式存入注册表。
+    因此"另一方"是 v1.1.10 的纯字符串格式（无花括号）。 }
+  sOtherPath := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\A8F3C2B1-9D4E-5F6A-7B8C-0D1E2F3A4B5C_is1';
+  if RegQueryStringValue(HKCU, sOtherPath, 'UninstallString', sOtherUninstall) or
+     RegQueryStringValue(HKLM, sOtherPath, 'UninstallString', sOtherUninstall) then
+  begin
+    Log('检测到另一方格式的旧版本，正在静默卸载: ' + sOtherUninstall);
+    sOtherUninstall := RemoveQuotes(sOtherUninstall);
+    Exec(ExpandConstant('{cmd}'), '/C ' + '"' + sOtherUninstall + '" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART',
+      '', SW_HIDE, ewWaitUntilTerminated, iResultCode);
+  end;
+end;
+
 function InitializeSetup: Boolean;
 var
   sUnInstallString: String;
@@ -181,6 +211,13 @@ begin
         Result := False;
     end;
   end;
+
+  { 同时清理另一方格式的旧版本（防止两种 AppId 时代的安装并存）。
+    必须在 IsUpgrade 之外执行 — 如果机器上只有 v1.1.10（纯字符串）
+    而没有 v1.1.7-v1.1.9（花括号），IsUpgrade 可能返回 False
+    （当前 AppId 使用花括号格式，查不到纯字符串格式的注册表项），
+    但 v1.1.10 的老文件仍在目录中——需要在这里卸载。 }
+  TryUninstallOtherFormat;
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
