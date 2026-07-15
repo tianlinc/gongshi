@@ -15,7 +15,10 @@ name: Build
 
 on:
   push:
+    branches: [main]
     tags: ['v*']
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -25,9 +28,36 @@ permissions:
 jobs:
 
   # ==========================================================
-  #  Windows 构建
+  #  ISCC 编译检查 — 每次 push/PR 到 main 都跑
+  #  只编译 setup.iss，不做 PyInstaller 打包，不上传 artifact
+  #  编译失败直接阻断，用于在开发阶段尽早发现问题
+  # ==========================================================
+  check-iscc:
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Inno Setup 6
+        run: choco install innosetup --no-progress -y
+
+      - name: Compile setup.iss (ISCC syntax check)
+        shell: cmd
+        run: |
+          set "ISCC="
+          if exist "%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe" set "ISCC=%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe"
+          if not defined ISCC if exist "%ProgramFiles%\Inno Setup 6\ISCC.exe" set "ISCC=%ProgramFiles%\Inno Setup 6\ISCC.exe"
+          if not defined ISCC if exist "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" set "ISCC=C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if not defined ISCC (echo [X] ISCC not found & exit /b 1)
+          echo [OK] ISCC: %ISCC%
+          "%ISCC%" /O%RUNNER_TEMP% /Qp "service_installer\installer\setup.iss" || exit /b %errorlevel%
+          echo [OK] ISCC compilation check passed
+
+  # ==========================================================
+  #  Windows 构建 (仅 tag push 触发)
   # ==========================================================
   build-windows:
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -109,9 +139,10 @@ jobs:
           if-no-files-found: error
 
   # ==========================================================
-  #  macOS 构建
+  #  macOS 构建 (仅 tag push 触发)
   # ==========================================================
   build-macos:
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -185,9 +216,10 @@ jobs:
           if-no-files-found: error
 
   # ==========================================================
-  #  部署 appcast.xml 到 GitHub Pages
+  #  部署 appcast.xml 到 GitHub Pages (仅 tag push 触发)
   # ==========================================================
   deploy-pages:
+    if: startsWith(github.ref, 'refs/tags/v')
     needs: build-macos
     runs-on: ubuntu-latest
     steps:
