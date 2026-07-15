@@ -879,8 +879,8 @@ class UpdateChecker:
             '',
             f'echo [!date! !time!] [OK] 安装成功 >> "!LOG!"',
             f'echo [!date! !time!] 启动新版本... >> "!LOG!"',
-            # start /B 启动 GUI exe：不创建新窗口，立即返回控制权（不阻塞后续清理）
-            f'start "" /B "{new_exe}"',
+            # start 启动 GUI exe（不加 /B，让新进程创建独立进程组，避免受父 cmd 生命周期影响）
+            f'start "" "{new_exe}"',
             '',
             # 清理安装包和安装脚本
             f'echo [!date! !time!] 清理临时文件... >> "!LOG!"',
