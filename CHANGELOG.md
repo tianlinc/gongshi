@@ -1,5 +1,21 @@
 # CHANGELOG
 
+## V1.1.10 (2026-07-14)
+
+修复安装目录跳变的真正根因：ExpandConstant({GUID}) 两阶段转义链导致注册表查找静默失败。
+
+### 修复
+
+- **AppId 两阶段转义链根因修复**：`setup.iss` 的 `GetUninstallString()` 中 `ExpandConstant` + `{#emit SetupSetting("AppId")}` 形成两阶段转义链——ISPP 将 `{{GUID}}` 处理为 `{GUID}`（含花括号），然后 `ExpandConstant` 将 `{GUID}` 当作未知常量替换为空字符串，导致注册表路径被破坏（`_is1`），`IsUpgrade` 永远返回 `False`、安装器走全新安装路径
+  - `setup.iss` AppId 改为**纯字符串** `A8F3C2B1-...`（无花括号）
+  - `GetUninstallString` 注册表路径改为**字面量字符串**（无 ExpandConstant、无 {#emit}）
+  - `_desktop_common.py` `KNOWN_APP_ID` 同步更新为无花括号纯字符串
+
+### 文档
+
+- **RELEASE_PROCEDURE.md**：新增踩坑 #9（ExpandConstant 未知常量吞并），附录二期望结果更新
+- **RELEASE_CHECKLIST.md**：重写坑 #2 为两阶段转义链的完整描述
+
 ## V1.1.9 (2026-07-14)
 
 V1.1.8 的修正版本，修复在线更新安装目录变化问题，更新发布流程文档。
