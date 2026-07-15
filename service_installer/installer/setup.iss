@@ -28,12 +28,16 @@
 #define MyAppExe "IEI Timer Faster.exe"
 
 [Setup]
-; INSPUR-93: AppId 使用纯字符串（无花括号）——消除 ISPP #emit 和
-; Inno Setup ExpandConstant 的转义链问题。
-; 双花括号 {{GUID}} 经 ISPP #emit 处理后变成 {GUID}（含花括号），
-; 再经 ExpandConstant 时 {GUID} 被当作未知常量替换为空字符串，
-; 导致注册表查找路径错误 → IsUpgrade 返回 False → 安装器走全新安装。
-AppId=A8F3C2B1-9D4E-5F6A-7B8C-0D1E2F3A4B5C
+; INSPUR-93: AppId 使用双花括号 {{GUID}}（Inno Setup 转义为字面量 { ）→
+; 最终 AppId 值 = {A8F3C2B1-...}（含花括号），与 v1.1.7-v1.1.9 存量安装一致。
+;
+; V1.1.10 曾改为纯字符串 A8F3C2B1-...（无花括号），导致新旧 AppId 不同 →
+; Inno Setup 认为是不同应用 → 两个注册表项 → 两个桌面快捷方式 + 无升级检测。
+; 现已回退到双花括号以匹配存量安装。
+;
+; @IMPORTANT: GetUninstallString() 使用 Pascal 字面量字符串（无 ExpandConstant），
+; 因此两个注册表路径中的花括号不会被当作未知常量吞并。
+AppId={{A8F3C2B1-9D4E-5F6A-7B8C-0D1E2F3A4B5C}}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
@@ -89,15 +93,34 @@ begin
   Result := Pos('/VERYSILENT', UpperCase(GetCmdTail)) > 0;
 end;
 
+function GetUninstallStringForPath(const sRegPath: String): String;
+var
+  sUnInstallString: String;
+begin
+  sUnInstallString := '';
+  if not RegQueryStringValue(HKCU, sRegPath, 'UninstallString', sUnInstallString) then
+    RegQueryStringValue(HKLM, sRegPath, 'UninstallString', sUnInstallString);
+  Result := sUnInstallString;
+end;
+
 function GetUninstallString: String;
 var
   sUnInstPath: String;
   sUnInstallString: String;
 begin
-  sUnInstPath := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\A8F3C2B1-9D4E-5F6A-7B8C-0D1E2F3A4B5C_is1';
   sUnInstallString := '';
-  if not RegQueryStringValue(HKCU, sUnInstPath, 'UninstallString', sUnInstallString) then
-    RegQueryStringValue(HKLM, sUnInstPath, 'UninstallString', sUnInstallString);
+
+  { 1. 先查旧格式（v1.1.9 及之前，花括号 AppId → {GUID}_is1）→ 优先兼容存量 }
+  sUnInstPath := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{A8F3C2B1-9D4E-5F6A-7B8C-0D1E2F3A4B5C}_is1';
+  sUnInstallString := GetUninstallStringForPath(sUnInstPath);
+
+  { 2. 查新格式（v1.1.10，纯字符串 AppId → A8F3C2B1-..._is1） }
+  if sUnInstallString = '' then
+  begin
+    sUnInstPath := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\A8F3C2B1-9D4E-5F6A-7B8C-0D1E2F3A4B5C_is1';
+    sUnInstallString := GetUninstallStringForPath(sUnInstPath);
+  end;
+
   Result := sUnInstallString;
 end;
 
@@ -165,5 +188,36 @@ begin
   if CurStep = ssPostInstall then
   begin
     Log('安装完成: ' + ExpandConstant('{app}'));
+    { 清理 v1.1.10 纯字符串 AppId 遗留的孤儿注册表项 }
+    CleanupOrphanRegistryEntries;
   end;
+end;
+
+{ ---- 清理孤儿注册表项（v1.1.10 纯字符串 AppId 残留） ----
+  v1.1.10 的 AppId=A8F3C2B1-...（无花括号）与 v1.1.9 的 AppId={{GUID}}（花括号）
+  创建了不同的注册表项。本安装器优先卸载花括号格式的旧版本，但纯字符串格式的
+  v1.1.10 遗留项也可能存在，需要一并清理，否则会导致重复快捷方式和升级检测异常。}
+procedure CleanupOrphanRegistryEntries;
+var
+  sOtherPath: String;
+begin
+  { 本安装器使用花括号格式 {{GUID}}，因此纯字符串格式是"另一方" }
+  sOtherPath := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\A8F3C2B1-9D4E-5F6A-7B8C-0D1E2F3A4B5C_is1';
+  if RegKeyExists(HKCU, sOtherPath) then
+  begin
+    Log('检测到 v1.1.10 遗留注册表项，正在清理: ' + sOtherPath);
+    RegDeleteKeyIncludingSubkeys(HKCU, sOtherPath);
+  end;
+  if RegKeyExists(HKLM, sOtherPath) then
+  begin
+    Log('检测到 v1.1.10 遗留注册表项，正在清理: ' + sOtherPath);
+    RegDeleteKeyIncludingSubkeys(HKLM, sOtherPath);
+  end;
+end;
+
+{ 在卸载完成后清理另一方格式的注册表项 }
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep = usPostUninstall then
+    CleanupOrphanRegistryEntries;
 end;

@@ -941,7 +941,11 @@ class UpdateChecker:
             (winreg.HKEY_LOCAL_MACHINE,
              r'Software\Microsoft\Windows\CurrentVersion\Uninstall'),
         )
-        KNOWN_APP_ID = 'A8F3C2B1-9D4E-5F6A-7B8C-0D1E2F3A4B5C'
+        # 主 AppId（花括号格式，匹配 setup.iss {{A8F3C2B1-...}} → {A8F3C2B1-...}）
+        # V1.1.10-V1.1.11 曾改为纯字符串（无花括号），现已回退。
+        KNOWN_APP_ID = '{A8F3C2B1-9D4E-5F6A-7B8C-0D1E2F3A4B5C}'
+        # 旧 AppId（v1.1.10-v1.1.11 纯字符串格式），作为回退兼容
+        KNOWN_APP_ID_ALT = 'A8F3C2B1-9D4E-5F6A-7B8C-0D1E2F3A4B5C'
         APP_DISPLAY_NAME = 'IEI Timer Faster'
 
         def _read_install_location(root, subkey_path):
@@ -958,10 +962,17 @@ class UpdateChecker:
                 pass
             return None
 
-        # 第一步：按已知 AppId 直接查找（快速路径，v1.1.7+ 版本）
+        # 第一步：按已知 AppId 直接查找（快速路径）
         for root, base_path in _UNINSTALL_ROOTS:
             result = _read_install_location(
                 root, fr'{base_path}\{KNOWN_APP_ID}_is1')
+            if result:
+                return result
+
+        # 1b: 回退查旧 AppId（v1.1.10-v1.1.11 纯字符串格式）
+        for root, base_path in _UNINSTALL_ROOTS:
+            result = _read_install_location(
+                root, fr'{base_path}\{KNOWN_APP_ID_ALT}_is1')
             if result:
                 return result
 
