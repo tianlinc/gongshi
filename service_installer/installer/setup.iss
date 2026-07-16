@@ -83,6 +83,16 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"; IconFilename:
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"; IconFilename: "{app}\iei_timer.ico"
 Name: "{group}\卸载 {#MyAppName}"; Filename: "{uninstallexe}"
 
+; INSPUR-95: 静默升级时，批处理脚本由旧版本 _desktop_common.py 生成，
+; 可能因 PowerShell ^ 续行等旧版代码缺陷而崩溃 → start 命令永不被执行。
+; [Run] 段在安装完成后由 installer 自身启动新版本，不依赖批处理脚本，
+; 即使批处理崩溃升级后应用也能自动打开。
+[Run]
+; 正常安装：完成页显示"启动应用"复选框
+Filename: "{app}\{#MyAppExe}"; Description: "启动 IEI Timer Faster"; Flags: nowait postinstall skipifsilent
+; 静默升级：自动启动新版本（nowait: 不等待进程, shellexec: 确保作为独立进程启动）
+Filename: "{app}\{#MyAppExe}"; Flags: nowait shellexec; Check: IsSilentInstall
+
 ; INSPUR-115: 安装前删除旧文件，确保升级后干净。
 ; - ignoreversion 会跳过已存在的 VERSION，通过 InstallDelete 在复制前清除旧文件
 ; - 旧桌面快捷方式：如果不同 AppId 格式的旧版本 uninstaller 未正确清理（如 GetUninstallString
