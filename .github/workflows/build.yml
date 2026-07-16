@@ -92,10 +92,35 @@ jobs:
           echo [OK] ISCC compilation check passed
 
   # ==========================================================
+  #  版本号校验 — tag push 前验证 VERSION 文件与 git tag 一致
+  #  杜绝 v1.1.13 tag + v1.1.12 产物的事故（INSPUR-95）
+  # ==========================================================
+  verify-version:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify VERSION matches git tag
+        shell: bash
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          FILE_VERSION=$(cat VERSION | tr -d '[:space:]')
+          echo "Git tag:    v${TAG_VERSION}"
+          echo "VERSION file: ${FILE_VERSION}"
+          if [ "${TAG_VERSION}" != "${FILE_VERSION}" ]; then
+            echo ""
+            echo "[X] VERSION file (${FILE_VERSION}) does not match git tag (v${TAG_VERSION})"
+            echo "    Update the VERSION file before pushing the tag."
+            exit 1
+          fi
+          echo "[OK] VERSION file matches git tag: ${FILE_VERSION}"
+
+  # ==========================================================
   #  Windows 构建 (仅 tag push 触发)
   # ==========================================================
   build-windows:
     if: startsWith(github.ref, 'refs/tags/v')
+    needs: verify-version
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -181,6 +206,7 @@ jobs:
   # ==========================================================
   build-macos:
     if: startsWith(github.ref, 'refs/tags/v')
+    needs: verify-version
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
