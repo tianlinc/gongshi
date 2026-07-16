@@ -850,8 +850,11 @@ class UpdateChecker:
         # 安装包和批处理文件路径（安装完成后清理）
         bat_path = os.path.join(os.path.dirname(file_path), '_install.bat')
 
-        # 生成批处理脚本：终止旧进程 → 静默安装 → 启动新版本 → 清理
-        # start /B 在父 cmd（已通过 CREATE_NO_WINDOW 隐藏）中启动 exe，不创建新控制台窗口
+        # 桌面快捷方式路径（用于兜底创建）
+        desktop_lnk = os.path.join(os.environ.get('USERPROFILE', ''), 'Desktop', 'IEI Timer Faster.lnk')
+
+        # 生成批处理脚本：终止旧进程 → 静默安装 → 兜底创建桌面快捷方式 → 启动新版本 → 清理
+        # 注意：start 不加 /B — 让新进程创建独立进程组，避免受父 cmd 生命周期影响（INSPUR-98）
         bat_lines = [
             '@echo off',
             'setlocal enabledelayedexpansion',
@@ -878,8 +881,27 @@ class UpdateChecker:
             ')',
             '',
             f'echo [!date! !time!] [OK] 安装成功 >> "!LOG!"',
+            '',
+            # 兜底创建桌面快捷方式（Inno Setup silent 安装在某些边界情况下可能不创建）
+            f'echo [!date! !time!] 检查桌面快捷方式... >> "!LOG!"',
+            f'if not exist "{desktop_lnk}" (',
+            f'    echo [!date! !time!] 快捷方式缺失，正在创建... >> "!LOG!"',
+            f'    powershell -NoProfile -Command ^',
+            f'      "$ws = New-Object -ComObject WScript.Shell; ^',
+            f'      $s = $ws.CreateShortcut(\'{desktop_lnk}\'); ^',
+            f'      $s.TargetPath = \'{new_exe}\'; ^',
+            f'      $s.IconLocation = \'{new_exe},0\'; ^',
+            f'      $s.Save()" >> "!LOG!" 2>&1',
+            f'    if exist "{desktop_lnk}" (',
+            f'        echo [!date! !time!] [OK] 桌面快捷方式已创建 >> "!LOG!"',
+            f'    ) else (',
+            f'        echo [!date! !time!] [X] 桌面快捷方式创建失败 >> "!LOG!"',
+            f'    )',
+            f') else (',
+            f'    echo [!date! !time!] [OK] 桌面快捷方式已存在 >> "!LOG!"',
+            f')',
+            '',
             f'echo [!date! !time!] 启动新版本... >> "!LOG!"',
-            # start 启动 GUI exe（不加 /B，让新进程创建独立进程组，避免受父 cmd 生命周期影响）
             f'start "" "{new_exe}"',
             '',
             # 清理安装包和安装脚本
