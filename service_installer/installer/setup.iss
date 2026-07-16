@@ -76,7 +76,9 @@ Source: "iei_timer.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 ; 桌面快捷方式 → 指向 exe（不是 URL）
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"; IconFilename: "{app}\iei_timer.ico"; Tasks: desktopicon
+; 使用 Check 函数代替 Tasks: desktopicon，避免静默升级时 checkedonce 状态因
+; 旧版 uninstaller 清空注册表而丢失 → 桌面快捷方式不创建的问题。
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"; IconFilename: "{app}\iei_timer.ico"; Check: ShouldCreateDesktopIcon
 ; 开始菜单
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"; IconFilename: "{app}\iei_timer.ico"
 Name: "{group}\卸载 {#MyAppName}"; Filename: "{uninstallexe}"
@@ -95,6 +97,19 @@ procedure CleanupOrphanRegistryEntries; forward;
 function IsSilentInstall: Boolean;
 begin
   Result := Pos('/VERYSILENT', UpperCase(GetCmdTail)) > 0;
+end;
+
+function ShouldCreateDesktopIcon: Boolean;
+begin
+  { 静默升级（自动更新）时强制创建桌面快捷方式。
+    旧版 uninstaller 在 InitializeSetup 中被调用 → 清除了 Inno Setup 注册表键
+    （含 checkedonce 任务状态）。[Registry] 段在 [Icons] 段之后才写入注册表，
+    此时 checkedonce 无历史记录可查，在 /VERYSILENT 下默认未选中 →
+    桌面快捷方式不会被创建。用 Check 函数在静默安装时覆盖此行为。}
+  if IsSilentInstall then
+    Result := True
+  else
+    Result := WizardIsTaskSelected('desktopicon');
 end;
 
 function GetUninstallStringForPath(const sRegPath: String): String;
