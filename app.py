@@ -47,9 +47,17 @@ log.setLevel(logging.INFO)  # 默认 INFO；app.debug 时在 main 中切换 DEBU
 
 
 def _read_app_version():
-    """读取项目根目录 VERSION 文件，返回版本号字符串。失败回退 '0.0.0'。"""
+    """读取项目根目录 VERSION 文件，返回版本号字符串。失败回退 '0.0.0'。
+
+    frozen 模式使用 sys._MEIPASS（PyInstaller 正确注入的 bundle 路径），
+    而不依赖 __file__——__file__ 在 os.chdir(data_dir) 之后可能相对 CWD 解析，
+    导致读错路径。与 _desktop_common._read_version() 保持一致。
+    """
     try:
-        base_dir = os.path.dirname(os.path.abspath(__file__))
+        if getattr(sys, 'frozen', False):
+            base_dir = sys._MEIPASS
+        else:
+            base_dir = os.path.dirname(os.path.abspath(__file__))
         with open(os.path.join(base_dir, 'VERSION'), 'r', encoding='utf-8') as f:
             return f.read().strip()
     except Exception:
@@ -2088,12 +2096,16 @@ def api_system_info():
     except Exception as _e:
         log.warning("[!] 更新信息获取失败: %s", _e)
 
-    return jsonify({
+    response = jsonify({
         'success': True,
         'version': version,
         'license': license_data,
         'update': update_data,
     })
+    # 禁止 WebView2 缓存此响应——升级后 WebView2 的 HTTP cache 可能
+    # 返回旧版本号，导致自动重启后 UI 显示错误版本。
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    return response
 
 
 @app.route('/api/release-notes', methods=['GET'])
@@ -2116,7 +2128,9 @@ def api_release_notes():
 @app.route('/api/version', methods=['GET'])
 def api_version():
     """返回当前版本号，无需登录"""
-    return jsonify({'version': _read_app_version()})
+    response = jsonify({'version': _read_app_version()})
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    return response
 
 
 # ===========================================================================
