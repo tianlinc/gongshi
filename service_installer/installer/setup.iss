@@ -93,11 +93,15 @@ Filename: "{app}\{#MyAppExe}"; Description: "启动 IEI Timer Faster"; Flags: no
 ; 静默升级：自动启动新版本（nowait: 不等待进程, shellexec: 确保作为独立进程启动）
 Filename: "{app}\{#MyAppExe}"; Flags: nowait shellexec; Check: IsSilentInstall
 
-; INSPUR-115: 安装前删除旧文件，确保升级后干净。
-; - ignoreversion 会跳过已存在的 VERSION，通过 InstallDelete 在复制前清除旧文件
+; INSPUR-115 / INSPUR-95 fix: 安装前删除旧 VERSION，确保升级后版本号正确。
+; - ignoreversion 会跳过已存在的 VERSION（纯文本文件无版本信息资源），
+;   通过 InstallDelete 在复制前清除旧文件
+; - PyInstaller 6+ onedir 结构：VERSION 在 _internal/ 子目录下（{app}\_internal\VERSION）
+;   保留 {app}\VERSION 兼容旧 PyInstaller 的 root VERSION
 ; - 旧桌面快捷方式：如果不同 AppId 格式的旧版本 uninstaller 未正确清理（如 GetUninstallString
 ;   "先到先得"策略跳过了另一方格式的卸载），这里兜底删除，避免两份同名快捷方式共存
 [InstallDelete]
+Type: files; Name: "{app}\_internal\VERSION"
 Type: files; Name: "{app}\VERSION"
 Type: files; Name: "{autodesktop}\{#MyAppName}.lnk"
 
