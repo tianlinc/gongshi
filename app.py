@@ -35,6 +35,7 @@ from license_utils import (
     generate_sn, generate_license, verify_license,
     read_status, write_status, check_activated, activate,
 )
+from _desktop_common import _read_version
 import rdm_config
 
 app = Flask(__name__)
@@ -46,23 +47,7 @@ log = logging.getLogger('gongshi')
 log.setLevel(logging.INFO)  # 默认 INFO；app.debug 时在 main 中切换 DEBUG
 
 
-def _read_app_version():
-    """读取项目根目录 VERSION 文件，返回版本号字符串。失败回退 '0.0.0'。
-
-    frozen 模式使用 sys._MEIPASS（PyInstaller 正确注入的 bundle 路径），
-    而不依赖 __file__——__file__ 在 os.chdir(data_dir) 之后可能相对 CWD 解析，
-    导致读错路径。与 _desktop_common._read_version() 保持一致。
-    """
-    try:
-        if getattr(sys, 'frozen', False):
-            base_dir = sys._MEIPASS
-        else:
-            base_dir = os.path.dirname(os.path.abspath(__file__))
-        with open(os.path.join(base_dir, 'VERSION'), 'r', encoding='utf-8') as f:
-            return f.read().strip()
-    except Exception:
-        return '0.0.0'
-
+# _read_version 已从 _desktop_common 导入，统一版本号来源，不再在 app.py 中重复定义
 
 # ===========================================================================
 # _unplannedInfo 编码常量（来自 scripts/myspace/unplannedTask.js 实证）
@@ -2048,7 +2033,7 @@ def api_system_info():
     """
     # 1. 版本号
     try:
-        version = _read_app_version()
+        version = _read_version()
     except Exception as _e:
         log.warning("[!] 版本号读取失败: %s", _e)
         version = '0.0.0'
@@ -2128,7 +2113,7 @@ def api_release_notes():
 @app.route('/api/version', methods=['GET'])
 def api_version():
     """返回当前版本号，无需登录"""
-    response = jsonify({'version': _read_app_version()})
+    response = jsonify({'version': _read_version()})
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     return response
 
