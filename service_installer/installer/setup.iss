@@ -83,15 +83,13 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"; IconFilename:
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"; IconFilename: "{app}\iei_timer.ico"
 Name: "{group}\卸载 {#MyAppName}"; Filename: "{uninstallexe}"
 
-; INSPUR-95: 静默升级时，批处理脚本由旧版本 _desktop_common.py 生成，
-; 可能因 PowerShell ^ 续行等旧版代码缺陷而崩溃 → start 命令永不被执行。
-; [Run] 段在安装完成后由 installer 自身启动新版本，不依赖批处理脚本，
-; 即使批处理崩溃升级后应用也能自动打开。
+; INSPUR-95: 批处理脚本已稳定（v1.1.17 修复 PowerShell ^ 续行 bug），
+; start "" 可靠。installer 不再在静默升级时 auto-start 新版本——
+; 避免与批处理的 start "" 形成双启动竞争，导致单实例锁 FOCUS 信号
+; 在 WebView2 初始化阶段从后台线程触发窗口 API 造成死锁。
 [Run]
 ; 正常安装：完成页显示"启动应用"复选框
 Filename: "{app}\{#MyAppExe}"; Description: "启动 IEI Timer Faster"; Flags: nowait postinstall skipifsilent
-; 静默升级：自动启动新版本（nowait: 不等待进程, shellexec: 确保作为独立进程启动）
-Filename: "{app}\{#MyAppExe}"; Flags: nowait shellexec; Check: IsSilentInstall
 
 ; INSPUR-115 / INSPUR-95 fix: 安装前删除旧 VERSION，确保升级后版本号正确。
 ; - ignoreversion 会跳过已存在的 VERSION（纯文本文件无版本信息资源），

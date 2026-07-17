@@ -1292,17 +1292,34 @@ check();
         if self._window is None:
             return
         try:
+            # restore() 在 WinForms 后端使用 self.Invoke() 调度到 UI 线程，线程安全
             self._window.restore()
-            self._window.on_top = True
 
-            def _reset_ontop():
-                time.sleep(0.5)
+            if threading.current_thread() is threading.main_thread():
+                # 主线程：直接调用 on_top 确保窗口置前
+                self._window.on_top = True
+
+                def _reset_ontop():
+                    time.sleep(0.5)
+                    try:
+                        if self._window is not None:
+                            self._window.on_top = False
+                    except Exception:
+                        pass
+
+                threading.Thread(target=_reset_ontop, daemon=True).start()
+            else:
+                # 非主线程（锁服务 daemon 线程）：
+                # on_top setter → winforms.set_on_top() 直接赋值 i.TopMost，
+                # 无 Invoke 调度 → 跨线程操作 WinForms 控件 → 死锁风险。
+                # 改用 evaluate_js('window.focus()')，EdgeChromium 内部用
+                # self.webview.Invoke() 调度到 UI 线程，线程安全。
                 try:
-                    self._window.on_top = False
+                    import webview
+                    if webview.windows:
+                        webview.windows[0].evaluate_js('window.focus()')
                 except Exception:
                     pass
-
-            threading.Thread(target=_reset_ontop, daemon=True).start()
         except Exception:
             pass
 
