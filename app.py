@@ -35,6 +35,7 @@ from license_utils import (
     generate_sn, generate_license, verify_license,
     read_status, write_status, check_activated, activate,
 )
+from _desktop_common import _read_version
 import rdm_config
 
 app = Flask(__name__)
@@ -46,15 +47,7 @@ log = logging.getLogger('gongshi')
 log.setLevel(logging.INFO)  # 默认 INFO；app.debug 时在 main 中切换 DEBUG
 
 
-def _read_app_version():
-    """读取项目根目录 VERSION 文件，返回版本号字符串。失败回退 '0.0.0'。"""
-    try:
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        with open(os.path.join(base_dir, 'VERSION'), 'r', encoding='utf-8') as f:
-            return f.read().strip()
-    except Exception:
-        return '0.0.0'
-
+# _read_version 已从 _desktop_common 导入，统一版本号来源，不再在 app.py 中重复定义
 
 # ===========================================================================
 # _unplannedInfo 编码常量（来自 scripts/myspace/unplannedTask.js 实证）
@@ -2040,7 +2033,7 @@ def api_system_info():
     """
     # 1. 版本号
     try:
-        version = _read_app_version()
+        version = _read_version()
     except Exception as _e:
         log.warning("[!] 版本号读取失败: %s", _e)
         version = '0.0.0'
@@ -2088,12 +2081,16 @@ def api_system_info():
     except Exception as _e:
         log.warning("[!] 更新信息获取失败: %s", _e)
 
-    return jsonify({
+    response = jsonify({
         'success': True,
         'version': version,
         'license': license_data,
         'update': update_data,
     })
+    # 禁止 WebView2 缓存此响应——升级后 WebView2 的 HTTP cache 可能
+    # 返回旧版本号，导致自动重启后 UI 显示错误版本。
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    return response
 
 
 @app.route('/api/release-notes', methods=['GET'])
@@ -2116,7 +2113,9 @@ def api_release_notes():
 @app.route('/api/version', methods=['GET'])
 def api_version():
     """返回当前版本号，无需登录"""
-    return jsonify({'version': _read_app_version()})
+    response = jsonify({'version': _read_version()})
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    return response
 
 
 # ===========================================================================
