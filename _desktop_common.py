@@ -22,6 +22,7 @@ import socket
 import threading
 import json
 import base64
+import hashlib
 
 
 # =========================================================================
@@ -278,6 +279,13 @@ class UpdateChecker:
         self._install_error = None
         self._release_notes_cache = None  # Release Note 缓存（TTL 1h）
         self._release_notes_cache_ts = 0.0
+        # INSPUR-102 新增：增量更新/静默下载/断点续传 状态
+        self._download_event = 'idle'        # idle / downloading_incremental / downloading_full / downloading_resume / ready_to_restart / updating_chain / rollback_available
+        self._auto_download = False          # 是否自动后台静默下载
+        self._staging_dir = None             # staging 目录路径
+        self._is_incremental = False         # 当前是否为增量下载
+        self._chain_versions = []            # 多版本跳跃链式升级的中间版本列表
+        self._check_result_with_assets = None  # 完整的更新检查结果（含所有 assets）
 
     @classmethod
     def _get_system_proxies(cls):
@@ -422,7 +430,13 @@ class UpdateChecker:
             return self._check_windows_update(current_version)
 
     def _check_windows_update(self, current_version):
-        """Windows 平台：从 GitHub Releases API 检查更新。"""
+        """Windows 平台：从 GitHub Releases API 检查更新。
+
+        INSPUR-102 增强：
+        - 同时查找完整包(.exe)和增量包(snapshot_v*.zip)
+        - 检测多版本跳跃，计算链式升级路径
+        - 缓存完整 asset 列表供后续下载使用
+        """
         import logging
         _log = logging.getLogger(__name__)
 
@@ -446,22 +460,46 @@ class UpdateChecker:
             self._last_check = None
             return None
 
-        # 找到当前平台的安装包
+        # 遍历所有 assets：查找完整包 + 增量包
         download_url = None
+        incremental_url = None
+        all_snapshots = []  # 所有增量包，用于多版本跳跃
         body = data.get('body', '')
         for asset in data.get('assets', []):
             name = asset.get('name', '')
             if sys.platform == 'win32' and name.lower().endswith('.exe'):
                 download_url = asset.get('browser_download_url')
-                break
+            elif name.startswith('snapshot_v') and name.lower().endswith('.zip'):
+                asset_url = asset.get('browser_download_url')
+                # 解析 from_version → to_version
+                try:
+                    core = name[len('snapshot_'):-len('.zip')]  # 如 v1.1.20_v1.1.21
+                    parts = core.split('_')
+                    if len(parts) == 2:
+                        fv = parts[0].lstrip('v')
+                        tv = parts[1].lstrip('v')
+                        snapshot_info = {
+                            'from_version': fv,
+                            'to_version': tv,
+                            'url': asset_url,
+                            'name': name,
+                        }
+                        all_snapshots.append(snapshot_info)
+                        # 精确匹配当前版本的增量包优先
+                        if fv == current_version and tv == remote_version:
+                            incremental_url = asset_url
+                except Exception:
+                    pass
 
-        if not download_url:
+        if not download_url and not incremental_url:
             _log.warning("[!] 未找到匹配的安装包 assets=%s",
                          [a.get('name', '?') for a in data.get('assets', [])])
             self._last_check = None
             return None
 
-        _log.info("[OK] 发现新版本 V%s (current=%s), url=%s", remote_version, current_version, download_url)
+        _log.info("[OK] 发现新版本 V%s (current=%s), full=%s, incremental=%s",
+                  remote_version, current_version,
+                  download_url or 'N/A', incremental_url or 'N/A')
 
         # Release notes: 优先使用 Release body，为空时用 published_at 生成兜底
         release_notes = (body or '').strip()
@@ -472,14 +510,71 @@ class UpdateChecker:
             else:
                 release_notes = '新版本 V' + remote_version
 
+        # 计算多版本跳跃的链式升级路径
+        chain_versions = []
+        if len(all_snapshots) > 1:
+            # 构建从当前版本到目标版本的升级链
+            chain_versions = self._build_upgrade_chain(
+                current_version, remote_version, all_snapshots)
+
         result = {
             'has_update': True,
             'version': remote_version,
             'download_url': download_url,
+            'incremental_url': incremental_url,
             'release_notes': release_notes,
+            'auto_download': True,       # INSPUR-102: 触发前端后台下载
+            'chain_versions': chain_versions,
+            'is_multi_hop': len(chain_versions) > 1,
         }
         self._last_check = result
+        self._check_result_with_assets = data  # 缓存完整 API 响应
+        self._chain_versions = chain_versions
         return result
+
+    def _build_upgrade_chain(self, current_version, target_version, all_snapshots):
+        """构建多版本跳跃的链式升级路径。
+
+        从 current_version 到 target_version，查找连续的 snapshot 包链路。
+        如 v1.1.20 → v1.1.23:
+          chain = [
+            {from: '1.1.20', to: '1.1.21', url: '...'},
+            {from: '1.1.21', to: '1.1.22', url: '...'},
+            {from: '1.1.22', to: '1.1.23', url: '...'},
+          ]
+
+        Returns
+        -------
+        list of dict
+            按顺序排列的升级链路
+        """
+        snapshot_map = {}  # from_version → snapshot_info
+        for snap in all_snapshots:
+            snapshot_map[snap['from_version']] = snap
+
+        chain = []
+        current = current_version
+        visited = set()
+        max_steps = 20  # 防止死循环
+
+        for _ in range(max_steps):
+            if current == target_version:
+                break
+            if current in visited:
+                break
+            visited.add(current)
+
+            snap = snapshot_map.get(current)
+            if snap:
+                chain.append(snap)
+                current = snap['to_version']
+            else:
+                # 链路断裂，无法继续
+                break
+
+        if chain and chain[-1]['to_version'] == target_version:
+            return chain
+        return []
 
     def _check_mac_update(self, current_version):
         """macOS 平台：从 appcast.xml（Sparkle 协议）检查更新。"""
@@ -648,6 +743,14 @@ class UpdateChecker:
             target=self._do_download, args=(url, save_dir), daemon=True
         ).start()
 
+    def _get_staging_dir(self):
+        """获取 staging 目录路径。"""
+        return os.path.join(_get_data_dir(), 'staging')
+
+    def _get_resume_state_path(self):
+        """获取断点续传状态文件路径。"""
+        return os.path.join(_get_data_dir(), 'cache', 'download_state.json')
+
     def _reset_download_state(self):
         with self._lock:
             self._downloading = True
@@ -657,6 +760,350 @@ class UpdateChecker:
             self._error = None
             self._install_status = 'idle'
             self._install_error = None
+            self._download_event = 'idle'
+            self._is_incremental = False
+            self._staging_dir = None
+
+    # ---- 断点续传状态管理 ----
+
+    def _save_resume_state(self, url, filepath, so_far, total):
+        """保存断点续传状态到文件。"""
+        state = {
+            'url': url,
+            'filepath': filepath,
+            'downloaded_bytes': so_far,
+            'total_bytes': total,
+            'updated_at': time.time(),
+        }
+        try:
+            state_path = self._get_resume_state_path()
+            os.makedirs(os.path.dirname(state_path), exist_ok=True)
+            with open(state_path, 'w', encoding='utf-8') as f:
+                json.dump(state, f)
+        except Exception:
+            pass
+
+    def _load_resume_state(self, url=None):
+        """加载断点续传状态。
+
+        Parameters
+        ----------
+        url : str, optional
+            可选 URL 校验——仅当 URL 匹配时才恢复
+        """
+        state_path = self._get_resume_state_path()
+        if not os.path.isfile(state_path):
+            return None
+        try:
+            with open(state_path, 'r', encoding='utf-8') as f:
+                state = json.load(f)
+            # URL 校验（防止缓存了不同版本的下载状态）
+            if url and state.get('url') != url:
+                return None
+            # 检查部分文件是否仍然存在
+            filepath = state.get('filepath', '')
+            if filepath and os.path.isfile(filepath):
+                actual_size = os.path.getsize(filepath)
+                if actual_size == state.get('downloaded_bytes', 0):
+                    return state
+            return None
+        except Exception:
+            return None
+
+    def _clear_resume_state(self):
+        """清除断点续传状态文件。"""
+        state_path = self._get_resume_state_path()
+        if os.path.isfile(state_path):
+            try:
+                os.remove(state_path)
+            except Exception:
+                pass
+
+    # ---- 下载（INSPUR-102 增量优先 + 断点续传） ----
+
+    def start_download(self, url, save_dir):
+        """启动后台下载线程。
+
+        Parameters
+        ----------
+        url : str
+            安装包下载地址
+        save_dir : str
+            保存目录（如 %APPDATA%/gongshi/updates/）
+        """
+        self._reset_download_state()
+        threading.Thread(
+            target=self._do_download, args=(url, save_dir), daemon=True
+        ).start()
+
+    def start_incremental_download(self):
+        """启动增量包优先的后台下载线程（INSPUR-102）。
+
+        流程：
+        1. 优先下载增量包（snapshot_*.zip）
+        2. 404 或其他失败 → 降级下载完整安装包
+        3. 下载目标为 staging 目录
+        4. 支持断点续传
+        """
+        last = self.get_last_check()
+        if not last:
+            return
+
+        self._reset_download_state()
+        self._is_incremental = True
+        threading.Thread(
+            target=self._do_incremental_download, daemon=True
+        ).start()
+
+    def _do_incremental_download(self):
+        """增量下载主流程：增量包优先，失败降级完整包。
+
+        Module 2 + Module 5: 增量下载链路 + 多版本跳跃升级
+        支持链式下载多个中间增量包。
+        """
+        import logging
+        _log = logging.getLogger(__name__)
+
+        last = self.get_last_check()
+        if not last:
+            self._set_download_error('无可用更新信息')
+            return
+
+        target_version = last.get('version', '')
+        current_version = _read_version()
+        chain = self._chain_versions
+
+        # ---- 多版本跳跃：链式下载所有中间增量包 ----
+        if chain and len(chain) > 1:
+            with self._lock:
+                self._download_event = 'updating_chain'
+            _log.info("[OK] 多版本跳跃升级: %s → %s, 共 %d 步",
+                      current_version, target_version, len(chain))
+
+            all_success = True
+            for i, snap in enumerate(chain):
+                _log.info("[OK] 链式下载 %d/%d: %s → %s",
+                          i + 1, len(chain), snap['from_version'], snap['to_version'])
+                with self._lock:
+                    self._progress_percent = int(i * 100 / len(chain))
+
+                success = self._download_single_incremental(
+                    snap['url'], snap['from_version'], snap['to_version'],
+                    is_chain=True
+                )
+                if not success:
+                    _log.warning("[!] 增量包下载失败 %s → %s，降级为完整包下载",
+                                snap['from_version'], snap['to_version'])
+                    all_success = False
+                    break
+
+            if all_success:
+                self._finalize_download(target_version)
+                return
+            else:
+                # 降级：完整包下载
+                _log.info("[OK] 降级为完整包下载...")
+
+        # ---- 精确匹配的增量包 ----
+        incremental_url = last.get('incremental_url')
+        if incremental_url:
+            with self._lock:
+                self._download_event = 'downloading_incremental'
+            _log.info("[OK] 尝试增量下载: %s", incremental_url)
+
+            success = self._download_single_incremental(
+                incremental_url, current_version, target_version,
+                is_chain=False
+            )
+            if success:
+                self._finalize_download(target_version)
+                return
+
+            _log.info("[OK] 增量包不可用，降级为完整包下载...")
+
+        # ---- 降级：下载完整安装包 ----
+        full_url = last.get('download_url')
+        if not full_url:
+            self._set_download_error('无可用下载链接（增量包和完整包均不可用）')
+            return
+
+        with self._lock:
+            self._download_event = 'downloading_full'
+            self._is_incremental = False
+
+        _log.info("[OK] 下载完整安装包: %s", full_url)
+        save_dir = os.path.join(_get_data_dir(), 'updates')
+        self._do_download(full_url, save_dir)
+
+    def _download_single_incremental(self, url, from_version, to_version, is_chain=False):
+        """下载单个增量包并解压到 staging 目录。
+
+        Parameters
+        ----------
+        url : str
+            增量包下载 URL
+        from_version : str
+            起始版本号
+        to_version : str
+            目标版本号
+        is_chain : bool
+            是否属于多版本跳跃链（链中每个包都追加到 staging）
+
+        Returns
+        -------
+        bool
+            成功返回 True
+        """
+        import logging
+        _log = logging.getLogger(__name__)
+        import zipfile
+        import io
+
+        staging_dir = self._get_staging_dir()
+        os.makedirs(staging_dir, exist_ok=True)
+
+        # 下载到临时文件
+        temp_file = os.path.join(staging_dir, f'snapshot_v{from_version}_v{to_version}.zip')
+        files_dir = os.path.join(staging_dir, 'files')
+        os.makedirs(files_dir, exist_ok=True)
+
+        try:
+            self._do_download_once(url, temp_file)
+        except Exception as e:
+            _log.warning("[!] 增量包下载失败: %s", e)
+            return False
+
+        # 解压到 staging/files/
+        try:
+            with zipfile.ZipFile(temp_file, 'r') as zf:
+                zf.extractall(files_dir)
+            _log.info("[OK] 增量包解压完成: %s", temp_file)
+        except zipfile.BadZipFile:
+            _log.error("[X] 增量包损坏（非有效 ZIP 文件）: %s", temp_file)
+            try:
+                os.remove(temp_file)
+            except Exception:
+                pass
+            return False
+        except Exception as e:
+            _log.error("[X] 增量包解压失败: %s", e)
+            try:
+                os.remove(temp_file)
+            except Exception:
+                pass
+            return False
+
+        # 删除下载的 zip 文件（已解压）
+        try:
+            os.remove(temp_file)
+        except Exception:
+            pass
+
+        # 校验 manifest.json 的 SHA256
+        manifest_path = os.path.join(files_dir, 'manifest.json')
+        if os.path.isfile(manifest_path):
+            if not self._verify_manifest(manifest_path, files_dir):
+                _log.error("[X] manifest SHA256 校验失败")
+                shutil.rmtree(staging_dir, ignore_errors=True)
+                return False
+        else:
+            _log.warning("[!] 增量包中未找到 manifest.json")
+
+        _log.info("[OK] 增量包已就绪: %s → %s (chain=%s)", from_version, to_version, is_chain)
+        return True
+
+    def _verify_manifest(self, manifest_path, files_dir):
+        """校验 staging 目录中文件的 SHA256。
+
+        Parameters
+        ----------
+        manifest_path : str
+            manifest.json 路径
+        files_dir : str
+            files/ 目录路径
+
+        Returns
+        -------
+        bool
+            全部校验通过返回 True
+        """
+        import logging
+        _log = logging.getLogger(__name__)
+
+        try:
+            with open(manifest_path, 'r', encoding='utf-8') as f:
+                manifest = json.load(f)
+        except Exception as e:
+            _log.error("[X] manifest.json 解析失败: %s", e)
+            return False
+
+        expected_sha256 = manifest.get('sha256', {})
+        if not expected_sha256:
+            _log.info("[OK] manifest 中无 SHA256 字段，跳过校验")
+            return True
+
+        all_files = (manifest.get('added_files', []) +
+                     manifest.get('changed_files', []))
+        all_valid = True
+        for fname in all_files:
+            expected = expected_sha256.get(fname)
+            if not expected:
+                continue
+            filepath = os.path.join(files_dir, fname)
+            if not os.path.isfile(filepath):
+                _log.error("[X] 文件缺失: %s", fname)
+                all_valid = False
+                continue
+            try:
+                h = hashlib.sha256()
+                with open(filepath, 'rb') as f_in:
+                    while True:
+                        chunk = f_in.read(65536)
+                        if not chunk:
+                            break
+                        h.update(chunk)
+                actual = h.hexdigest()
+                if actual != expected:
+                    _log.error("[X] SHA256 校验失败: %s (期望 %s, 实际 %s)",
+                               fname, expected[:16], actual[:16])
+                    all_valid = False
+            except Exception as e:
+                _log.error("[X] 文件读取失败: %s - %s", fname, e)
+                all_valid = False
+
+        if all_valid:
+            _log.info("[OK] 文件完整性校验通过 (%d 个文件)", len(all_files))
+        return all_valid
+
+    def _finalize_download(self, target_version):
+        """下载完成后的收尾工作。
+
+        1. 标记下载完成
+        2. 写入 update_ready.json
+        3. 设置状态为 ready_to_restart
+        """
+        staging_dir = self._get_staging_dir()
+
+        with self._lock:
+            self._downloading = False
+            self._downloaded = True
+            self._file_path = staging_dir
+            self._progress_percent = 100
+            self._download_event = 'ready_to_restart'
+            self._staging_dir = staging_dir
+
+        # 清理断点续传状态
+        self._clear_resume_state()
+
+        print(f"[OK] 更新包就绪: staging={staging_dir}, target={target_version}")
+
+    def _set_download_error(self, error_msg):
+        """安全地设置下载错误状态。"""
+        with self._lock:
+            self._downloading = False
+            self._downloaded = False
+            self._error = error_msg
+        print(f"[X] 下载失败: {error_msg}")
 
     def _do_download(self, url, save_dir):
         """后台下载，更新进度状态。
@@ -667,6 +1114,7 @@ class UpdateChecker:
           requests 的 Session 可复用连接，比 urllib 每次新开连接更快
         - stream=True + iter_content 64KB chunk，比 urllib.read(8KB) 吞吐更高
         - 支持断点续传：第 2/3 次重试时从已下载位置继续（Range 请求）
+        - INSPUR-102: 下载状态持久化，支持程序重启后继续下载
         """
         import requests
 
@@ -688,6 +1136,8 @@ class UpdateChecker:
                     self._downloaded = True
                     self._file_path = filepath
                     self._progress_percent = 100
+                    self._download_event = 'ready_to_restart'
+                self._clear_resume_state()
                 print(f"[OK] 更新包下载完成: {filepath}")
                 return
             except Exception as e:
@@ -697,12 +1147,8 @@ class UpdateChecker:
                     # 重置进度，清理部分文件
                     with self._lock:
                         self._progress_percent = 0
-                    if os.path.isfile(filepath):
-                        try:
-                            os.remove(filepath)
-                        except OSError:
-                            pass
                     time.sleep(RETRY_DELAY)
+                    # 断点续传：不清除已下载的部分文件，下次下载继续
                     continue
                 # 非网络错误，或重试次数耗尽
                 error_msg = str(e)
@@ -712,24 +1158,51 @@ class UpdateChecker:
                     self._downloading = False
                     self._downloaded = False
                     self._error = error_msg
+                self._clear_resume_state()
                 print(f"[X] 更新包下载失败: {error_msg}")
                 return
 
     def _do_download_once(self, url, filepath):
-        """单次下载尝试（不含重试），写入 filepath。"""
+        """单次下载尝试（不含重试），支持断点续传。
+
+        INSPUR-102 增强：
+        - 支持 HTTP Range 请求续传（Module 4）
+        - 下载过程中定期持久化进度状态
+        """
         import requests
+
+        # 检查断点续传状态
+        headers = {'User-Agent': 'gongshi-updater/1.0'}
+        resume_offset = 0
+        resume_state = self._load_resume_state(url)
+        if resume_state and resume_state.get('filepath') == filepath:
+            resume_offset = resume_state.get('downloaded_bytes', 0)
+            if resume_offset > 0:
+                headers['Range'] = f'bytes={resume_offset}-'
+                with self._lock:
+                    self._download_event = 'downloading_resume'
+                print(f"[OK] 断点续传: 从 {resume_offset} 字节继续下载")
 
         with requests.get(
             url,
-            headers={'User-Agent': 'gongshi-updater/1.0'},
+            headers=headers,
             timeout=(30, 300),  # (connect_timeout, read_timeout)
             stream=True,
             proxies=self._get_system_proxies(),
         ) as resp:
-            resp.raise_for_status()
-            total = int(resp.headers.get('Content-Length', 0))
-            so_far = 0
-            with open(filepath, 'wb') as f:
+            if resume_offset > 0 and resp.status_code not in (200, 206):
+                # Range 请求未得到预期响应，从头开始
+                resp.raise_for_status()
+                resume_offset = 0
+
+            if resp.status_code == 206:
+                total = resume_offset + int(resp.headers.get('Content-Length', 0))
+            else:
+                total = int(resp.headers.get('Content-Length', 0))
+
+            so_far = resume_offset
+            mode = 'ab' if resume_offset > 0 else 'wb'
+            with open(filepath, mode) as f:
                 for chunk in resp.iter_content(chunk_size=65536):
                     if chunk:
                         bytes_written = f.write(chunk)
@@ -738,6 +1211,12 @@ class UpdateChecker:
                             pct = int(so_far * 100 / total)
                             with self._lock:
                                 self._progress_percent = pct
+                        # 定期保存续传状态（每 ~5MB 或 10 秒）
+                        if so_far % (5 * 1024 * 1024) < 65536:
+                            self._save_resume_state(url, filepath, so_far, total)
+
+            # 下载完成，清理续传状态
+            self._save_resume_state(url, filepath, so_far, total)
 
     @staticmethod
     def _is_network_error(exception):
@@ -763,7 +1242,7 @@ class UpdateChecker:
     # ---- 状态查询（线程安全） ----
 
     def get_status(self):
-        """获取当前下载/安装状态。"""
+        """获取当前下载/安装状态（INSPUR-102 增强事件字段）。"""
         with self._lock:
             return {
                 'downloading': self._downloading,
@@ -772,6 +1251,9 @@ class UpdateChecker:
                 'error': self._error,
                 'install_status': self._install_status,
                 'install_error': self._install_error,
+                # INSPUR-102 新增事件字段
+                'event': self._download_event,
+                'is_incremental': self._is_incremental,
             }
 
     def get_file_path(self):
@@ -782,7 +1264,11 @@ class UpdateChecker:
     def install_update(self):
         """检查安装包是否就绪，并标记安装进行中。
 
-        Windows: 返回成功状态，等待前端调用 restart_and_install 完成安装
+        INSPUR-102:
+        - 增量更新：staging 目录已就绪，直接标记 installing
+        - 完整包：检查 .exe 文件是否存在
+
+        Windows: 返回成功状态，等待前端调用 prepare_restart 完成安装
         macOS:   open 命令打开 DMG，弹出 Finder
 
         返回 (success: bool, message: str)
@@ -790,14 +1276,23 @@ class UpdateChecker:
         with self._lock:
             file_path = self._file_path
             downloaded = self._downloaded
+            is_incremental = self._is_incremental
 
-        if not downloaded or not file_path or not os.path.isfile(file_path):
-            with self._lock:
-                self._install_status = 'failed'
-                self._install_error = '安装包文件不存在'
-            return False, '安装包文件不存在'
+        if is_incremental:
+            # 增量模式：检查 staging 目录
+            if not file_path or not os.path.isdir(file_path):
+                with self._lock:
+                    self._install_status = 'failed'
+                    self._install_error = '增量包目录不存在'
+                return False, '增量包目录不存在'
+        else:
+            if not downloaded or not file_path or not os.path.isfile(file_path):
+                with self._lock:
+                    self._install_status = 'failed'
+                    self._install_error = '安装包文件不存在'
+                return False, '安装包文件不存在'
 
-        print(f"[OK] 安装模式: platform={sys.platform}, file={file_path}")  # noqa: W503
+        print(f"[OK] 安装模式: platform={sys.platform}, incremental={is_incremental}")
 
         if sys.platform == 'win32':
             with self._lock:
@@ -811,11 +1306,161 @@ class UpdateChecker:
                 self._install_error = f'不支持的平台: {sys.platform}'
             return False, f'不支持的平台: {sys.platform}'
 
-    def restart_and_install(self):
-        """执行后台静默安装并自动重启应用（Windows 平台）。
+    def prepare_restart(self):
+        """准备重启并应用更新（INSPUR-102：替换原 Inno Setup 静默安装流程）。
 
-        使用隐蔽进程启动安装脚本和 Inno Setup 静默安装程序。
-        全程无 cmd 弹窗，安装完成后自动启动新版本，用户端无感知。
+        新流程：
+        1. 写入 update_ready.json（bootstrap 启动时读取）
+        2. 对完整包下载的场景：将 .exe 安装包路径也记录到 update_ready.json
+           让 bootstrap 在启动后静默安装
+        3. 返回成功，由调用方执行 os._exit(0)
+
+        移除了原 batch 脚本 + Inno Setup 静默安装流程。
+
+        返回 (success: bool, message: str)
+        """
+        with self._lock:
+            file_path = self._file_path
+            downloaded = self._downloaded
+            is_incremental = self._is_incremental
+            staging_dir = self._staging_dir
+            download_event = self._download_event
+
+        # 准备 update_ready.json
+        last = self.get_last_check()
+        target_version = last.get('version', '') if last else ''
+
+        if is_incremental or download_event == 'ready_to_restart':
+            # 增量更新：staging 目录已就绪
+            actual_staging = staging_dir or self._get_staging_dir()
+            if not os.path.isdir(actual_staging):
+                with self._lock:
+                    self._install_status = 'failed'
+                    self._install_error = '增量更新文件未就绪'
+                return False, '增量更新文件未就绪'
+
+            update_ready = {
+                'target_version': target_version,
+                'staging_dir': actual_staging,
+                'type': 'incremental',
+            }
+        elif downloaded and file_path and os.path.isfile(file_path):
+            # 完整包下载：需要 bootstrap 启动后执行 Inno Setup 静默安装
+            # 或者直接用现有 restart_and_install 路径
+            update_ready = {
+                'target_version': target_version,
+                'installer_path': file_path,
+                'type': 'full',
+            }
+        else:
+            with self._lock:
+                self._install_status = 'failed'
+                self._install_error = '安装包文件不存在'
+            return False, '安装包文件不存在'
+
+        # 写入 update_ready.json
+        update_ready_path = os.path.join(_get_data_dir(), 'update_ready.json')
+        try:
+            os.makedirs(os.path.dirname(update_ready_path), exist_ok=True)
+            with open(update_ready_path, 'w', encoding='utf-8') as f:
+                json.dump(update_ready, f, ensure_ascii=False, indent=2)
+            print(f"[OK] update_ready.json 已写入: {update_ready_path}")
+            print(f"[OK] 更新目标版本: {target_version}")
+        except Exception as e:
+            with self._lock:
+                self._install_status = 'failed'
+                self._install_error = f'写入 update_ready.json 失败: {e}'
+            return False, f'写入 update_ready.json 失败: {e}'
+
+        with self._lock:
+            self._install_status = 'done'
+            self._download_event = 'ready_to_restart'
+        return True, '更新已就绪，应用即将重启'
+
+    def prepare_rollback(self):
+        """准备回滚：检查 rollback 目录是否存在。
+        INSPUR-102 Module 6。
+
+        Returns
+        -------
+        (available: bool, message: str)
+        """
+        rollback_dir = os.path.join(_get_data_dir(), 'rollback')
+        manifest_path = os.path.join(rollback_dir, 'rollback_manifest.json')
+
+        if not os.path.isfile(manifest_path):
+            return False, '回滚文件不存在'
+
+        try:
+            with open(manifest_path, 'r', encoding='utf-8') as f:
+                manifest = json.load(f)
+
+            orig_version = manifest.get('original_version', '未知')
+            changed_count = len(manifest.get('changed_files', {}))
+            added_count = len(manifest.get('added_files', []))
+
+            with self._lock:
+                self._download_event = 'rollback_available'
+
+            return True, f'可回滚到 {orig_version}（{changed_count} 个变更文件，{added_count} 个新增文件）'
+        except Exception as e:
+            return False, f'回滚清单损坏: {e}'
+
+    def do_rollback(self):
+        """执行回滚操作（通过 bootstrap --rollback 方式）。
+
+        由于运行中的进程无法替换自身文件，这里不做实际文件操作，
+        而是设置 enable_rollback 标志，让调用方通过命令行参数启动 bootstrap 来执行回滚。
+
+        Returns
+        -------
+        (success: bool, message: str)
+        """
+        rollback_dir = os.path.join(_get_data_dir(), 'rollback')
+        manifest_path = os.path.join(rollback_dir, 'rollback_manifest.json')
+
+        if not os.path.isfile(manifest_path):
+            return False, '无可用回滚文件'
+
+        # 标记回滚请求（下次 bootstrap 启动时执行）
+        update_ready_path = os.path.join(_get_data_dir(), 'update_ready.json')
+        rollback_flag = {'rollback': True, 'rollback_dir': rollback_dir}
+        try:
+            with open(update_ready_path, 'w', encoding='utf-8') as f:
+                json.dump(rollback_flag, f)
+            print(f"[OK] 回滚标志已设置: {update_ready_path}")
+        except Exception as e:
+            return False, f'设置回滚标志失败: {e}'
+
+        return True, '回滚已准备，请重启应用完成回滚'
+
+    def auto_start_download(self):
+        """后台静默下载（INSPUR-102 Module 3）。
+
+        启动后检测到新版本时自动在后台下载，不等待用户操作。
+        仅在没有进行中的下载时触发。
+        """
+        with self._lock:
+            is_downloading = self._downloading
+            is_downloaded = self._downloaded
+
+        if is_downloading or is_downloaded:
+            return  # 已有进行中的下载
+
+        last = self.get_last_check()
+        if not last or not last.get('has_update'):
+            return
+
+        self._auto_download = True
+        self.start_incremental_download()
+
+    # ---- 旧的 restart_and_install 保留向后兼容（完整包安装器路径） ----
+
+    def restart_and_install(self):
+        """执行后台静默安装并自动重启应用（Windows 平台，完整包兼容路径）。
+
+        保留用于完整 .exe 安装包的回退场景。
+        增量更新应使用 prepare_restart() 新路径。
 
         返回 (success: bool, message: str)
         """
@@ -831,10 +1476,6 @@ class UpdateChecker:
 
         import subprocess
 
-        # 获取安装目标目录：优先使用当前运行路径（frozen exe 目录），
-        # 其次查注册表（AppId 匹配），最后回退到默认路径。
-        # 直接使用 sys.executable 是最可靠的方式——更新进程本身就在安装目录下，
-        # 不依赖注册表 AppId 历史匹配。
         frozen_dir = None
         if getattr(sys, 'frozen', False):
             frozen_dir = os.path.dirname(sys.executable)
@@ -845,16 +1486,11 @@ class UpdateChecker:
         target_dir = install_dir or default_dir
         new_exe = os.path.join(target_dir, 'IEI Timer Faster.exe')
 
-        # 升级日志文件（与安装包同目录）
         log_file = os.path.join(os.path.dirname(file_path), '_update.log')
-        # 安装包和批处理文件路径（安装完成后清理）
         bat_path = os.path.join(os.path.dirname(file_path), '_install.bat')
 
-        # 桌面快捷方式路径（setup.iss v1.1.16+ 静默安装时强制创建，此处仅验证存在性）
         desktop_lnk = os.path.join(os.environ.get('USERPROFILE', ''), 'Desktop', 'IEI Timer Faster.lnk')
 
-        # 生成批处理脚本：终止旧进程 → 静默安装 → 检查桌面快捷方式 → 启动新版本 → 清理
-        # 注意：start 不加 /B — 让新进程创建独立进程组，避免受父 cmd 生命周期影响（INSPUR-98）
         bat_lines = [
             '@echo off',
             'setlocal enabledelayedexpansion',
@@ -862,19 +1498,15 @@ class UpdateChecker:
             '',
             f'echo [!date! !time!] 开始更新... >> "!LOG!"',
             '',
-            # 强制终止旧进程
             'taskkill /f /im "IEI Timer Faster.exe" >nul 2>&1',
             f'echo [!date! !time!] 已终止旧进程 >> "!LOG!"',
             '',
-            # 等待旧进程完全退出 + 文件锁释放（ping 5次 = 约5秒）
             'ping 127.0.0.1 -n 6 >nul',
             '',
-            # 运行静默安装
             f'echo [!date! !time!] 运行安装程序... >> "!LOG!"',
             f'"{file_path}" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR="{target_dir}"',
             'set SETUP_ERR=!ERRORLEVEL!',
             '',
-            # 检查安装结果
             'if !SETUP_ERR! neq 0 (',
             f'    echo [!date! !time!] [X] 安装失败, 错误码=!SETUP_ERR! >> "!LOG!"',
             '    exit /b !SETUP_ERR!',
@@ -882,10 +1514,6 @@ class UpdateChecker:
             '',
             f'echo [!date! !time!] [OK] 安装成功 >> "!LOG!"',
             '',
-            # 桌面快捷方式检查（setup.iss v1.1.16+ 的 Check: ShouldCreateDesktopIcon
-            # 在静默升级时强制创建，此处仅验证结果，不做 PowerShell 兜底；
-            # 移除原 PowerShell ^ 续行——在 GBK 编码批处理 if 块中会引发解析错误，
-            # 导致脚本退出 → start 命令永远不执行 → 升级后不自动重启）
             f'echo [!date! !time!] 检查桌面快捷方式... >> "!LOG!"',
             f'if exist "{desktop_lnk}" (',
             f'    echo [!date! !time!] [OK] 桌面快捷方式已存在 >> "!LOG!"',
@@ -896,7 +1524,6 @@ class UpdateChecker:
             f'echo [!date! !time!] 启动新版本... >> "!LOG!"',
             f'start "" "{new_exe}"',
             '',
-            # 清理安装包和安装脚本
             f'echo [!date! !time!] 清理临时文件... >> "!LOG!"',
             f'del /f /q "{file_path}" >nul 2>&1',
             f'del /f /q "{bat_path}" >nul 2>&1',
@@ -913,8 +1540,6 @@ class UpdateChecker:
 
         try:
             print(f"[OK] 启动后台静默安装脚本: {bat_path}")
-            # 使用 STARTUPINFO + CREATE_NO_WINDOW 确保完全无窗口闪现
-            # shell=False 避免额外的 cmd.exe 壳进程
             startupinfo = subprocess.STARTUPINFO()
             startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
             startupinfo.wShowWindow = subprocess.SW_HIDE
@@ -1433,12 +2058,17 @@ check();
                 time.sleep(0.25)
 
         # ---- 后台更新检查（异步，不阻塞主流程）----
+        # INSPUR-102: 检测到新版本后自动开始静默下载
         def _check_for_update():
             time.sleep(2)  # 启动后延迟 2-3 秒，等 UI 渲染
             checker = get_update_checker()
             result = checker.check_update(_read_version())
             if result:
                 print(f"[OK] 发现新版本 V{result['version']}")
+                # Module 3: 自动后台静默下载增量包
+                if result.get('auto_download'):
+                    print("[OK] 开始后台静默下载...")
+                    checker.auto_start_download()
             elif checker.get_last_check() is None:
                 # check_update 返回 None 且 _last_check 为 None：
                 # 可能网络异常或 XML 解析失败，已在 _check_* 方法中记录详情

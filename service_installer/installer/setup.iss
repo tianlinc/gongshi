@@ -25,7 +25,9 @@
 #endif
 #define MyAppPublisher "InManage"
 #define MyAppURL "http://10.111.36.3:2029"
-#define MyAppExe "IEI Timer Faster.exe"
+; INSPUR-102: 快捷方式指向 bootstrap.exe（引导启动器）
+; bootstrap.exe → 检查 update_ready.json → 应用增量更新 → 启动 IEI Timer Faster.exe
+#define MyAppExe "bootstrap.exe"
 
 [Setup]
 ; INSPUR-93: AppId 使用双花括号 {{GUID}}（Inno Setup 转义为字面量 { ）→

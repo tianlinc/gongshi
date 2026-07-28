@@ -2153,7 +2153,12 @@ def api_update_check():
 
 @app.route('/api/update/download', methods=['POST'])
 def api_update_download():
-    """触发异步下载最新版本安装包。需要登录但不需激活检查。"""
+    """触发异步下载最新版本安装包。
+
+    INSPUR-102: 增量包优先。POST body 可选：
+      - {"mode": "incremental"} 增量优先（默认）
+      - {"mode": "full"} 强制完整包
+    """
     try:
         from _desktop_common import get_update_checker, _get_data_dir
     except ImportError:
@@ -2161,13 +2166,24 @@ def api_update_download():
 
     checker = get_update_checker()
     last = checker.get_last_check()
-    if not last or not last.get('download_url'):
+    if not last or not (last.get('download_url') or last.get('incremental_url')):
         return jsonify({'success': False, 'message': '无可用下载链接'})
 
-    data_dir = _get_data_dir()
-    updates_dir = os.path.join(data_dir, 'updates')
-    checker.start_download(last['download_url'], updates_dir)
-    return jsonify({'success': True, 'message': '开始下载'})
+    body = request.get_json(silent=True) or {}
+    mode = body.get('mode', 'incremental')
+
+    if mode == 'full' or not last.get('incremental_url'):
+        # 强制完整包 或 无增量包
+        if not last.get('download_url'):
+            return jsonify({'success': False, 'message': '无可用完整包下载链接'})
+        data_dir = _get_data_dir()
+        updates_dir = os.path.join(data_dir, 'updates')
+        checker.start_download(last['download_url'], updates_dir)
+        return jsonify({'success': True, 'message': '开始下载完整包'})
+    else:
+        # 增量包优先
+        checker.start_incremental_download()
+        return jsonify({'success': True, 'message': '开始增量下载'})
 
 
 @app.route('/api/update/status', methods=['GET'])
@@ -2176,7 +2192,7 @@ def api_update_status():
     try:
         from _desktop_common import get_update_checker
     except ImportError:
-        return jsonify({'downloading': False, 'progress_percent': 0, 'downloaded': False})
+        return jsonify({'downloading': False, 'progress_percent': 0, 'downloaded': False, 'event': 'idle'})
 
     checker = get_update_checker()
     return jsonify(checker.get_status())
@@ -2198,14 +2214,26 @@ def api_update_install():
 
 @app.route('/api/update/restart', methods=['POST'])
 def api_update_restart():
-    """启动安装脚本并重启应用（Windows 平台）。"""
+    """准备更新并重启应用（INSPUR-102：写入 update_ready.json + os._exit）。
+
+    新流程（增量更新）：写入 update_ready.json → os._exit(0) → bootstrap 启动替换文件
+    旧流程（完整包）：保留 restart_and_install() batch 脚本路径
+    """
     try:
         from _desktop_common import get_update_checker
     except ImportError:
         return jsonify({'success': False, 'message': '桌面模式下才支持在线更新'})
 
     checker = get_update_checker()
-    success, msg = checker.restart_and_install()
+    status = checker.get_status()
+
+    # INSPUR-102: 优先使用 prepare_restart（增量更新新路径）
+    if status.get('is_incremental') or status.get('event') == 'ready_to_restart':
+        success, msg = checker.prepare_restart()
+    else:
+        # 完整包：保留原 batch 脚本路径
+        success, msg = checker.restart_and_install()
+
     if not success:
         return jsonify({'success': False, 'message': msg})
 
@@ -2220,6 +2248,66 @@ def api_update_restart():
         return response
 
     return jsonify({'success': True, 'message': msg})
+
+
+# ---- INSPUR-102 新增：回滚 API ----
+
+@app.route('/api/update/rollback-check', methods=['GET'])
+def api_update_rollback_check():
+    """检查是否有可用的回滚备份。"""
+    try:
+        from _desktop_common import get_update_checker
+    except ImportError:
+        return jsonify({'available': False, 'message': '桌面模式下才支持在线更新'})
+
+    checker = get_update_checker()
+    available, message = checker.prepare_rollback()
+    return jsonify({'available': available, 'message': message})
+
+
+@app.route('/api/update/rollback', methods=['POST'])
+def api_update_rollback():
+    """触发回滚操作（设置回滚标志，重启后执行）。"""
+    try:
+        from _desktop_common import get_update_checker
+    except ImportError:
+        return jsonify({'success': False, 'message': '桌面模式下才支持在线更新'})
+
+    checker = get_update_checker()
+    success, msg = checker.do_rollback()
+    if not success:
+        return jsonify({'success': False, 'message': msg})
+
+    # 重启应用（bootstrap 启动时执行回滚）
+    @after_this_request
+    def _schedule_exit(response):
+        import threading
+        def _delayed_exit():
+            time.sleep(0.5)
+            os._exit(0)
+        threading.Thread(target=_delayed_exit, daemon=True).start()
+        return response
+
+    return jsonify({'success': True, 'message': '回滚已准备，应用即将重启'})
+
+
+# ---- INSPUR-102 新增：增量下载触发 ----
+
+@app.route('/api/update/download-incremental', methods=['POST'])
+def api_update_download_incremental():
+    """触发增量包优先的后台下载。"""
+    try:
+        from _desktop_common import get_update_checker
+    except ImportError:
+        return jsonify({'success': False, 'message': '桌面模式下才支持在线更新'})
+
+    checker = get_update_checker()
+    last = checker.get_last_check()
+    if not last or not last.get('has_update'):
+        return jsonify({'success': False, 'message': '无可用更新'})
+
+    checker.start_incremental_download()
+    return jsonify({'success': True, 'message': '开始增量下载'})
 
 
 # ===========================================================================

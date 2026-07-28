@@ -21,13 +21,14 @@ cd /d "%~dp0"
 echo ============================================
 echo   IEI Timer Faster 桌面版 一键构建
 echo   INSPUR-74 - pywebview + WebView2 桌面应用
+echo   INSPUR-102 - bootstrap 启动器
 echo ============================================
 echo.
 
 REM ============================================================
 REM  步骤 1: 检查 Python
 REM ============================================================
-echo [1/6] 检查 Python...
+echo [1/7] 检查 Python...
 python --version >nul 2>&1
 if errorlevel 1 (
     echo [X] 未找到 Python，请先安装 Python 3.8+
@@ -39,7 +40,7 @@ for /f "tokens=2" %%v in ('python --version 2^>^&1') do echo [OK] Python %%v
 REM ============================================================
 REM  步骤 2: 安装/升级 PyInstaller
 REM ============================================================
-echo [2/6] 安装 PyInstaller...
+echo [2/7] 安装 PyInstaller...
 python -m pip install pyinstaller --quiet
 if errorlevel 1 (
     echo [X] PyInstaller 安装失败，查看详细错误...
@@ -51,7 +52,7 @@ echo [OK] PyInstaller 已就绪
 REM ============================================================
 REM  步骤 3: 检查 pywebview
 REM ============================================================
-echo [3/6] 检查 pywebview...
+echo [3/7] 检查 pywebview...
 python -c "import webview" >nul 2>&1
 if errorlevel 1 (
     echo [!] 未安装 pywebview，正在安装...
@@ -71,7 +72,7 @@ taskkill /f /im "IEI Timer Faster.exe" >nul 2>&1
 REM ============================================================
 REM  步骤 4: 清理构建缓存和旧产物
 REM ============================================================
-echo [4/6] 清理构建缓存和旧产物...
+echo [4/7] 清理构建缓存和旧产物...
 if exist "dist\IEI Timer Faster" (
     rmdir /s /q "dist\IEI Timer Faster" 2>nul
     echo [OK] 已清理旧 dist 产物
@@ -86,7 +87,7 @@ if exist "build\service" (
 REM ============================================================
 REM  步骤 5: PyInstaller 构建
 REM ============================================================
-echo [5/6] 构建中，约 2-5 分钟...
+echo [5/7] 构建主应用，约 2-5 分钟...
 echo.
 python -m PyInstaller --noconfirm service.spec
 if errorlevel 1 (
@@ -111,9 +112,30 @@ if exist "dist\IEI Timer Faster.exe" (
 )
 
 REM ============================================================
-REM  步骤 6: Inno Setup 安装包编译（可选）
+REM  步骤 6: 构建 bootstrap 启动器 (INSPUR-102)
 REM ============================================================
-echo [6/6] 编译 Inno Setup 安装包...
+echo [6/7] 构建 bootstrap 启动器...
+echo.
+python -m PyInstaller --noconfirm bootstrap.spec
+if errorlevel 1 (
+    echo.
+    echo [X] bootstrap 构建失败，请检查上方错误信息
+    exit /b 1
+)
+
+REM 复制 bootstrap.exe 到主应用目录（由 setup.iss 打包到安装目录）
+echo [OK] 复制 bootstrap.exe 到主应用目录...
+copy /y "dist\bootstrap.exe" "dist\IEI Timer Faster\bootstrap.exe" >nul 2>&1
+if not exist "dist\IEI Timer Faster\bootstrap.exe" (
+    echo [X] bootstrap.exe 复制失败
+    exit /b 1
+)
+echo [OK] bootstrap 启动器构建完成
+
+REM ============================================================
+REM  步骤 7: Inno Setup 安装包编译（可选）
+REM ============================================================
+echo [7/7] 编译 Inno Setup 安装包...
 
 echo [DBG9] ISCC at step 9: [%ISCC%]
 if not "%ISCC%"=="" goto :have_iscc
