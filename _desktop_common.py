@@ -114,6 +114,49 @@ def _read_version():
         return '0.0.0'
 
 
+# ---- Channel 偏好设置 ----
+
+_CHANNEL_PREF_FILE = 'channel_pref.json'
+
+def _get_channel_preference():
+    """读取当前更新通道偏好，默认 stable。
+
+    Returns
+    -------
+    str
+        'stable' 或 'beta'
+    """
+    data_dir = _get_data_dir()
+    pref_path = os.path.join(data_dir, _CHANNEL_PREF_FILE)
+    try:
+        if os.path.isfile(pref_path):
+            with open(pref_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                return data.get('channel', 'stable')
+    except Exception:
+        pass
+    return 'stable'
+
+
+def _set_channel_preference(channel):
+    """保存更新通道偏好。
+
+    Parameters
+    ----------
+    channel : str
+        'stable' 或 'beta'
+    """
+    data_dir = _get_data_dir()
+    os.makedirs(data_dir, exist_ok=True)
+    pref_path = os.path.join(data_dir, _CHANNEL_PREF_FILE)
+    try:
+        with open(pref_path, 'w', encoding='utf-8') as f:
+            json.dump({'channel': channel}, f)
+    except Exception:
+        pass
+
+
+
 def _find_available_port(start=5000, max_tries=3):
     """找可用端口，依次尝试 start ~ start+max_tries-1。"""
     for port in range(start, start + max_tries):
@@ -253,6 +296,7 @@ class UpdateChecker:
     """
 
     GITHUB_API = 'https://api.github.com/repos/tianlinc/gongshi/releases/latest'
+    RELEASES_API = 'https://api.github.com/repos/tianlinc/gongshi/releases'
     APPCASAT_URL = 'https://tianlinc.github.io/gongshi/appcast.xml'
     TIMEOUT = 5  # API 请求超时（秒）
 
@@ -432,105 +476,179 @@ class UpdateChecker:
     def _check_windows_update(self, current_version):
         """Windows 平台：从 GitHub Releases API 检查更新。
 
-        INSPUR-102 增强：
+        INSPUR-102/103 增强：
         - 同时查找完整包(.exe)和增量包(snapshot_v*.zip)
         - 检测多版本跳跃，计算链式升级路径
-        - 缓存完整 asset 列表供后续下载使用
+        - 支持 channel 过滤：stable 用户跳过 beta 标签，beta 用户看全部（最新优先）
+        - 采集 force_update 标记和 release_info.json 元数据
         """
         import logging
         _log = logging.getLogger(__name__)
+        import requests as _requests
+
+        user_channel = _get_channel_preference()
 
         try:
-            data = self._github_get(
-                self.GITHUB_API,
+            # 获取 releases 列表（非 /latest），支持 channel 过滤
+            releases = self._github_get(
+                self.RELEASES_API,
                 timeout=self.TIMEOUT,
                 proxies=self._get_system_proxies(),
             )
         except Exception:
-            _log.exception("[X] 更新检查失败（网络异常），api=%s", self.GITHUB_API)
+            # 回退到 /latest API
+            _log.exception("[X] 获取 releases 列表失败，回退到 /latest API")
+            try:
+                latest = self._github_get(
+                    self.GITHUB_API,
+                    timeout=self.TIMEOUT,
+                    proxies=self._get_system_proxies(),
+                )
+                releases = [latest]
+            except Exception:
+                _log.exception("[X] 更新检查失败（网络异常），api=%s", self.GITHUB_API)
+                self._last_check = None
+                return None
+
+        if not releases:
             self._last_check = None
             return None
 
-        tag = data.get('tag_name', '')
-        remote_version = tag.lstrip('v')
-        _log.info("[OK] GitHub Releases API 返回 tag=%s", tag)
+        # 按 channel 过滤并取最新匹配版本
+        for release in releases:
+            tag = release.get('tag_name', '')
+            remote_version = tag.lstrip('v')
+            _log.info("  checking release: %s", tag)
 
-        if not self._is_newer(remote_version, current_version):
-            _log.info("[OK] 已是最新版本 (current=%s, remote=%s)", current_version, remote_version)
-            self._last_check = None
-            return None
+            if not self._is_newer(remote_version, current_version):
+                _log.info("[OK] 已是最新版本 (current=%s, latest=%s)", current_version, remote_version)
+                self._last_check = None
+                return None
 
-        # 遍历所有 assets：查找完整包 + 增量包
-        download_url = None
-        incremental_url = None
-        all_snapshots = []  # 所有增量包，用于多版本跳跃
-        body = data.get('body', '')
-        for asset in data.get('assets', []):
-            name = asset.get('name', '')
-            if sys.platform == 'win32' and name.lower().endswith('.exe'):
-                download_url = asset.get('browser_download_url')
-            elif name.startswith('snapshot_v') and name.lower().endswith('.zip'):
-                asset_url = asset.get('browser_download_url')
-                # 解析 from_version → to_version
-                try:
-                    core = name[len('snapshot_'):-len('.zip')]  # 如 v1.1.20_v1.1.21
-                    parts = core.split('_')
-                    if len(parts) == 2:
-                        fv = parts[0].lstrip('v')
-                        tv = parts[1].lstrip('v')
-                        snapshot_info = {
-                            'from_version': fv,
-                            'to_version': tv,
-                            'url': asset_url,
-                            'name': name,
-                        }
-                        all_snapshots.append(snapshot_info)
-                        # 精确匹配当前版本的增量包优先
-                        if fv == current_version and tv == remote_version:
-                            incremental_url = asset_url
-                except Exception:
-                    pass
+            # 尝试获取 release_info.json 判断 channel
+            release_info = self._get_release_info(release, _log)
 
-        if not download_url and not incremental_url:
-            _log.warning("[!] 未找到匹配的安装包 assets=%s",
-                         [a.get('name', '?') for a in data.get('assets', [])])
-            self._last_check = None
-            return None
+            release_channel = release_info.get('channel', 'stable') if release_info else 'stable'
+            is_force = release_info.get('force_update', False) if release_info else False
 
-        _log.info("[OK] 发现新版本 V%s (current=%s), full=%s, incremental=%s",
-                  remote_version, current_version,
-                  download_url or 'N/A', incremental_url or 'N/A')
+            # stable 用户跳过 beta release
+            if user_channel == 'stable' and release_channel == 'beta':
+                _log.info("  skip beta release %s (user channel=stable)", tag)
+                continue
 
-        # Release notes: 优先使用 Release body，为空时用 published_at 生成兜底
-        release_notes = (body or '').strip()
-        if not release_notes:
-            pub = data.get('published_at', '')
-            if pub:
-                release_notes = '版本发布日期：' + pub[:10]
-            else:
-                release_notes = '新版本 V' + remote_version
+            # 遍历所有 assets：查找完整包 + 增量包
+            download_url = None
+            incremental_url = None
+            all_snapshots = []  # 所有增量包，用于多版本跳跃
+            body = release.get('body', '')
+            for asset in release.get('assets', []):
+                name = asset.get('name', '')
+                if sys.platform == 'win32' and name.lower().endswith('.exe'):
+                    download_url = asset.get('browser_download_url')
+                elif name.startswith('snapshot_v') and name.lower().endswith('.zip'):
+                    asset_url = asset.get('browser_download_url')
+                    # 解析 from_version → to_version
+                    try:
+                        core = name[len('snapshot_'):-len('.zip')]  # 如 v1.1.20_v1.1.21
+                        parts = core.split('_')
+                        if len(parts) == 2:
+                            fv = parts[0].lstrip('v')
+                            tv = parts[1].lstrip('v')
+                            snapshot_info = {
+                                'from_version': fv,
+                                'to_version': tv,
+                                'url': asset_url,
+                                'name': name,
+                            }
+                            all_snapshots.append(snapshot_info)
+                            # 精确匹配当前版本的增量包优先
+                            if fv == current_version and tv == remote_version:
+                                incremental_url = asset_url
+                    except Exception:
+                        pass
 
-        # 计算多版本跳跃的链式升级路径
-        chain_versions = []
-        if len(all_snapshots) > 1:
-            # 构建从当前版本到目标版本的升级链
-            chain_versions = self._build_upgrade_chain(
-                current_version, remote_version, all_snapshots)
+            if not download_url and not incremental_url:
+                _log.warning("[!] 未找到匹配的安装包 for release=%s assets=%s",
+                             tag, [a.get('name', '?') for a in release.get('assets', [])])
+                continue
 
-        result = {
-            'has_update': True,
-            'version': remote_version,
-            'download_url': download_url,
-            'incremental_url': incremental_url,
-            'release_notes': release_notes,
-            'auto_download': True,       # INSPUR-102: 触发前端后台下载
-            'chain_versions': chain_versions,
-            'is_multi_hop': len(chain_versions) > 1,
-        }
-        self._last_check = result
-        self._check_result_with_assets = data  # 缓存完整 API 响应
-        self._chain_versions = chain_versions
-        return result
+            _log.info("[OK] 发现新版本 V%s (current=%s, channel=%s, force=%s), full=%s, incremental=%s",
+                      remote_version, current_version, release_channel, is_force,
+                      download_url or 'N/A', incremental_url or 'N/A')
+
+            release_notes = body.strip()
+            if not release_notes:
+                pub = release.get('published_at', '')
+                if pub:
+                    release_notes = '版本发布日期：' + pub[:10]
+                else:
+                    release_notes = '新版本 V' + remote_version
+
+            # 计算多版本跳跃的链式升级路径
+            chain_versions = []
+            if len(all_snapshots) > 1:
+                chain_versions = self._build_upgrade_chain(
+                    current_version, remote_version, all_snapshots)
+
+            result = {
+                'has_update': True,
+                'version': remote_version,
+                'download_url': download_url,
+                'incremental_url': incremental_url,
+                'release_notes': release_notes,
+                'channel': release_channel,
+                'force_update': is_force,
+                'auto_download': True,
+                'chain_versions': chain_versions,
+                'is_multi_hop': len(chain_versions) > 1,
+            }
+            self._last_check = result
+            self._check_result_with_assets = release  # 缓存完整 API 响应
+            self._chain_versions = chain_versions
+            return result
+
+        _log.info("[OK] 无匹配的 %s 更新", user_channel)
+        self._last_check = None
+        return None
+
+    def _get_release_info(self, release, _log):
+        """从 release assets 中获取 release_info.json 内容。
+
+        Parameters
+        ----------
+        release : dict
+            GitHub Release API 返回的 release 对象
+        _log : logging.Logger
+
+        Returns
+        -------
+        dict or None
+        """
+        import requests as _requests
+        for asset in release.get('assets', []):
+            if asset.get('name') == 'release_info.json':
+                info_url = asset.get('browser_download_url')
+                if info_url:
+                    try:
+                        resp = _requests.get(
+                            info_url,
+                            timeout=5,
+                            proxies=self._get_system_proxies(),
+                            verify=False,
+                        )
+                        resp.raise_for_status()
+                        info = resp.json()
+                        _log.info("  release_info: channel=%s, force_update=%s",
+                                  info.get('channel', 'stable'), info.get('force_update', False))
+                        return info
+                    except Exception as e:
+                        _log.warning("  release_info.json 下载失败: %s", e)
+                        return None
+        # 通过 tag name 判断 channel（fallback：-beta 后缀）
+        tag = release.get('tag_name', '')
+        if '-beta' in tag:
+            return {'channel': 'beta', 'force_update': False}
+        return {'channel': 'stable', 'force_update': False}
 
     def _build_upgrade_chain(self, current_version, target_version, all_snapshots):
         """构建多版本跳跃的链式升级路径。
