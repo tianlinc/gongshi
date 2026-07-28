@@ -2071,6 +2071,8 @@ def api_system_info():
                 'version': result.get('version', ''),
                 'release_notes': result.get('release_notes', ''),
                 'download_url': result.get('download_url', ''),
+                'channel': result.get('channel', 'stable'),
+                'force_update': result.get('force_update', False),
             }
         # 合并下载/安装状态（下载中、已下载等）
         try:
@@ -2220,6 +2222,30 @@ def api_update_restart():
         return response
 
     return jsonify({'success': True, 'message': msg})
+
+
+# ===========================================================================
+#  Channel 偏好 API (INSPUR-103 模块4)
+# ===========================================================================
+
+@app.route('/api/update/channel', methods=['GET', 'POST'])
+def api_update_channel():
+    """获取或设置更新通道偏好。GET 返回当前设置，POST 保存新设置。"""
+    try:
+        from _desktop_common import _get_channel_preference, _set_channel_preference
+    except ImportError:
+        return jsonify({'success': False, 'message': '桌面模式下才支持此功能'})
+
+    if request.method == 'POST':
+        data = request.get_json(silent=True) or {}
+        channel = (data.get('channel') or '').strip().lower()
+        if channel not in ('stable', 'beta'):
+            return jsonify({'success': False, 'message': '无效的通道，仅支持 stable 或 beta'})
+        _set_channel_preference(channel)
+        return jsonify({'success': True, 'channel': channel})
+
+    channel = _get_channel_preference()
+    return jsonify({'success': True, 'channel': channel})
 
 
 # ===========================================================================

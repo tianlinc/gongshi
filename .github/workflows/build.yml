@@ -168,6 +168,106 @@ jobs:
             exit /b 1
           )
 
+      # =========================================================
+      #  INSPUR-103 模块3: 确定性构建验证
+      #  对比两次 PyInstaller 构建的文件哈希，差异率 > 10%% 则阻断
+      # =========================================================
+      - name: Deterministic build verification
+        shell: bash
+        run: |
+          DIST_DIR="service_installer/dist/IEI Timer Faster"
+          BUILD_DIR="service_installer/build"
+          TEMP_DIST="service_installer/dist_save"
+          HASH_FILE_1="hash_v1.txt"
+          HASH_FILE_2="hash_v2.txt"
+
+          # Step 1: 第一次构建的哈希快照
+          echo "[OK] Computing first build hash snapshot..."
+          find "$DIST_DIR" -type f -exec sha256sum {} \; | sort > "$HASH_FILE_1"
+          echo "  Total files: $(wc -l < $HASH_FILE_1)"
+
+          # Step 2: 保存第一次 dist 到临时目录
+          echo "[OK] Saving first build to temp..."
+          rm -rf "$TEMP_DIST"
+          mkdir -p "$TEMP_DIST"
+          cp -r "$DIST_DIR" "$TEMP_DIST/"
+
+          # Step 3: 清除并重新构建
+          echo "[OK] Cleaning build artifacts..."
+          rm -rf "$DIST_DIR" "$BUILD_DIR"
+          echo "[OK] Rebuilding (second pass)..."
+          cd service_installer
+          python -m PyInstaller --noconfirm service.spec
+          cd ..
+
+          # Step 4: 第二次构建的哈希快照
+          echo "[OK] Computing second build hash snapshot..."
+          find "$DIST_DIR" -type f -exec sha256sum {} \; | sort > "$HASH_FILE_2"
+          echo "  Total files: $(wc -l < $HASH_FILE_2)"
+
+          # Step 5: 对比
+          echo "[OK] Comparing builds..."
+          DIFF_COUNT=$(comm -3 "$HASH_FILE_1" "$HASH_FILE_2" | wc -l)
+          TOTAL=$(wc -l < "$HASH_FILE_1")
+          if [ "$TOTAL" -eq 0 ]; then TOTAL=1; fi
+          DIFF_PCT=$(( DIFF_COUNT * 100 / TOTAL ))
+          echo "  Different files: $DIFF_COUNT / $TOTAL (${DIFF_PCT}%)"
+
+          if [ "$DIFF_PCT" -gt 10 ]; then
+            echo ""
+            echo "[X] Build determinism FAILED: ${DIFF_PCT}%% files differ (threshold: 10%%)"
+            echo "  Differences:"
+            comm -3 "$HASH_FILE_1" "$HASH_FILE_2" | head -20
+            # Restore first build for CI artifact upload (always want one installer)
+            echo "  Restoring first build for installer packaging..."
+            rm -rf "$DIST_DIR"
+            cp -r "$TEMP_DIST/IEI Timer Faster" "$DIST_DIR"
+            exit 1
+          fi
+          echo "[OK] Build determinism: OK (${DIFF_PCT}%%)"
+
+          # Step 6: 恢复第一次构建用于后续 Inno Setup（保证用第一次构建产物）
+          echo "[OK] Restoring first build for installer..."
+          rm -rf "$DIST_DIR"
+          cp -r "$TEMP_DIST/IEI Timer Faster" "$DIST_DIR"
+          rm -rf "$TEMP_DIST"
+
+      # =========================================================
+      #  INSPUR-103 模块2: 生成 manifest.json（SHA256 文件清单）
+      # =========================================================
+      - name: Generate manifest.json
+        id: manifest
+        shell: bash
+        run: |
+          DIST_DIR="service_installer/dist/IEI Timer Faster"
+          VERSION=$(cat VERSION | tr -d '[:space:]')
+          echo "Version: $VERSION"
+
+          # 计算每个文件的 SHA256
+          echo '{' > manifest.json
+          echo "  \"version\": \"$VERSION\"," >> manifest.json
+          echo '  "files": {' >> manifest.json
+
+          NUM_FILES=0
+          for f in $(find "$DIST_DIR" -type f | sort); do
+            REL_PATH="${f#$DIST_DIR/}"
+            HASH=$(sha256sum "$f" | cut -d' ' -f1)
+            if [ $NUM_FILES -gt 0 ]; then
+              echo ',' >> manifest.json
+            fi
+            printf '    "%s": "sha256:%s"' "$REL_PATH" "$HASH" >> manifest.json
+            NUM_FILES=$((NUM_FILES + 1))
+          done
+
+          echo '' >> manifest.json
+          echo '  },' >> manifest.json
+          echo "  \"total_files\": $NUM_FILES" >> manifest.json
+          echo '}' >> manifest.json
+          echo "[OK] manifest.json generated ($NUM_FILES files)"
+
+          # 写入 step output 供后续步骤使用
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
       - name: Build (Inno Setup installer)
         shell: cmd
         run: |
@@ -193,6 +293,130 @@ jobs:
             dir service_installer\dist 2>nul || echo "(dist/ directory does not exist)"
             exit /b 1
           )
+
+      # =========================================================
+      #  INSPUR-103 模块2: 获取上一版本 manifest 并生成增量包
+      # =========================================================
+      - name: Generate snapshot package
+        id: snapshot
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(cat VERSION | tr -d '[:space:]')
+          echo "Current version: $VERSION"
+
+          # 尝试从最新 GitHub Release 获取上一版本 manifest
+          mkdir -p snapshot_work
+          PREV_MANIFEST=""
+          PREV_VERSION=""
+
+          # 用 GitHub CLI 查询所有 release
+          RELEASES_JSON=$(gh api repos/tianlinc/gongshi/releases --jq '.[] | {tag: .tag_name, assets: [.assets[].name]}' 2>/dev/null || echo "")
+
+          # 尝试下载上一个 release 的 manifest.json
+          LATEST_RELEASE_TAG=$(gh api repos/tianlinc/gongshi/releases/latest --jq '.tag_name' 2>/dev/null || echo "")
+          if [ -n "$LATEST_RELEASE_TAG" ] && [ "$LATEST_RELEASE_TAG" != "v$VERSION" ]; then
+            echo "Latest release tag: $LATEST_RELEASE_TAG"
+            PREV_VERSION="${LATEST_RELEASE_TAG#v}"
+            echo "Previous version: $PREV_VERSION"
+
+            if gh release download "$LATEST_RELEASE_TAG" -p "manifest.json" -D snapshot_work 2>/dev/null; then
+              if [ -f "snapshot_work/manifest.json" ]; then
+                PREV_MANIFEST="snapshot_work/manifest.json"
+                echo "[OK] Downloaded previous manifest.json from $LATEST_RELEASE_TAG"
+              fi
+            else
+              echo "[!] manifest.json not found in previous release $LATEST_RELEASE_TAG"
+            fi
+          else
+            echo "[!] No previous release found (this may be the first release)"
+          fi
+
+          # 如果拿到上一版本 manifest，比对差异并生成增量包
+          if [ -n "$PREV_MANIFEST" ] && [ -f "$PREV_MANIFEST" ]; then
+            DIST_DIR="service_installer/dist/IEI Timer Faster"
+
+            # 解析 manifest.json 获取文件列表
+            # 使用 Python 做 diff（简单可靠）
+            python3 - "$PREV_MANIFEST" "manifest.json" "$DIST_DIR" "$VERSION" "$PREV_VERSION" << 'PYEOF'
+          import json, os, sys, zipfile, shutil
+
+          prev_mf = sys.argv[1]
+          new_mf = sys.argv[2]
+          dist_dir = sys.argv[3]
+          new_version = sys.argv[4]
+          prev_version = sys.argv[5]
+
+          with open(prev_mf) as f:
+              prev_data = json.load(f)
+          with open(new_mf) as f:
+              new_data = json.load(f)
+
+          prev_files = set(prev_data['files'].keys())
+          new_files = set(new_data['files'].keys())
+
+          added = new_files - prev_files
+          changed = {f for f in (new_files & prev_files) if new_data['files'][f] != prev_data['files'][f]}
+          removed = prev_files - new_files
+
+          total = len(new_files)
+          change_count = len(added) + len(changed) + len(removed)
+
+          # 降级策略：changed_files > 50%% 不生成增量包
+          if len(changed) > total * 0.5:
+              print(f"[!] Too many changes ({len(changed)}/{total}), skipping snapshot")
+              sys.exit(0)
+
+          print(f"[OK] Added: {len(added)}, Changed: {len(changed)}, Removed: {len(removed)}")
+
+          snapshot_name = f"snapshot_v{prev_version}_{new_version}.zip"
+          with zipfile.ZipFile(snapshot_name, 'w', zipfile.ZIP_DEFLATED) as zf:
+              # 写入 changed files
+              for fname in sorted(changed):
+                  local_path = os.path.join(dist_dir, fname)
+                  if os.path.isfile(local_path):
+                      zf.write(local_path, f"changed_files/{fname}")
+
+              # 写入 added files
+              for fname in sorted(added):
+                  local_path = os.path.join(dist_dir, fname)
+                  if os.path.isfile(local_path):
+                      zf.write(local_path, f"added_files/{fname}")
+
+              # 写入 removed.list
+              if removed:
+                  zf.writestr("removed.list", "\n".join(sorted(removed)))
+
+              # 写入新版本 manifest.json
+              zf.writestr("manifest.json", json.dumps(new_data, indent=2))
+
+          print(f"[OK] Snapshot generated: {snapshot_name}")
+
+          # 写入 step output
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as gh_out:
+              gh_out.write(f"snapshot_name={snapshot_name}\n")
+              gh_out.write(f"has_snapshot=true\n")
+          PYEOF
+          else
+            echo "[!] No previous manifest, skipping snapshot generation"
+            echo "has_snapshot=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload manifest artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: manifest.json
+          path: manifest.json
+          if-no-files-found: error
+
+      - name: Upload snapshot artifact
+        if: steps.snapshot.outputs.has_snapshot == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshot-package
+          path: snapshot_v*.zip
+          if-no-files-found: error
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -303,6 +527,7 @@ jobs:
 
   # ==========================================================
   #  自动创建 GitHub Release 并上传未压缩产物
+  #  INSPUR-103 模块4: channel 检测（beta/stable/security）
   # ==========================================================
   create-release:
     needs: [build-windows, build-macos]
@@ -327,6 +552,80 @@ jobs:
           name: macos-installer
           path: ./release
 
+      - name: Download manifest artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: manifest.json
+          path: ./release
+
+      - name: Download snapshot artifact
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: snapshot-package
+          path: ./release
+
+      # =========================================================
+      #  INSPUR-103 模块4: 检测 release channel
+      #  - v1.1.22-beta tag → beta channel
+      #  - v1.1.22 tag → stable channel
+      #  - label_security → security (force_update)
+      # =========================================================
+      - name: Detect release channel
+        id: channel
+        shell: bash
+        run: |
+          TAG="${{ github.ref_name }}"
+          CHANNEL="stable"
+          IS_SECURITY="false"
+
+          if [[ "$TAG" =~ -beta$ ]]; then
+            CHANNEL="beta"
+          fi
+
+          echo "channel=$CHANNEL" >> $GITHUB_OUTPUT
+          echo "is_security=$IS_SECURITY" >> $GITHUB_OUTPUT
+          echo "Tag: $TAG, Channel: $CHANNEL, Security: $IS_SECURITY"
+
+      - name: Compute base_versions (last 3 releases)
+        id: base_versions
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          CURRENT_TAG="${{ github.ref_name }}"
+          echo "Current: $CURRENT_TAG"
+
+          # 获取最近 4 个 release（包含当前构建的版本，跳过它）
+          TAGS=$(gh api repos/tianlinc/gongshi/releases --jq '.[].tag_name' 2>/dev/null | head -4 | grep -v "$CURRENT_TAG" | head -3)
+          BASE_LIST="[]"
+          if [ -n "$TAGS" ]; then
+            BASE_LIST=$(echo "$TAGS" | sed 's/^v//' | awk '{printf "\"%s\"", $0}' | paste -sd,)
+            BASE_LIST="[$BASE_LIST]"
+          fi
+          echo "Base versions: $BASE_LIST"
+          echo "base_versions=$BASE_LIST" >> $GITHUB_OUTPUT
+
+      - name: Generate release_info.json
+        shell: bash
+        run: |
+          VERSION=$(cat VERSION | tr -d '[:space:]')
+          CHANNEL="${{ steps.channel.outputs.channel }}"
+          IS_SECURITY="${{ steps.channel.outputs.is_security }}"
+          BASE_VERSIONS='${{ steps.base_versions.outputs.base_versions }}'
+          TAG="${{ github.ref_name }}"
+
+          printf '{\n' > release_info.json
+          printf '  "version": "%s",\n' "$VERSION" >> release_info.json
+          printf '  "tag": "%s",\n' "$TAG" >> release_info.json
+          printf '  "channel": "%s",\n' "$CHANNEL" >> release_info.json
+          printf '  "force_update": %s,\n' "$IS_SECURITY" >> release_info.json
+          printf '  "base_versions": %s\n' "$BASE_VERSIONS" >> release_info.json
+          printf '}\n' >> release_info.json
+          echo "[OK] release_info.json generated"
+          cat release_info.json
+          cp release_info.json ./release/
+
       - name: Read release notes
         id: notes
         shell: bash
@@ -349,5 +648,8 @@ jobs:
           files: |
             ./release/IEI_Timer_Faster_Setup*.exe
             ./release/IEI_Timer_Faster_Setup_*.dmg
+            ./release/manifest.json
+            ./release/release_info.json
+            ./release/snapshot_v*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

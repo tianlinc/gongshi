@@ -83,25 +83,31 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"; IconFilename:
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"; IconFilename: "{app}\iei_timer.ico"
 Name: "{group}\卸载 {#MyAppName}"; Filename: "{uninstallexe}"
 
-; INSPUR-95: 批处理脚本已稳定（v1.1.17 修复 PowerShell ^ 续行 bug），
-; start "" 可靠。installer 不再在静默升级时 auto-start 新版本——
-; 避免与批处理的 start "" 形成双启动竞争，导致单实例锁 FOCUS 信号
-; 在 WebView2 初始化阶段从后台线程触发窗口 API 造成死锁。
+; INSPUR-95: 静默升级时，批处理脚本由旧版本 _desktop_common.py 生成，
+; 可能因 PowerShell ^ 续行等旧版代码缺陷而崩溃 → start 命令永不被执行。
+; [Run] 段在安装完成后由 installer 自身启动新版本，不依赖批处理脚本，
+; 即使批处理崩溃升级后应用也能自动打开。
 [Run]
 ; 正常安装：完成页显示"启动应用"复选框
 Filename: "{app}\{#MyAppExe}"; Description: "启动 IEI Timer Faster"; Flags: nowait postinstall skipifsilent
+; 静默升级：自动启动新版本（nowait: 不等待进程, shellexec: 确保作为独立进程启动）
+Filename: "{app}\{#MyAppExe}"; Flags: nowait shellexec; Check: IsSilentInstall
 
-; INSPUR-115 / INSPUR-95 fix: 安装前删除旧 VERSION，确保升级后版本号正确。
-; - ignoreversion 会跳过已存在的 VERSION（纯文本文件无版本信息资源），
-;   通过 InstallDelete 在复制前清除旧文件
-; - PyInstaller 6+ onedir 结构：VERSION 在 _internal/ 子目录下（{app}\_internal\VERSION）
-;   保留 {app}\VERSION 兼容旧 PyInstaller 的 root VERSION
+; INSPUR-115: 安装前删除旧文件，确保升级后干净。
+; - ignoreversion 会跳过已存在的 VERSION，通过 InstallDelete 在复制前清除旧文件
 ; - 旧桌面快捷方式：如果不同 AppId 格式的旧版本 uninstaller 未正确清理（如 GetUninstallString
 ;   "先到先得"策略跳过了另一方格式的卸载），这里兜底删除，避免两份同名快捷方式共存
+; INSPUR-103 模块5: 清理更新临时文件（旧版本 installer 残留的更新缓存）
+; - _install.bat / _update.log / manifest.json / channel_pref.json / snapshot_v*.zip
 [InstallDelete]
-Type: files; Name: "{app}\_internal\VERSION"
 Type: files; Name: "{app}\VERSION"
 Type: files; Name: "{autodesktop}\{#MyAppName}.lnk"
+Type: files; Name: "{app}\_install.bat"
+Type: files; Name: "{app}\_update.log"
+Type: files; Name: "{app}\manifest.json"
+Type: files; Name: "{app}\channel_pref.json"
+Type: files; Name: "{app}\snapshot_v*.zip"
+Type: files; Name: "{app}\release_info.json"
 
 [Code]
 procedure CleanupOrphanRegistryEntries; forward;
