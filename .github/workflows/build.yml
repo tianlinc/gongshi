@@ -213,6 +213,22 @@ jobs:
           DIFF_PCT=$(( DIFF_COUNT * 100 / TOTAL ))
           echo "  Different files: $DIFF_COUNT / $TOTAL (${DIFF_PCT}%)"
 
+          # ---- helper: 安全恢复第一次构建产物到 dist 目录 ----
+          _restore_dist() {
+            # Windows 上 rm -rf 可能因文件锁/路径过长等原因残留，
+            # cp -r 在目标为非目录时直接报错。这里先确保目标不存在，再复制。
+            if [ -e "$DIST_DIR" ]; then
+              rm -rf "$DIST_DIR" 2>/dev/null || true
+            fi
+            # rm 后仍存在则改名避开（Windows 文件锁场景）
+            if [ -e "$DIST_DIR" ]; then
+              _bak="${DIST_DIR}.stale_$(date +%s)"
+              mv "$DIST_DIR" "$_bak" 2>/dev/null || true
+              rm -rf "$_bak" &  # 后台异步清理，不阻塞
+            fi
+            cp -r "$TEMP_DIST/IEI Timer Faster" "$DIST_DIR"
+          }
+
           if [ "$DIFF_PCT" -gt 10 ]; then
             echo ""
             echo "[X] Build determinism FAILED: ${DIFF_PCT}%% files differ (threshold: 10%%)"
@@ -220,16 +236,14 @@ jobs:
             comm -3 "$HASH_FILE_1" "$HASH_FILE_2" | head -20
             # Restore first build for CI artifact upload (always want one installer)
             echo "  Restoring first build for installer packaging..."
-            rm -rf "$DIST_DIR"
-            cp -r "$TEMP_DIST/IEI Timer Faster" "$DIST_DIR"
+            _restore_dist
             exit 1
           fi
           echo "[OK] Build determinism: OK (${DIFF_PCT}%%)"
 
           # Step 6: 恢复第一次构建用于后续 Inno Setup（保证用第一次构建产物）
           echo "[OK] Restoring first build for installer..."
-          rm -rf "$DIST_DIR"
-          cp -r "$TEMP_DIST/IEI Timer Faster" "$DIST_DIR"
+          _restore_dist
           rm -rf "$TEMP_DIST"
 
       # =========================================================
