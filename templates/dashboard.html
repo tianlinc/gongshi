@@ -1870,13 +1870,21 @@
                 _forceUpdate = !!(data.update.force_update);
                 updateChannelBadge();
             }
-            // 如果已缓存更新信息，直接显示
+            // 根据缓存的更新信息切换状态
             if (data && data.update && data.update.has_update) {
+                // 有新版本：显示更新信息框
                 _globalUpdateData = data.update;
                 showAboutUpdateAvailable(data.update);
+            } else if (data && data.update && data.update.has_update === false) {
+                // 无新版本：隐藏新版本信息框，显示已是最新提示
+                document.getElementById('aboutUpdateIdle').style.display = 'none';
+                document.getElementById('aboutUpdateLatest').style.display = '';
+                document.getElementById('aboutNewVerBox').style.display = 'none';
+                document.getElementById('aboutDownloadBtn').style.display = 'none';
+                document.getElementById('aboutDlProgress').style.display = 'none';
             }
-            // 恢复下载进度（如果正在下载或已下载）
-            if (data && data.update && data.update.dl_status) {
+            // 恢复下载进度（如果正在下载或已下载，仅在有新版本时恢复）
+            if (data && data.update && data.update.has_update && data.update.dl_status) {
                 restoreDownloadStatus(data.update.dl_status);
             }
         } catch (_) {
@@ -1983,7 +1991,7 @@
     }
 
     function showAboutUpdateAvailable(data) {
-        if (!data) return;
+        if (!data || !data.has_update) return;
         document.getElementById('aboutUpdateIdle').style.display = 'none';
         document.getElementById('aboutUpdateLatest').style.display = 'none';
         document.getElementById('aboutUpdateAvailable').style.display = '';
