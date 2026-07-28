@@ -263,15 +263,17 @@ jobs:
           echo '  "files": {' >> manifest.json
 
           NUM_FILES=0
-          for f in $(find "$DIST_DIR" -type f | sort); do
+          # 路径含空格 (IEI Timer Faster)，不能用 for f in $(find ...)（会被 shell word-splitting 切分）
+          while IFS= read -r f; do
             REL_PATH="${f#$DIST_DIR/}"
+            # sha256sum 输出 "hash  path"，取第一列
             HASH=$(sha256sum "$f" | cut -d' ' -f1)
             if [ $NUM_FILES -gt 0 ]; then
               echo ',' >> manifest.json
             fi
             printf '    "%s": "sha256:%s"' "$REL_PATH" "$HASH" >> manifest.json
             NUM_FILES=$((NUM_FILES + 1))
-          done
+          done < <(find "$DIST_DIR" -type f | sort)
 
           echo '' >> manifest.json
           echo '  },' >> manifest.json
