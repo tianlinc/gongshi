@@ -1836,8 +1836,8 @@
     let aboutModalInst = null;
 
     async function openAboutModal() {
-        // 关闭更新 toast
-        const toast = document.getElementById('updateToast');
+        // 关闭更新确认 toast
+        const toast = document.getElementById('confirmUpdateToast');
         if (toast) toast.style.display = 'none';
 
         if (!aboutModalInst) {
@@ -2594,9 +2594,9 @@
                 _updateChannel = data.channel || 'stable';
                 // 显示关于按钮红点
                 document.getElementById('aboutRedDot').classList.add('show');
-                // 自动触发后台下载（含 toast 通知）
+                // 弹出确认通知，用户点击"立即升级"后才下载
                 if (data.download_url) {
-                    triggerBackgroundDownload(data);
+                    showConfirmUpdateToast(data);
                 }
             } catch (_) {
                 // 静默忽略（非桌面模式无此 API 或无网络）
@@ -2604,50 +2604,43 @@
         }, 3000);
     })();
 
-    function showUpdateToast(version, downloadUrl, releaseNotes) {
-        const existing = document.getElementById('updateToast');
+    function showConfirmUpdateToast(updateData) {
+        const existing = document.getElementById('confirmUpdateToast');
         if (existing) existing.remove();
 
-        const isForce = _forceUpdate;
-        const toastClass = isForce ? 'update-toast force-update' : 'update-toast';
-        const headerClass = isForce ? 'update-toast-header-danger' : 'update-toast-header-green';
-
         const wrapper = document.createElement('div');
-        wrapper.id = 'updateToast';
+        wrapper.id = 'confirmUpdateToast';
         wrapper.className = 'update-toast-wrapper';
         wrapper.innerHTML =
-            '<div class="' + toastClass + '" id="updateToastInner">' +
-            '<div class="' + headerClass + '">' +
-            '<i class="' + (isForce ? 'bi bi-shield-exclamation' : 'bi bi-rocket-takeoff') + '"></i>' +
-            '<strong>' + (isForce ? '安全更新' : '发现新版本') + '</strong>' +
-            '<button class="update-toast-close" id="updateToastClose">&times;</button>' +
+            '<div class="update-toast">' +
+            '<div class="update-toast-header-green">' +
+            '<i class="bi bi-rocket-takeoff"></i>' +
+            '<strong>发现新版本 V' + escapeHtml(updateData.version || '') + '</strong>' +
+            '<button class="update-toast-close" id="confirmUpdateClose">&times;</button>' +
             '</div>' +
             '<div class="update-toast-body">' +
-            '<span class="version-tag">V' + escapeHtml(version) + '</span>' +
-            (releaseNotes ? escapeHtml(releaseNotes.substring(0, 120)) : '本次更新包含功能优化和体验提升。') +
+            '<span class="version-tag">V' + escapeHtml(updateData.version || '') + '</span>' +
+            escapeHtml((updateData.release_notes || '本次更新包含功能优化和体验提升。').substring(0, 120)) +
             '</div>' +
-            '<div class="update-toast-footer">' +
-            '<span style="font-size:12px;color:#999;">' + (isForce ? '正在后台下载，完成后必须重启' : '正在后台下载，点击查看进度') + '</span>' +
-            '<span class="click-hint"><i class="bi bi-hand-index"></i> 打开关于</span>' +
+            '<div class="update-toast-footer" style="justify-content:space-between;">' +
+            '<button class="btn btn-outline-secondary btn-sm" id="confirmUpdateLater">稍后提醒</button>' +
+            '<button class="btn btn-success btn-sm" id="confirmUpdateNow"><i class="bi bi-download"></i> 立即升级</button>' +
             '</div>' +
             '</div>';
         document.body.appendChild(wrapper);
 
-        // 点击整体打开关于弹窗
-        document.getElementById('updateToastInner').addEventListener('click', function() {
+        document.getElementById('confirmUpdateNow').addEventListener('click', function() {
             wrapper.remove();
-            openAboutModal();
+            triggerBackgroundDownload(updateData);
         });
 
-        document.getElementById('updateToastClose').addEventListener('click', function(e) {
-            e.stopPropagation();
+        document.getElementById('confirmUpdateClose').addEventListener('click', function() {
             wrapper.remove();
         });
-    }
 
-    function closeUpdateToast() {
-        const toast = document.getElementById('updateToast');
-        if (toast) toast.remove();
+        document.getElementById('confirmUpdateLater').addEventListener('click', function() {
+            wrapper.remove();
+        });
     }
 })();
 </script>
