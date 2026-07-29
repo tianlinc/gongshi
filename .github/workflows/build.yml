@@ -634,7 +634,8 @@ jobs:
           echo "Current: $CURRENT_TAG"
 
           # 获取最近 4 个 release（包含当前构建的版本，跳过它）
-          TAGS=$(gh api repos/tianlinc/gongshi/releases --jq '.[].tag_name' 2>/dev/null | head -4 | grep -v "$CURRENT_TAG" | head -3)
+          # 用 awk 替代 head/grep/head 管道链，避免 head 提前退出时 gh api 收到 SIGPIPE (exit 141)
+          TAGS=$(gh api repos/tianlinc/gongshi/releases --jq '.[].tag_name' 2>/dev/null | awk -v cur="$CURRENT_TAG" 'NR <= 4 && $0 != cur && c < 3 {print; c++}')
           BASE_LIST="[]"
           if [ -n "$TAGS" ]; then
             BASE_LIST=$(echo "$TAGS" | sed 's/^v//' | awk '{printf "\"%s\"", $0}' | paste -sd,)
