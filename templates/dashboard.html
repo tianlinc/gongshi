@@ -2031,9 +2031,13 @@
                 _globalUpdateData = data;
                 _forceUpdate = !!(data.force_update);
                 showAboutUpdateAvailable(data);
-                // 自动触发后台下载（强制更新立即下载，普通更新也可触发）
+                // 强制更新立即下载；普通更新先询问用户确认
                 if (data.download_url) {
-                    triggerBackgroundDownload(data);
+                    if (data.force_update) {
+                        triggerBackgroundDownload(data);
+                    } else {
+                        showConfirmUpdateToast(data);
+                    }
                 }
             } else {
                 document.getElementById('aboutUpdateLatest').style.display = '';
@@ -2079,8 +2083,10 @@
             '<span id="bgDlToastPct" style="font-size:13px;color:#333;">准备下载...</span>' +
             '</div>' +
             '<div class="update-toast-footer">' +
-            '<span style="font-size:12px;color:#999;">下载完成后可重启升级</span>' +
-            '<span class="click-hint"><i class="bi bi-hand-index"></i> 查看详情</span>' +
+            '<span id="bgDlFooterText" style="font-size:12px;color:#999;">下载完成后可重启升级</span>' +
+            '<span class="click-hint" id="bgDlClickHint"><i class="bi bi-hand-index"></i> 查看详情</span>' +
+            '<button class="btn btn-success btn-sm" id="bgDlRestartBtn" style="display:none;">' +
+            '<i class="bi bi-arrow-repeat"></i> 立即重启升级</button>' +
             '</div>' +
             '</div>';
         document.body.appendChild(_bgDownloadToast);
@@ -2093,6 +2099,12 @@
         document.getElementById('bgDlToastClose').addEventListener('click', function(e) {
             e.stopPropagation();
             closeBgDownloadToast();
+        });
+        // 立即重启升级按钮
+        document.getElementById('bgDlRestartBtn').addEventListener('click', function(e) {
+            e.stopPropagation();
+            closeBgDownloadToast();
+            doAboutRestart();
         });
     }
 
@@ -2255,6 +2267,13 @@
                 header.innerHTML = '<i class="bi bi-check-circle-fill"></i><strong>新版本已就绪</strong>' +
                     '<button class="update-toast-close">&times;</button>';
             }
+            // 显示"立即重启升级"按钮，隐藏提示文字
+            var restartBtn = document.getElementById('bgDlRestartBtn');
+            if (restartBtn) restartBtn.style.display = '';
+            var clickHint = document.getElementById('bgDlClickHint');
+            if (clickHint) clickHint.style.display = 'none';
+            var footerText = document.getElementById('bgDlFooterText');
+            if (footerText) footerText.style.display = 'none';
         }
     }
 
