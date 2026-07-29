@@ -1118,14 +1118,29 @@ class UpdateChecker:
             pass
 
         # 校验 manifest.json 的 SHA256
-        manifest_path = os.path.join(files_dir, 'manifest.json')
-        if os.path.isfile(manifest_path):
-            if not self._verify_manifest(manifest_path, files_dir):
+        # manifest.json 在 zip 内位于根级别，解压后位于 staging/files/manifest.json
+        # 但 bootstrap._apply_staging() 期望 manifest.json 在 staging/manifest.json
+        # 因此需要复制/生成一份到 staging 根目录
+        manifest_path_in_files = os.path.join(files_dir, 'manifest.json')
+        manifest_path_in_staging = os.path.join(staging_dir, 'manifest.json')
+
+        if os.path.isfile(manifest_path_in_files):
+            if not self._verify_manifest(manifest_path_in_files, files_dir):
                 _log.error("[X] manifest SHA256 校验失败")
                 shutil.rmtree(staging_dir, ignore_errors=True)
                 return False
+            # 复制 manifest.json 到 staging 根目录，供 bootstrap 读取
+            shutil.copy2(manifest_path_in_files, manifest_path_in_staging)
+            _log.info("[OK] manifest.json 已复制到 staging 根目录")
         else:
-            _log.warning("[!] 增量包中未找到 manifest.json")
+            _log.warning("[!] 增量包中未找到 manifest.json，自动生成...")
+            # 生成 manifest.json：扫描 staging/files/ 下的文件列表
+            loaded_manifest = self._generate_manifest_from_extracted(
+                files_dir, from_version, to_version)
+            if loaded_manifest is None:
+                _log.error("[X] 无法生成 manifest.json（提取目录为空）")
+                shutil.rmtree(staging_dir, ignore_errors=True)
+                return False
 
         _log.info("[OK] 增量包已就绪: %s → %s (chain=%s)", from_version, to_version, is_chain)
         return True
@@ -1192,6 +1207,93 @@ class UpdateChecker:
         if all_valid:
             _log.info("[OK] 文件完整性校验通过 (%d 个文件)", len(all_files))
         return all_valid
+
+    @staticmethod
+    def _generate_manifest_from_extracted(files_dir, from_version, to_version):
+        """从已解压的文件目录生成 manifest.json。
+
+        当增量 zip 包内不包含 manifest.json 时，自动扫描 files_dir
+        下的所有文件生成 manifest，写入 staging 根目录供 bootstrap 读取。
+
+        Parameters
+        ----------
+        files_dir : str
+            已解压文件的目录（如 staging/files/）
+        from_version : str
+            起始版本号
+        to_version : str
+            目标版本号
+
+        Returns
+        -------
+        dict or None
+            生成的 manifest dict，files_dir 为空时返回 None
+        """
+        import logging
+        _log = logging.getLogger(__name__)
+
+        staging_dir = os.path.dirname(files_dir)  # staging 根目录
+
+        added_files = []
+        changed_files = []
+        sha256_map = {}
+
+        # 遍历 files/ 下所有文件（含子目录）
+        for root, dirs, filenames in os.walk(files_dir):
+            for fname in filenames:
+                full_path = os.path.join(root, fname)
+                # 相对于 files/ 的路径
+                rel_path = os.path.relpath(full_path, files_dir).replace('\\', '/')
+
+                # 跳过 .patch 差分文件（如果有），只列出主文件
+                if rel_path.endswith('.patch'):
+                    continue
+
+                # 跳过 manifest.json 本身
+                if rel_path == 'manifest.json':
+                    continue
+
+                # 所有文件作为 added_files（_safe_copy 会覆盖已存在的文件）
+                if os.path.isfile(full_path):
+                    added_files.append(rel_path)
+
+                # 计算 SHA256
+                try:
+                    h = hashlib.sha256()
+                    with open(full_path, 'rb') as f_in:
+                        while True:
+                            chunk = f_in.read(65536)
+                            if not chunk:
+                                break
+                            h.update(chunk)
+                    sha256_map[rel_path] = h.hexdigest()
+                except Exception:
+                    pass
+
+        if not added_files and not changed_files:
+            _log.warning("[X] 解压目录为空，无法生成 manifest")
+            return None
+
+        manifest = {
+            'from_version': from_version,
+            'to_version': to_version,
+            'added_files': added_files,
+            'changed_files': changed_files,
+            'removed_files': [],
+            'sha256': sha256_map,
+            '_generated': True,  # 标记为自动生成
+        }
+
+        manifest_path = os.path.join(staging_dir, 'manifest.json')
+        try:
+            with open(manifest_path, 'w', encoding='utf-8') as f:
+                json.dump(manifest, f, ensure_ascii=False, indent=2)
+            _log.info("[OK] manifest.json 已自动生成: %d 个文件", len(added_files))
+        except Exception as e:
+            _log.error("[X] manifest.json 写入失败: %s", e)
+            return None
+
+        return manifest
 
     def _finalize_download(self, target_version):
         """下载完成后的收尾工作。

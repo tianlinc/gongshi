@@ -600,7 +600,16 @@ def main():
             _log('[OK] 更新应用成功')
         else:
             _log('[X] 更新应用失败，尝试回滚...')
-            _restore_from_rollback()
+            rolled_back = _restore_from_rollback()
+            if not rolled_back:
+                _log('[!] 回滚失败，删除 update_ready.json 防止死循环')
+            # 无论回滚是否成功，都要删除 update_ready.json
+            # 否则每次启动 bootstrap 都会重复尝试应用更新 → 重复失败
+            try:
+                os.remove(UPDATE_READY_FILE)
+                _log('[OK] update_ready.json 已删除')
+            except Exception as del_err:
+                _log(f'[!] update_ready.json 删除失败: {del_err}')
 
     # 启动主应用
     launch_main_app()
