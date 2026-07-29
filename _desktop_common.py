@@ -1039,7 +1039,7 @@ class UpdateChecker:
 
             _log.info("[OK] 增量包不可用，降级为完整包下载...")
 
-        # ---- 降级：下载完整安装包 ----
+        # ---- 降级：下载完整包（优先 zip 格式，兜底 exe 安装包） ----
         full_url = last.get('download_url')
         if not full_url:
             self._set_download_error('无可用下载链接（增量包和完整包均不可用）')
@@ -1052,6 +1052,37 @@ class UpdateChecker:
         _log.info("[OK] 下载完整安装包: %s", full_url)
         save_dir = os.path.join(_get_data_dir(), 'updates')
         self._do_download(full_url, save_dir)
+
+        # 完整包也是 zip 格式时，自动解压到 staging + 生成 manifest
+        full_path = self._file_path
+        if full_path and full_path.lower().endswith('.zip'):
+            _log.info("[OK] 完整包为 zip 格式，解压到 staging 目录")
+            staging_dir = self._get_staging_dir()
+            files_dir = os.path.join(staging_dir, 'files')
+            os.makedirs(files_dir, exist_ok=True)
+            try:
+                import zipfile
+                with zipfile.ZipFile(full_path, 'r') as zf:
+                    zf.extractall(files_dir)
+                _log.info("[OK] 完整包解压完成")
+                # 生成 manifest.json
+                self._generate_manifest_from_extracted(
+                    files_dir, current_version, target_version)
+                with self._lock:
+                    self._is_incremental = True
+                    self._file_path = staging_dir
+                    self._staging_dir = staging_dir
+                    self._download_event = 'ready_to_restart'
+                # 删除临时 zip 文件
+                try:
+                    os.remove(full_path)
+                except Exception:
+                    pass
+                _log.info("[OK] 完整包 zip → staging 转换完成")
+            except Exception as e:
+                _log.warning("[!] 完整包 zip 解压失败: %s (保留 exe 安装器模式)", e)
+                # 解压失败时保留原有状态（exe 安装器模式）
+                # prepare_restart 会以 type='full_installer' 处理
 
     def _download_single_incremental(self, url, from_version, to_version, is_chain=False):
         """下载单个增量包并解压到 staging 目录。
@@ -1527,56 +1558,46 @@ class UpdateChecker:
             return False, f'不支持的平台: {sys.platform}'
 
     def prepare_restart(self):
-        """准备重启并应用更新（INSPUR-102：替换原 Inno Setup 静默安装流程）。
+        """统一升级路径：写入 update_ready.json，bootstrap 启动时应用更新。
 
-        新流程：
-        1. 写入 update_ready.json（bootstrap 启动时读取）
-        2. 对完整包下载的场景：将 .exe 安装包路径也记录到 update_ready.json
-           让 bootstrap 在启动后静默安装
-        3. 返回成功，由调用方执行 os._exit(0)
-
-        移除了原 batch 脚本 + Inno Setup 静默安装流程。
+        INSPUR-112 统一：不再区分增量/完整包，两套路径合并为一套。
+        1. 检测 staging 目录（zip 解压后的文件）或 exe 安装包
+        2. 写入 update_ready.json，bootstrap.exe 启动时读取并执行升级
+        3. bootstrap.exe 负责显示进度窗口（tkinter GUI）
+        4. 调用方在返回值后应 os._exit(0) + 启动 bootstrap.exe
 
         返回 (success: bool, message: str)
         """
         with self._lock:
             file_path = self._file_path
             downloaded = self._downloaded
-            is_incremental = self._is_incremental
             staging_dir = self._staging_dir
-            download_event = self._download_event
+            is_incremental = self._is_incremental
 
-        # 准备 update_ready.json
         last = self.get_last_check()
         target_version = last.get('version', '') if last else ''
 
-        if is_incremental:
-            # 增量更新：staging 目录已就绪
-            actual_staging = staging_dir or self._get_staging_dir()
-            if not os.path.isdir(actual_staging):
-                with self._lock:
-                    self._install_status = 'failed'
-                    self._install_error = '增量更新文件未就绪'
-                return False, '增量更新文件未就绪'
-
+        # 路径 1: staging 目录（zip 解压，优先）
+        actual_staging = staging_dir or self._get_staging_dir()
+        staging_manifest = os.path.join(actual_staging, 'manifest.json')
+        if os.path.isfile(staging_manifest):
             update_ready = {
                 'target_version': target_version,
                 'staging_dir': actual_staging,
-                'type': 'incremental',
+                'type': 'staging',
             }
+        # 路径 2: exe 安装包（完整包下载的兜底）
         elif downloaded and file_path and os.path.isfile(file_path):
-            # 完整包下载：需要 bootstrap 启动后执行 Inno Setup 静默安装
-            # 或者直接用现有 restart_and_install 路径
             update_ready = {
                 'target_version': target_version,
                 'installer_path': file_path,
-                'type': 'full',
+                'type': 'full_installer',
             }
         else:
             with self._lock:
                 self._install_status = 'failed'
-                self._install_error = '安装包文件不存在'
-            return False, '安装包文件不存在'
+                self._install_error = '更新文件未就绪，请重新下载'
+            return False, '更新文件未就绪，请重新下载'
 
         # 写入 update_ready.json
         update_ready_path = os.path.join(_get_data_dir(), 'update_ready.json')
@@ -1674,208 +1695,37 @@ class UpdateChecker:
         self._auto_download = True
         self.start_incremental_download()
 
-    # ---- 旧的 restart_and_install 保留向后兼容（完整包安装器路径） ----
-
-    def restart_and_install(self):
-        """执行后台静默安装并自动重启应用（Windows 平台，完整包兼容路径）。
-
-        保留用于完整 .exe 安装包的回退场景。
-        增量更新应使用 prepare_restart() 新路径。
-
-        返回 (success: bool, message: str)
-        """
-        with self._lock:
-            file_path = self._file_path
-            downloaded = self._downloaded
-
-        if not downloaded or not file_path or not os.path.isfile(file_path):
-            with self._lock:
-                self._install_status = 'failed'
-                self._install_error = '安装包文件不存在'
-            return False, '安装包文件不存在'
-
-        import subprocess
-
-        frozen_dir = None
-        if getattr(sys, 'frozen', False):
-            frozen_dir = os.path.dirname(sys.executable)
-
-        install_dir = frozen_dir or self._get_windows_install_dir()
-        default_dir = os.path.join(os.environ.get('LOCALAPPDATA', os.path.expanduser('~')),
-                                   'IEI Timer Faster')
-        target_dir = install_dir or default_dir
-        new_exe = os.path.join(target_dir, 'IEI Timer Faster.exe')
-
-        log_file = os.path.join(os.path.dirname(file_path), '_update.log')
-        bat_path = os.path.join(os.path.dirname(file_path), '_install.bat')
-
-        desktop_lnk = os.path.join(os.environ.get('USERPROFILE', ''), 'Desktop', 'IEI Timer Faster.lnk')
-
-        bat_lines = [
-            '@echo off',
-            'setlocal enabledelayedexpansion',
-            f'set LOG={log_file}',
-            '',
-            f'echo [!date! !time!] 开始更新... >> "!LOG!"',
-            '',
-            'taskkill /f /im "IEI Timer Faster.exe" >nul 2>&1',
-            f'echo [!date! !time!] 已终止旧进程 >> "!LOG!"',
-            '',
-            'ping 127.0.0.1 -n 6 >nul',
-            '',
-            f'echo [!date! !time!] 运行安装程序... >> "!LOG!"',
-            f'"{file_path}" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR="{target_dir}"',
-            'set SETUP_ERR=!ERRORLEVEL!',
-            '',
-            'if !SETUP_ERR! neq 0 (',
-            f'    echo [!date! !time!] [X] 安装失败, 错误码=!SETUP_ERR! >> "!LOG!"',
-            '    exit /b !SETUP_ERR!',
-            ')',
-            '',
-            f'echo [!date! !time!] [OK] 安装成功 >> "!LOG!"',
-            '',
-            f'echo [!date! !time!] 检查桌面快捷方式... >> "!LOG!"',
-            f'if exist "{desktop_lnk}" (',
-            f'    echo [!date! !time!] [OK] 桌面快捷方式已存在 >> "!LOG!"',
-            f') else (',
-            f'    echo [!date! !time!] [!] 快捷方式缺失(右键exe→发送到→桌面快捷方式) >> "!LOG!"',
-            f')',
-            '',
-            f'echo [!date! !time!] 启动新版本... >> "!LOG!"',
-            f'start "" "{new_exe}"',
-            '',
-            f'echo [!date! !time!] 清理临时文件... >> "!LOG!"',
-            f'del /f /q "{file_path}" >nul 2>&1',
-            f'del /f /q "{bat_path}" >nul 2>&1',
-            f'echo [!date! !time!] 更新流程完成 >> "!LOG!"',
-        ]
-        try:
-            with open(bat_path, 'w', encoding='gbk') as f:
-                f.write('\r\n'.join(bat_lines))
-        except Exception as e:
-            with self._lock:
-                self._install_status = 'failed'
-                self._install_error = f'创建安装脚本失败: {e}'
-            return False, f'创建安装脚本失败: {e}'
-
-        try:
-            print(f"[OK] 启动后台静默安装脚本: {bat_path}")
-            startupinfo = subprocess.STARTUPINFO()
-            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-            startupinfo.wShowWindow = subprocess.SW_HIDE
-            subprocess.Popen(
-                ['cmd.exe', '/c', bat_path],
-                startupinfo=startupinfo,
-                creationflags=subprocess.CREATE_NO_WINDOW,
-            )
-        except Exception as e:
-            with self._lock:
-                self._install_status = 'failed'
-                self._install_error = f'启动安装失败: {e}'
-            return False, f'启动安装失败: {e}'
-
-        with self._lock:
-            self._install_status = 'done'
-        return True, '安装已启动，应用即将重启'
+    # ---- _launch_bootstrap: 启动 bootstrap.exe（所有升级路径统一入口） ----
 
     @staticmethod
-    def _get_windows_install_dir():
-        """从注册表读取现有安装目录。
+    def _launch_bootstrap():
+        """启动 bootstrap.exe（主应用退出前调用）。
 
-        优先按当前 AppId 直接查找（v1.1.7+ 固定 GUID 快速路径），
-        查不到时遍历 Uninstall 注册表子键，匹配 DisplayName 回退查找
-        （兼容 v1.1.6 及更早版本——当时 AppId 使用 ISPP {{}} 随机生成）。
-
-        Returns
-        -------
-        str or None
-            安装目录路径，读取失败返回 None
+        bootstrap.exe 负责检测 update_ready.json 并执行升级操作。
+        使用 CREATE_NO_WINDOW 避免 CMD 黑框闪现。
         """
-        import winreg
+        import subprocess as _sp
 
-        # 要搜索的注册表根键
-        _UNINSTALL_ROOTS = (
-            (winreg.HKEY_CURRENT_USER,
-             r'Software\Microsoft\Windows\CurrentVersion\Uninstall'),
-            (winreg.HKEY_LOCAL_MACHINE,
-             r'Software\Microsoft\Windows\CurrentVersion\Uninstall'),
-        )
-        # 主 AppId（花括号格式，匹配 setup.iss {{A8F3C2B1-...}} → {A8F3C2B1-...}）
-        # V1.1.10-V1.1.11 曾改为纯字符串（无花括号），现已回退。
-        KNOWN_APP_ID = '{A8F3C2B1-9D4E-5F6A-7B8C-0D1E2F3A4B5C}'
-        # 旧 AppId（v1.1.10-v1.1.11 纯字符串格式），作为回退兼容
-        KNOWN_APP_ID_ALT = 'A8F3C2B1-9D4E-5F6A-7B8C-0D1E2F3A4B5C'
-        APP_DISPLAY_NAME = 'IEI Timer Faster'
+        if getattr(sys, 'frozen', False):
+            app_dir = os.path.dirname(sys.executable)
+        else:
+            app_dir = os.path.dirname(os.path.abspath(__file__))
 
-        def _read_install_location(root, subkey_path):
-            """读取单个注册表键的 InstallLocation。"""
-            try:
-                key = winreg.OpenKey(root, subkey_path)
-                try:
-                    val, _ = winreg.QueryValueEx(key, 'InstallLocation')
-                    if val and os.path.isdir(val):
-                        return val
-                finally:
-                    winreg.CloseKey(key)
-            except OSError:
-                pass
-            return None
+        bootstrap_exe = os.path.join(app_dir, 'bootstrap.exe')
+        if not os.path.isfile(bootstrap_exe):
+            print(f"[!] bootstrap.exe 未找到: {bootstrap_exe}")
+            return False
 
-        # 第一步：按已知 AppId 直接查找（快速路径）
-        for root, base_path in _UNINSTALL_ROOTS:
-            result = _read_install_location(
-                root, fr'{base_path}\{KNOWN_APP_ID}_is1')
-            if result:
-                return result
-
-        # 1b: 回退查旧 AppId（v1.1.10-v1.1.11 纯字符串格式）
-        for root, base_path in _UNINSTALL_ROOTS:
-            result = _read_install_location(
-                root, fr'{base_path}\{KNOWN_APP_ID_ALT}_is1')
-            if result:
-                return result
-
-        # 第二步：回退——遍历所有子键，匹配 DisplayName
-        # 兼容 v1.1.6 等 AppId 使用 {{}} 随机生成的旧版本
-        for root, base_path in _UNINSTALL_ROOTS:
-            try:
-                uninstall_key = winreg.OpenKey(root, base_path)
-                try:
-                    idx = 0
-                    while True:
-                        try:
-                            subkey_name = winreg.EnumKey(uninstall_key, idx)
-                            idx += 1
-                        except OSError:
-                            break  # 枚举完毕
-
-                        subkey_path = fr'{base_path}\{subkey_name}'
-                        try:
-                            sk = winreg.OpenKey(root, subkey_path)
-                            try:
-                                display_name, _ = winreg.QueryValueEx(
-                                    sk, 'DisplayName')
-                                if display_name == APP_DISPLAY_NAME:
-                                    val, _ = winreg.QueryValueEx(
-                                        sk, 'InstallLocation')
-                                    winreg.CloseKey(sk)
-                                    if val and os.path.isdir(val):
-                                        return val
-                            except OSError:
-                                pass
-                            finally:
-                                try:
-                                    winreg.CloseKey(sk)
-                                except OSError:
-                                    pass
-                        except OSError:
-                            continue
-                finally:
-                    winreg.CloseKey(uninstall_key)
-            except OSError:
-                continue
-
-        return None
+        try:
+            kwargs = {}
+            if sys.platform == 'win32':
+                kwargs['creationflags'] = _sp.CREATE_NO_WINDOW
+            _sp.Popen([bootstrap_exe], **kwargs)
+            print(f"[OK] bootstrap.exe 已启动: {bootstrap_exe}")
+            return True
+        except Exception as e:
+            print(f"[X] 启动 bootstrap.exe 失败: {e}")
+            return False
 
     @staticmethod
     def _install_mac(file_path):

@@ -29,6 +29,7 @@ import sys
 import json
 import shutil
 import time
+import queue
 import subprocess
 import hashlib
 import zipfile
@@ -488,6 +489,406 @@ def _apply_staging(update_info):
 
 
 # -------------------------------------------------------------------------
+# 升级进度窗口（tkinter）— INSPUR-112 新增
+# -------------------------------------------------------------------------
+
+_QUEUE_ITEM_COUNT = 0  # shared counter for progress tracking in staging apply
+
+def _apply_staging_with_progress(update_info, status_queue):
+    """Apply staging update with progress callbacks via queue.
+
+    Same logic as _apply_staging() but reports progress through status_queue
+    for the tkinter GUI to display.
+
+    Parameters
+    ----------
+    update_info : dict
+        update_ready.json content
+    status_queue : queue.Queue
+        Queue for sending (msg_type, data) tuples to tkinter main thread.
+        msg_type: 'status' → data=str; 'progress' → data=int (percent)
+
+    Returns
+    -------
+    bool
+    """
+    staging_dir = update_info.get('staging_dir', STAGING_DIR_DEFAULT)
+    target_version = update_info.get('target_version', '')
+
+    if not os.path.isdir(staging_dir):
+        status_queue.put(('status', f'Staging dir not found: {staging_dir}'))
+        return False
+
+    manifest_path = os.path.join(staging_dir, 'manifest.json')
+    if not os.path.isfile(manifest_path):
+        status_queue.put(('status', 'Manifest not found'))
+        return False
+
+    try:
+        with open(manifest_path, 'r', encoding='utf-8') as f:
+            manifest = json.load(f)
+    except Exception as e:
+        status_queue.put(('status', f'Manifest parse error: {e}'))
+        return False
+
+    added_files = manifest.get('added_files', [])
+    changed_files = manifest.get('changed_files', [])
+    removed_files = manifest.get('removed_files', [])
+    expected_sha256 = manifest.get('sha256', {})
+
+    total = len(added_files) + len(changed_files) + len(removed_files) + 1  # +1 for cleanup
+    if total == 0:
+        total = 1
+    done = 0
+
+    status_queue.put(('status', 'Preparing upgrade...'))
+    status_queue.put(('progress', 0))
+
+    # 1. Backup for rollback
+    _backup_for_rollback(changed_files, added_files)
+    done += 1
+    status_queue.put(('progress', int(done * 100 / total)))
+
+    # 2. Apply added_files
+    for fname in added_files:
+        src = os.path.join(staging_dir, 'files', fname)
+        dst = os.path.join(BOOTSTRAP_DIR, fname)
+        if os.path.isfile(src):
+            # Show filename (truncated for display)
+            display_name = fname if len(fname) <= 50 else '...' + fname[-47:]
+            status_queue.put(('status', f'Adding: {display_name}'))
+            try:
+                _safe_copy(src, dst)
+            except Exception as e:
+                status_queue.put(('status', f'Failed to add: {fname}'))
+                _log(f'[X] 新增文件失败: {fname} - {e}')
+                status_queue.put(('status', 'Rolling back...'))
+                _restore_from_rollback()
+                return False
+            done += 1
+            status_queue.put(('progress', int(done * 100 / total)))
+        else:
+            _log(f'[!] 源文件不存在: {src}')
+
+    # 3. Apply changed_files
+    for fname in changed_files:
+        src = os.path.join(staging_dir, 'files', fname)
+        dst = os.path.join(BOOTSTRAP_DIR, fname)
+        if os.path.isfile(src):
+            display_name = fname if len(fname) <= 50 else '...' + fname[-47:]
+            status_queue.put(('status', f'Updating: {display_name}'))
+            try:
+                _safe_copy(src, dst)
+            except Exception as e:
+                status_queue.put(('status', f'Failed to update: {fname}'))
+                _log(f'[X] 覆盖文件失败: {fname} - {e}')
+                status_queue.put(('status', 'Rolling back...'))
+                _restore_from_rollback()
+                return False
+            done += 1
+            status_queue.put(('progress', int(done * 100 / total)))
+
+    # 4. Delete removed_files
+    for fname in removed_files:
+        dst = os.path.join(BOOTSTRAP_DIR, fname)
+        if os.path.exists(dst):
+            display_name = fname if len(fname) <= 50 else '...' + fname[-47:]
+            status_queue.put(('status', f'Removing: {display_name}'))
+            try:
+                _safe_delete(dst)
+            except Exception as e:
+                _log(f'[!] 删除文件失败: {fname} - {e}')
+            done += 1
+            status_queue.put(('progress', int(done * 100 / total)))
+
+    # 5. Write version
+    status_queue.put(('status', 'Updating version...'))
+    try:
+        with open(VERSION_FILE, 'w', encoding='utf-8') as f:
+            f.write(target_version)
+        _log(f'[OK] 版本号已更新: {target_version}')
+    except Exception as e:
+        _log(f'[X] 版本号更新失败: {e}')
+        status_queue.put(('status', 'Version write failed, rolling back...'))
+        _restore_from_rollback()
+        return False
+
+    # 6. Cleanup
+    status_queue.put(('status', 'Cleaning up...'))
+    done += 1
+    status_queue.put(('progress', int(done * 100 / total)))
+    try:
+        shutil.rmtree(staging_dir)
+    except Exception as e:
+        _log(f'[!] staging 目录清理失败: {e}')
+    try:
+        os.remove(UPDATE_READY_FILE)
+    except Exception as e:
+        _log(f'[!] update_ready.json 删除失败: {e}')
+    try:
+        if os.path.isdir(ROLLBACK_DIR):
+            shutil.rmtree(ROLLBACK_DIR)
+    except Exception:
+        pass
+
+    _log(f'[OK] === 更新完成: {target_version} ===')
+    return True
+
+
+def _apply_full_installer(installer_path, target_version, status_queue):
+    """Run a full .exe installer silently via subprocess.
+
+    Parameters
+    ----------
+    installer_path : str
+        Path to the downloaded .exe installer
+    target_version : str
+        Target version string
+    status_queue : queue.Queue
+        Progress queue for tkinter GUI updates
+
+    Returns
+    -------
+    bool
+    """
+    if not os.path.isfile(installer_path):
+        status_queue.put(('status', 'Installer file not found'))
+        return False
+
+    status_queue.put(('status', 'Running installer...'))
+    status_queue.put(('progress', 20))
+
+    import subprocess as sp
+
+    try:
+        result = sp.run(
+            [
+                installer_path,
+                '/VERYSILENT',
+                '/SUPPRESSMSGBOXES',
+                '/NORESTART',
+                f'/DIR={BOOTSTRAP_DIR}',
+            ],
+            capture_output=True,
+            timeout=300,
+            creationflags=sp.CREATE_NO_WINDOW if sys.platform == 'win32' else 0,
+        )
+
+        status_queue.put(('progress', 70))
+
+        if result.returncode != 0:
+            stderr = result.stderr.decode('utf-8', errors='replace')[:200] if result.stderr else ''
+            _log(f'[X] 安装程序返回错误码: {result.returncode} {stderr}')
+            status_queue.put(('status', f'Install failed (code {result.returncode})'))
+            return False
+
+        status_queue.put(('status', 'Install complete'))
+        status_queue.put(('progress', 80))
+
+        # Cleanup
+        try:
+            os.remove(UPDATE_READY_FILE)
+        except Exception:
+            pass
+        try:
+            os.remove(installer_path)
+        except Exception:
+            pass
+
+        status_queue.put(('progress', 100))
+        return True
+
+    except sp.TimeoutExpired:
+        _log('[X] 安装程序执行超时')
+        status_queue.put(('status', 'Install timeout'))
+        return False
+    except Exception as e:
+        _log(f'[X] 安装程序执行失败: {e}')
+        status_queue.put(('status', f'Install error: {e}'))
+        return False
+
+
+def _show_upgrade_progress_window(update_info):
+    """Show a tkinter progress window during upgrade.
+
+    Reads update_info (from update_ready.json), dispatches to the
+    appropriate upgrade handler, and shows progress in a GUI window.
+
+    Parameters
+    ----------
+    update_info : dict
+        Parsed update_ready.json content
+
+    Returns
+    -------
+    (success: bool, error: str)
+    """
+    import tkinter as tk
+    from tkinter import ttk
+    import threading
+
+    target_version = update_info.get('target_version', '')
+    update_type = update_info.get('type', 'staging')
+
+    # Adjust title based on update type
+    if update_type == 'full_installer':
+        installer_path = update_info.get('installer_path', '')
+        title = 'IEI Timer Faster - Installing Update'
+    else:
+        installer_path = None
+        title = f'IEI Timer Faster - Upgrading to {target_version}'
+
+    # Communication between upgrade thread and tkinter thread
+    status_queue = queue.Queue()
+    result_queue = queue.Queue()
+
+    def upgrade_worker():
+        """Run in a background thread; sends progress to status_queue."""
+        try:
+            if update_type == 'full_installer':
+                success = _apply_full_installer(
+                    installer_path, target_version, status_queue)
+            else:
+                success = _apply_staging_with_progress(
+                    update_info, status_queue)
+
+            if success:
+                status_queue.put(('status', f'Upgrade to {target_version} complete!'))
+                status_queue.put(('progress', 100))
+                time.sleep(0.5)
+                result_queue.put((True, ''))
+            else:
+                result_queue.put((False, 'Upgrade failed — see bootstrap.log for details'))
+        except Exception as e:
+            _log(f'[X] 升级异常: {e}')
+            _log(traceback.format_exc())
+            result_queue.put((False, str(e)))
+
+    # Build tkinter window
+    root = tk.Tk()
+    root.title(title)
+    root.geometry('480x170')
+    root.resizable(False, False)
+
+    # Center window on screen
+    root.update_idletasks()
+    w = root.winfo_width()
+    h = root.winfo_height()
+    x = (root.winfo_screenwidth() // 2) - (w // 2)
+    y = (root.winfo_screenheight() // 2) - (h // 2)
+    root.geometry(f'+{x}+{y}')
+
+    # Keep window on top
+    root.attributes('-topmost', True)
+
+    # Widgets
+    try:
+        header_font = ('Microsoft YaHei', 11, 'bold')
+        normal_font = ('Microsoft YaHei', 9)
+    except Exception:
+        header_font = ('TkDefaultFont', 11, 'bold')
+        normal_font = ('TkDefaultFont', 9)
+
+    header = tk.Label(root, text='IEI Timer Faster Updating...', font=header_font)
+    header.pack(pady=(15, 5))
+
+    version_label = tk.Label(
+        root,
+        text=f'Upgrading to version {target_version}' if target_version
+             else 'Preparing upgrade...',
+        font=normal_font)
+    version_label.pack()
+
+    status_label = tk.Label(
+        root,
+        text='Initializing...',
+        font=normal_font,
+        wraplength=440)
+    status_label.pack(pady=(10, 5))
+
+    progress_bar = ttk.Progressbar(root, mode='determinate', length=420)
+    progress_bar.pack(pady=(0, 15))
+
+    def check_queue():
+        """Poll status_queue from tkinter main thread (thread-safe)."""
+        try:
+            while True:
+                msg_type, data = status_queue.get_nowait()
+                if msg_type == 'status':
+                    status_label.config(text=data)
+                elif msg_type == 'progress':
+                    progress_bar['value'] = data
+                root.update_idletasks()
+        except queue.Empty:
+            pass
+
+        # Check if worker has finished
+        try:
+            success, error = result_queue.get_nowait()
+            root.destroy()
+            result_queue.put((success, error))  # put back for caller
+            return
+        except queue.Empty:
+            pass
+
+        root.after(100, check_queue)
+
+    # Start upgrade in background thread
+    threading.Thread(target=upgrade_worker, daemon=True).start()
+    root.after(200, check_queue)
+    root.mainloop()
+
+    try:
+        return result_queue.get(timeout=1)
+    except queue.Empty:
+        return False, 'Upgrade cancelled'
+
+
+def _try_show_upgrade_window(update_info):
+    """Try to show tkinter progress window, fall back to log-based upgrade.
+
+    If tkinter is not available (e.g., stripped from PyInstaller build),
+    falls back to the old _apply_staging() without progress UI.
+    """
+    try:
+        import tkinter as _tk_test
+        return _show_upgrade_progress_window(update_info)
+    except (ImportError, RuntimeError) as e:
+        _log(f'[!] tkinter 不可用, 使用无界面升级模式: {e}')
+        target_version = update_info.get('target_version', '')
+        update_type = update_info.get('type', 'staging')
+
+        if update_type == 'full_installer':
+            installer_path = update_info.get('installer_path', '')
+            if not os.path.isfile(installer_path):
+                _log('[X] 安装包文件不存在')
+                return False, '安装包文件不存在'
+            _log('[OK] 无界面模式运行安装程序...')
+            import subprocess as _sp
+            try:
+                result = _sp.run(
+                    [installer_path, '/VERYSILENT', '/SUPPRESSMSGBOXES',
+                     '/NORESTART', f'/DIR={BOOTSTRAP_DIR}'],
+                    capture_output=True, timeout=300,
+                    creationflags=_sp.CREATE_NO_WINDOW,
+                )
+                success = result.returncode == 0
+                try:
+                    os.remove(UPDATE_READY_FILE)
+                    os.remove(installer_path)
+                except Exception:
+                    pass
+                return success, 'Install complete' if success else f'Error code {result.returncode}'
+            except Exception as err:
+                _log(f'[X] 安装失败: {err}')
+                return False, str(err)
+        else:
+            # staging type: use existing _apply_staging (no GUI)
+            success = _apply_staging(update_info)
+            return success, '' if success else 'Upgrade failed'
+
+
+# -------------------------------------------------------------------------
 # 主入口
 # -------------------------------------------------------------------------
 
@@ -595,21 +996,29 @@ def main():
         # 关闭旧应用进程（确保文件锁释放）
         _kill_app_process()
 
-        # 应用更新
-        if _apply_staging(update_info):
-            _log('[OK] 更新应用成功')
-        else:
-            _log('[X] 更新应用失败，尝试回滚...')
+        # 应用更新（INSPUR-112：显示 tkinter 进度窗口，无 tkinter 时降级无界面模式）
+        update_type = update_info.get('type', 'staging')
+        target_version = update_info.get('target_version', '')
+        _log(f'[OK] 更新类型: {update_type}, 目标版本: {target_version}')
+
+        success, error_msg = _try_show_upgrade_window(update_info)
+
+        if not success:
+            _log(f'[X] 更新应用失败: {error_msg}')
+            _log('[OK] 尝试回滚...')
             rolled_back = _restore_from_rollback()
             if not rolled_back:
                 _log('[!] 回滚失败，删除 update_ready.json 防止死循环')
             # 无论回滚是否成功，都要删除 update_ready.json
             # 否则每次启动 bootstrap 都会重复尝试应用更新 → 重复失败
             try:
-                os.remove(UPDATE_READY_FILE)
-                _log('[OK] update_ready.json 已删除')
+                if os.path.isfile(UPDATE_READY_FILE):
+                    os.remove(UPDATE_READY_FILE)
+                    _log('[OK] update_ready.json 已删除')
             except Exception as del_err:
                 _log(f'[!] update_ready.json 删除失败: {del_err}')
+        else:
+            _log('[OK] 更新应用成功')
 
     # 启动主应用
     launch_main_app()

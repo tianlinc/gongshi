@@ -2216,10 +2216,10 @@ def api_update_install():
 
 @app.route('/api/update/restart', methods=['POST'])
 def api_update_restart():
-    """准备更新并重启应用（INSPUR-102：写入 update_ready.json + os._exit）。
+    """统一升级路径（INSPUR-112）：写入 update_ready.json → 启动 bootstrap.exe → os._exit(0)。
 
-    新流程（增量更新）：写入 update_ready.json → os._exit(0) → bootstrap 启动替换文件
-    旧流程（完整包）：保留 restart_and_install() batch 脚本路径
+    bootstrap.exe 检测到 update_ready.json 后显示升级进度窗口（tkinter GUI），
+    完成文件替换后自动启动新版本主应用。
     """
     try:
         from _desktop_common import get_update_checker
@@ -2227,25 +2227,22 @@ def api_update_restart():
         return jsonify({'success': False, 'message': '桌面模式下才支持在线更新'})
 
     checker = get_update_checker()
-    status = checker.get_status()
 
-    # INSPUR-102: 增量更新走 prepare_restart 新路径（写 update_ready.json）
-    # INSPUR-109 修复: 仅对增量更新使用 prepare_restart，完整包走 restart_and_install
-    if status.get('is_incremental'):
-        success, msg = checker.prepare_restart()
-    else:
-        # 完整包：保留原 batch 脚本路径
-        success, msg = checker.restart_and_install()
+    # 统一升级路径：不再区分增量/完整包
+    success, msg = checker.prepare_restart()
 
     if not success:
         return jsonify({'success': False, 'message': msg})
+
+    # 在退出前启动 bootstrap.exe（tkinter 进度窗口由 bootstrap 驱动）
+    checker._launch_bootstrap()
 
     # 注册一个延迟退出的回调，让响应先返回给前端
     @after_this_request
     def _schedule_exit(response):
         import threading
         def _delayed_exit():
-            time.sleep(0.5)
+            time.sleep(1.0)  # 稍长延迟确保 bootstrap.exe 已经启动
             os._exit(0)
         threading.Thread(target=_delayed_exit, daemon=True).start()
         return response
