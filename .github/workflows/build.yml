@@ -247,6 +247,27 @@ jobs:
           rm -rf "$TEMP_DIST"
 
       # =========================================================
+      #  INSPUR-102: 构建 bootstrap 启动器
+      #  bootstrap.exe 是桌面快捷方式的入口，必须在 Inno Setup 打包前
+      #  放入 dist/IEI Timer Faster/ 目录。本地 build.bat 的步骤 6
+      #  做了这件事，但 CI 中一直遗漏，导致 v1.2.0 安装后桌面快捷方式
+      #  报 CreateProcess 错误代码 2（找不到 bootstrap.exe）。
+      # =========================================================
+      - name: Build bootstrap launcher
+        shell: cmd
+        working-directory: service_installer
+        run: |
+          echo === Build bootstrap.exe ===
+          python -m PyInstaller --noconfirm bootstrap.spec || exit /b %errorlevel%
+          echo === Copy bootstrap.exe to dist ===
+          copy /y "dist\bootstrap.exe" "dist\IEI Timer Faster\bootstrap.exe" || exit /b %errorlevel%
+          if not exist "dist\IEI Timer Faster\bootstrap.exe" (
+            echo [X] bootstrap.exe copy failed
+            exit /b 1
+          )
+          echo [OK] bootstrap.exe built and copied to dist/IEI Timer Faster/
+
+      # =========================================================
       #  INSPUR-103 模块2: 生成 manifest.json（SHA256 文件清单）
       # =========================================================
       - name: Generate manifest.json

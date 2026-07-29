@@ -1,32 +1,18 @@
 ## 修复内容
 
-**问题**：v1.1.15 ~ v1.1.17 版本在线升级完成后不会自动重启应用，用户需要手动双击 exe 才能打开新版本。
+**严重缺陷**：v1.2.0 / v1.2.1 安装后 `bootstrap.exe` 缺失，导致桌面快捷方式报 `CreateProcess 失败;错误代码2. 系统找不到指定的文件`，应用无法通过快捷方式启动。
 
-**根因**：在线升级的批处理脚本由**当前运行版本**的 `_desktop_common.py` 生成。v1.1.15 版本的批处理脚本中包含用于创建桌面快捷方式的 PowerShell `^` 多行续行，这些 `^` 字符在 GBK 编码批处理的 `if` 块内会触发解析错误，导致批处理直接崩溃退出——`start "" "new.exe"` 命令永远不执行。
+**根因**：CI workflow（`.github/workflows/build.yml`）只构建了 `service.spec`（主应用），从未构建 `bootstrap.spec`（引导启动器）。本地 `build.bat` 在步骤 6 做了这件事，但 CI 中遗漏了。v1.2.0 将桌面快捷方式改为指向 `bootstrap.exe` 后，安装包里没有这个文件 → 快捷方式直接不可用。
 
-更棘手的是：v1.1.17 虽然已在 `_desktop_common.py` 中移除了这部分 PowerShell 代码，但用户从 v1.1.16 升级到 v1.1.17 时，批处理仍由 v1.1.16 的旧代码生成，崩溃依然发生。这是一个鸡生蛋问题——`_desktop_common.py` 的修复在当前升级周期内无法惠及用户。
+**修复**：在 CI `build-windows` job 中，于确定性构建验证之后、manifest 生成之前，新增 `Build bootstrap launcher` 步骤：
+1. `python -m PyInstaller --noconfirm bootstrap.spec` 编译 bootstrap.exe
+2. 将 `dist/bootstrap.exe` 复制到 `dist/IEI Timer Faster/bootstrap.exe`
+3. 验证复制成功
 
-**修复方案（防御设计）**：在 `setup.iss` 中增加 `[Run]` 段，让 Inno Setup installer 自身在静默安装完成后直接启动新版本 exe。这是 installer（本次安装的新版本二进制）自己的行为，**不依赖**旧版本的批处理脚本。即使旧版批处理崩溃，installer 仍能成功启动应用。
-
-```
-[Run]
-; 正常安装：完成页显示"启动应用"复选框
-Filename: "{app}\IEI Timer Faster.exe"; Description: "启动 IEI Timer Faster"; Flags: nowait postinstall skipifsilent
-; 静默升级：自动启动新版本
-Filename: "{app}\IEI Timer Faster.exe"; Flags: nowait shellexec; Check: IsSilentInstall
-```
-
-- `Check: IsSilentInstall` — 仅静默升级（`/VERYSILENT`）时执行，正常安装不受影响
-- `shellexec` — 作为独立进程启动，与 installer 生命周期解耦，不会因 installer 退出而终止
-- `nowait` — 不等待新应用退出，安装流程正常结束
-
-## 验证过程
-
-1. 用 v1.1.17 的 `_desktop_common.py` 按实际路径参数生成批处理脚本，逐行检查：
-   - 无 `^` 续行，无 `/B` 标志，无 PowerShell 代码，`start ""` 命令存在
-2. 构造相同结构的测试批处理，运行后所有日志行正常写入，`start` 命令成功执行
-3. 确认 `[Run]` 段中 `Check: IsSilentInstall` 引用的函数已在 `setup.iss` 的 `[Code]` 段中正确定义
+manifest.json 也会包含 `bootstrap.exe` 的 SHA256 哈希，确保增量更新方案能正确处理此文件。
 
 ## 变更文件
 
-- `service_installer/installer/setup.iss` — 新增 `[Run]` 段（+10 行）
+- `.github/workflows/build.yml` — 新增 `Build bootstrap launcher` 步骤（+18 行）
+- `VERSION` — 1.2.1 → 1.2.2
+- `RELEASE_NOTES.md` — 本文档
