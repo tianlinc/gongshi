@@ -2207,6 +2207,7 @@ check();
                 min_size=(900, 600),
                 resizable=True,
                 text_select=True,
+                maximized=True,
             )
             print("[OK] 桌面窗口已创建")
 
