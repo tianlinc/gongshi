@@ -517,13 +517,9 @@ def launch_main_app():
     _log(f'[OK] 启动主应用: {app_path}')
     try:
         if sys.platform == 'win32':
-            # 隐藏启动窗口
-            startupinfo = subprocess.STARTUPINFO()
-            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-            startupinfo.wShowWindow = subprocess.SW_HIDE
+            # 使用 CREATE_NO_WINDOW 防止控制台窗口，让子进程自行管理 GUI 窗口
             subprocess.Popen(
                 [app_path],
-                startupinfo=startupinfo,
                 creationflags=subprocess.CREATE_NO_WINDOW,
             )
         else:
