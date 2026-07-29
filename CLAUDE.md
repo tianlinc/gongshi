@@ -335,6 +335,7 @@ Old v1 of the same project — earlier `app.py`, CLI tool (`rdm_timesheet.py`), 
 - **Agent 自行完成 git 操作，不推给用户。** 代码修改完成后，组长/开发者自行合并到 main、打 tag、推送，在回复中告知用户结果即可。不要列出需要用户手动执行的 git 命令（如 `git merge`、`git tag`、`git push`）。用户不是运维，不要让他们参与纯机械性的发布操作。
 - **The RDM base URL is hardcoded** to `http://10.111.36.3:2029` in `RDMClient.__init__`. Not configurable yet — change it there if needed.
 - **`docs/` has two Chinese guides** (`使用说明.md` technical, `完整说明-用户版.md` end-user). The README is the canonical English-ish overview; the two docs are for the user, not for navigating the code.
+- **RELEASE_NOTES.md 必须面向客户写，不写内部实现细节。** 每条更新说明回答"用户能感受到什么变化"，不写"改了哪个文件""修复了什么 bug 的根因"。正确示例："检测到新版本后，会先询问是否升级，不再后台自动下载"；错误示例："修复了 `checkForUpdates()` 中 `triggerBackgroundDownload()` 提前调用的问题"。每次发版前必须更新 RELEASE_NOTES.md 反映当次变化，不允许多个版本共用同一份说明。
 
 ## `setup.iss` 编辑规范（INSPUR-95 教训）
 
