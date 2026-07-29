@@ -2229,8 +2229,9 @@ def api_update_restart():
     checker = get_update_checker()
     status = checker.get_status()
 
-    # INSPUR-102: 优先使用 prepare_restart（增量更新新路径）
-    if status.get('is_incremental') or status.get('event') == 'ready_to_restart':
+    # INSPUR-102: 增量更新走 prepare_restart 新路径（写 update_ready.json）
+    # INSPUR-109 修复: 仅对增量更新使用 prepare_restart，完整包走 restart_and_install
+    if status.get('is_incremental'):
         success, msg = checker.prepare_restart()
     else:
         # 完整包：保留原 batch 脚本路径

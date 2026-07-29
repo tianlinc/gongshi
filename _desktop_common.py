@@ -1448,7 +1448,7 @@ class UpdateChecker:
         last = self.get_last_check()
         target_version = last.get('version', '') if last else ''
 
-        if is_incremental or download_event == 'ready_to_restart':
+        if is_incremental:
             # 增量更新：staging 目录已就绪
             actual_staging = staging_dir or self._get_staging_dir()
             if not os.path.isdir(actual_staging):

@@ -69,6 +69,7 @@ a = Analysis(
         # 本地模块
         'license_utils',
         '_desktop_common',
+        '_bootstrap',
         # 标准库常被遗漏的
         'html',
         'json',
