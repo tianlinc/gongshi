@@ -332,6 +332,7 @@ Old v1 of the same project — earlier `app.py`, CLI tool (`rdm_timesheet.py`), 
 
 - **Windows console can't print Unicode arrows.** Use `[OK]` / `[X]` instead of `✓` / `✗` in any script that prints to stdout — the system encoding is GBK and unicode arrows crash with `UnicodeEncodeError`. `tools/explore.py` was rewritten to follow this; keep it that way.
 - **All user-facing strings are Chinese** (UI labels, error messages, doc filenames like `使用说明.md`). Match this when adding routes or messages.
+- **Agent 自行完成 git 操作，不推给用户。** 代码修改完成后，组长/开发者自行合并到 main、打 tag、推送，在回复中告知用户结果即可。不要列出需要用户手动执行的 git 命令（如 `git merge`、`git tag`、`git push`）。用户不是运维，不要让他们参与纯机械性的发布操作。
 - **The RDM base URL is hardcoded** to `http://10.111.36.3:2029` in `RDMClient.__init__`. Not configurable yet — change it there if needed.
 - **`docs/` has two Chinese guides** (`使用说明.md` technical, `完整说明-用户版.md` end-user). The README is the canonical English-ish overview; the two docs are for the user, not for navigating the code.
 
@@ -349,7 +350,7 @@ Inno Setup 的 `[Code]` 段 Pascal 脚本中，`{` `}` 在注释和字符串字�
 - 修改 `setup.iss` 后，本地或 CI 必须过 ISCC 编译检查才可合并。
 - CI 的 `check-iscc` job（`.github/workflows/build.yml`）会在每次 push/PR 到 main 时自动运行：先跑 brace lint（正则扫描 `[Code]` 段内的花括号 GUID 模式，fast-fail 无需安装 ISCC），再跑完整 ISCC 编译。
 
-## 版本发布 Checklist（INSPUR-95 教训聚合）
+## 版本发布 Checklist（Agent 自行执行，不推给用户）
 
 v1.1.11 → v1.1.14 发布过程暴露了多类可预防的事故。以下 checklist 必须在每次打 tag 发布前逐项确认，CI 已对关键项做了自动化检查。
 
