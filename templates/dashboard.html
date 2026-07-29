@@ -2592,10 +2592,9 @@
                 _globalUpdateData = data;
                 _forceUpdate = !!(data.force_update);
                 _updateChannel = data.channel || 'stable';
-                showUpdateToast(data.version, data.download_url, data.release_notes);
                 // 显示关于按钮红点
                 document.getElementById('aboutRedDot').classList.add('show');
-                // 自动触发后台下载
+                // 自动触发后台下载（含 toast 通知）
                 if (data.download_url) {
                     triggerBackgroundDownload(data);
                 }
