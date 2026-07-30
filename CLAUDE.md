@@ -359,6 +359,7 @@ v1.1.11 → v1.1.14 发布过程暴露了多类可预防的事故。以下 check
 
 | # | 检查项 | 命令/验证方式 | CI 已覆盖 |
 |---|--------|-------------|----------|
+| 0 | **RELEASE_NOTES.md 已更新且不重复** | `git diff main -- RELEASE_NOTES.md` 应显示本次发版对应的客户视角变化，不允许与上一版本内容相同。每条说明回答"用户能感受到什么"，不写内部实现。 | 暂无 |
 | 1 | **VERSION 文件更新** | `cat VERSION` 输出应与计划打的 tag 版本号一致（如 `1.1.14`） | `verify-version` job |
 | 2 | **setup.iss [Code] 段无花括号 GUID** | `grep -nP '\{[A-F0-9]{8}-' service_installer/installer/setup.iss` 应无输出（或仅匹配 `[Setup]` 段的 `AppId={{GUID}}` 和字符串字面量的 `{{GUID}}`） | `check-iscc` brace lint step |
 | 3 | **ISCC 编译通过** | 本地运行 `ISCC.exe installer/setup.iss` 无报错 | `check-iscc` ISCC compile step |
@@ -368,6 +369,9 @@ v1.1.11 → v1.1.14 发布过程暴露了多类可预防的事故。以下 check
 ### 发布命令流程
 
 ```bash
+# 0. 确认 RELEASE_NOTES.md 已更新且不重复（最优先！已多次遗漏导致事故）
+git diff HEAD~1 -- RELEASE_NOTES.md   # 应显示本次版本特有的客户视角变化
+
 # 1. 确认 VERSION 文件正确
 cat VERSION                    # 输出应为目标版本号，如 1.1.15
 
@@ -377,8 +381,8 @@ grep -nP '\{[A-F0-9]{8}-' service_installer/installer/setup.iss
 # 3. 确认 _desktop_common.py 无 /B 参数
 grep '/B' _desktop_common.py   # 应无输出
 
-# 4. 提交 VERSION 更新（如有修改）
-git add VERSION && git commit -m "chore: bump VERSION to <ver>"
+# 4. 提交 VERSION 更新和 RELEASE_NOTES.md
+git add VERSION RELEASE_NOTES.md && git commit -m "chore: bump VERSION to <ver>, update release notes"
 
 # 5. 推送 main
 git push origin main
