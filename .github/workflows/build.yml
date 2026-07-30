@@ -268,6 +268,39 @@ jobs:
           echo [OK] bootstrap.exe built and copied to dist/IEI Timer Faster/
 
       # =========================================================
+      #  INSPUR-114: bootstrap.exe 文件有效性校验
+      #  检查 PE 头（前 2 字节应为 MZ）和文件大小（≥ 1MB）
+      #  防止 PyInstaller 静默失败产出损坏文件
+      # =========================================================
+      - name: Validate bootstrap.exe
+        shell: bash
+        run: |
+          BOOTSTRAP="service_installer/dist/IEI Timer Faster/bootstrap.exe"
+          if [ ! -f "$BOOTSTRAP" ]; then
+            echo "[X] bootstrap.exe not found at expected path"
+            exit 1
+          fi
+
+          # PE 头校验：前 2 字节应为 MZ（0x4D 0x5A）
+          HEADER=$(xxd -l 2 -p "$BOOTSTRAP" 2>/dev/null || od -A n -t x1 -N 2 "$BOOTSTRAP" | tr -d ' ')
+          echo "  PE signature bytes: $HEADER"
+          if [ "$HEADER" != "4d5a" ]; then
+            echo "[X] bootstrap.exe PE header invalid: expected MZ (4d5a), got $HEADER"
+            exit 1
+          fi
+          echo "[OK] PE header valid: MZ"
+
+          # 文件大小校验：PyInstaller onefile 产物至少 1MB
+          SIZE=$(stat -c%s "$BOOTSTRAP" 2>/dev/null || echo 0)
+          SIZE_MB=$(awk "BEGIN {printf \"%.1f\", $SIZE/1048576}")
+          echo "  File size: $SIZE bytes (${SIZE_MB} MB)"
+          if [ "$SIZE" -lt 1048576 ]; then
+            echo "[X] bootstrap.exe too small (${SIZE} bytes < 1 MB) — likely corrupted"
+            exit 1
+          fi
+          echo "[OK] File size OK"
+
+      # =========================================================
       #  INSPUR-103 模块2: 生成 manifest.json（SHA256 文件清单）
       # =========================================================
       - name: Generate manifest.json
@@ -330,6 +363,68 @@ jobs:
             dir service_installer\dist 2>nul || echo "(dist/ directory does not exist)"
             exit /b 1
           )
+
+      # =========================================================
+      #  INSPUR-114: 烟雾测试 — 安装 + 启动 + 存活检查
+      #  用 /VERYSILENT 静默安装构建产物，启动 bootstrap.exe，
+      #  等待 10s 后检查进程存活，然后清理。失败则阻断。
+      # =========================================================
+      - name: Smoke test (install + launch)
+        shell: bash
+        run: |
+          VERSION=$(cat VERSION | tr -d '[:space:]')
+          INSTALLER="service_installer/dist/IEI_Timer_Faster_Setup_v${VERSION}.exe"
+          SMOKE_DIR="C:/tmp/gongshi_smoke_test"
+          INSTALL_DIR="${SMOKE_DIR}/IEI Timer Faster"
+
+          if [ ! -f "$INSTALLER" ]; then
+            echo "[X] Smoke test FAILED: installer not found at $INSTALLER"
+            exit 1
+          fi
+
+          echo "[OK] Smoke test: installing to ${SMOKE_DIR} ..."
+          rm -rf "${SMOKE_DIR}" 2>/dev/null || true
+          mkdir -p "${SMOKE_DIR}"
+
+          # Silent install
+          "$INSTALLER" /VERYSILENT /SUPPRESSMSGBOXES '/DIR=C:\tmp\gongshi_smoke_test\IEI Timer Faster' || {
+            echo "[X] Smoke test FAILED: installer returned error"
+            exit 1
+          }
+
+          # Give installer time to finish background work
+          sleep 5
+
+          # Verify bootstrap.exe was installed
+          if [ ! -f "${INSTALL_DIR}/bootstrap.exe" ]; then
+            echo "[X] Smoke test FAILED: bootstrap.exe not found after install"
+            echo "  Directory listing:"
+            ls -la "${INSTALL_DIR}/" 2>/dev/null || echo "  (${INSTALL_DIR} does not exist)"
+            exit 1
+          fi
+          echo "[OK] bootstrap.exe found in install dir"
+
+          # Launch application in background
+          echo "[OK] Launching bootstrap.exe ..."
+          "${INSTALL_DIR}/bootstrap.exe" &
+          APP_PID=$!
+
+          # Wait for app to initialize
+          sleep 10
+
+          # Check process is still alive
+          if kill -0 $APP_PID 2>/dev/null; then
+            echo "[OK] Smoke test PASSED: process alive after 10s"
+            kill $APP_PID 2>/dev/null || true
+            wait $APP_PID 2>/dev/null || true
+          else
+            echo "[X] Smoke test FAILED: process exited prematurely (PID $APP_PID)"
+            exit 1
+          fi
+
+          # Cleanup
+          rm -rf "${SMOKE_DIR}" 2>/dev/null || true
+          echo "[OK] Smoke test cleanup done"
 
       # =========================================================
       #  INSPUR-103 模块2: 获取上一版本 manifest 并生成增量包
