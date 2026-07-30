@@ -598,7 +598,7 @@ class UpdateChecker:
                 'release_notes': release_notes,
                 'channel': release_channel,
                 'force_update': is_force,
-                'auto_download': True,
+                'auto_download': False,  # 已移除自动下载：用户必须在 About 弹窗中手动点击
                 'chain_versions': chain_versions,
                 'is_multi_hop': len(chain_versions) > 1,
             }
@@ -1685,6 +1685,9 @@ class UpdateChecker:
         - 没有 → 直接启动主应用
 
         使用 CREATE_NO_WINDOW + SW_HIDE 防止 CMD 黑框闪现。
+
+        如果 bootstrap.exe 不存在（安装包不完整），回退到直接 Popen 主应用，
+        确保应用不会因为 os._exit(0) 而静默消失（用户看到的现象是"没有任何反应"）。
         """
         import subprocess as _sp
 
@@ -1695,6 +1698,7 @@ class UpdateChecker:
 
         if frozen_dir:
             bootstrap_exe = os.path.join(frozen_dir, 'bootstrap.exe')
+            main_exe = os.path.join(frozen_dir, 'IEI Timer Faster.exe')
             if os.path.isfile(bootstrap_exe):
                 print(f"[OK] 启动 bootstrap.exe: {bootstrap_exe}")
                 startupinfo = _sp.STARTUPINFO()
@@ -1707,9 +1711,36 @@ class UpdateChecker:
                         creationflags=_sp.CREATE_NO_WINDOW,
                     )
                 except Exception as e:
-                    print(f"[!] 启动 bootstrap.exe 失败: {e}")
+                    print(f"[X] 启动 bootstrap.exe 失败: {e}")
+                    # 回退：直接启动主应用
+                    if os.path.isfile(main_exe):
+                        print(f"[!] 回退：直接启动主应用 {main_exe}")
+                        try:
+                            _sp.Popen(
+                                [main_exe],
+                                startupinfo=startupinfo,
+                                creationflags=_sp.CREATE_NO_WINDOW,
+                            )
+                        except Exception as e2:
+                            print(f"[X] 主应用启动也失败: {e2}")
             else:
-                print(f"[!] bootstrap.exe 不存在: {bootstrap_exe}")
+                print(f"[X] bootstrap.exe 不存在: {bootstrap_exe}")
+                # 回退：直接启动主应用
+                if os.path.isfile(main_exe):
+                    print(f"[!] 回退：直接启动主应用 {main_exe}")
+                    startupinfo = _sp.STARTUPINFO()
+                    startupinfo.dwFlags |= _sp.STARTF_USESHOWWINDOW
+                    startupinfo.wShowWindow = _sp.SW_HIDE
+                    try:
+                        _sp.Popen(
+                            [main_exe],
+                            startupinfo=startupinfo,
+                            creationflags=_sp.CREATE_NO_WINDOW,
+                        )
+                    except Exception as e:
+                        print(f"[X] 主应用启动失败: {e}")
+                else:
+                    print(f"[X] 主应用也不存在: {main_exe}")
         else:
             print("[!] 非 frozen 模式，跳过启动 bootstrap.exe")
 
@@ -2291,17 +2322,15 @@ check();
                 time.sleep(0.25)
 
         # ---- 后台更新检查（异步，不阻塞主流程）----
-        # INSPUR-102: 检测到新版本后自动开始静默下载
+        # 仅检查是否有新版本，不自动下载——下载必须由用户在 About 弹窗中手动触发
         def _check_for_update():
             time.sleep(2)  # 启动后延迟 2-3 秒，等 UI 渲染
             checker = get_update_checker()
             result = checker.check_update(_read_version())
             if result:
-                print(f"[OK] 发现新版本 V{result['version']}")
-                # Module 3: 自动后台静默下载增量包
-                if result.get('auto_download'):
-                    print("[OK] 开始后台静默下载...")
-                    checker.auto_start_download()
+                print(f"[OK] 发现新版本 V{result['version']}，等待用户手动下载")
+                # 不自动下载：将结果缓存到 _last_check，前端通过 /api/system-info 读取
+                # 用户必须在 About 弹窗中点击"下载更新"才会触发下载
             elif checker.get_last_check() is None:
                 # check_update 返回 None 且 _last_check 为 None：
                 # 可能网络异常或 XML 解析失败，已在 _check_* 方法中记录详情

@@ -377,13 +377,37 @@ def _apply_full_installer(update_info):
             timeout=300,
         )
         if result.returncode != 0:
-            _log(f'[X] 静默安装失败, 错误码={result.returncode}: {result.stderr}')
+            # 记录完整的 stderr/stdout，不吞噬错误信息
+            stderr_text = result.stderr.decode('utf-8', errors='replace').strip() if result.stderr else ''
+            stdout_text = result.stdout.decode('utf-8', errors='replace').strip() if result.stdout else ''
+            _log(f'[X] 静默安装失败, 错误码={result.returncode}')
+            if stderr_text:
+                _log(f'[X] stderr: {stderr_text}')
+            if stdout_text:
+                _log(f'[X] stdout: {stdout_text}')
             return False
     except Exception as e:
         _log(f'[X] 静默安装异常: {e}')
         return False
 
-    _log(f'[OK] 静默安装成功: {target_version}')
+    _log(f'[OK] 静默安装返回成功: {target_version}')
+
+    # 验证 VERSION 文件是否正确更新（防止静默安装成功但版本号未写入的情况）
+    if target_version and os.path.isfile(VERSION_FILE):
+        try:
+            with open(VERSION_FILE, 'r', encoding='utf-8') as vf:
+                actual_version = vf.read().strip()
+            if actual_version != target_version:
+                _log(f'[X] VERSION 文件未更新: 期望 {target_version}, 实际 {actual_version}')
+                # 手动写入正确版本号
+                try:
+                    with open(VERSION_FILE, 'w', encoding='utf-8') as vf:
+                        vf.write(target_version)
+                    _log(f'[OK] 已手动修正 VERSION: {target_version}')
+                except Exception as ve:
+                    _log(f'[X] VERSION 手动修正失败: {ve}')
+        except Exception as e:
+            _log(f'[!] 无法检查 VERSION 文件: {e}')
 
     # 清理安装包
     try:
