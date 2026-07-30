@@ -356,18 +356,6 @@
                     </div>
                 </div>
 
-                <!-- 更新通道 -->
-                <div class="version-info-card" style="background:#f0f4ff;border-color:#c5d0f0;">
-                    <div class="d-flex align-items-center justify-content-between">
-                        <span style="color:#888;font-size:13px;"
-                              id="aboutChannelLabel"
-                              title="当前更新通道为稳定版，仅接收正式版本更新">
-                            <i class="bi bi-broadcast"></i> 更新通道
-                            <i class="bi bi-question-circle-fill" style="font-size:10px;color:#aaa;cursor:help;"></i>
-                        </span>
-                        <span class="badge ms-2" id="aboutChannel" style="font-size:12px;">-</span>
-                    </div>
-                </div>
 
                 <!-- 更新检查 -->
                 <div class="d-flex align-items-center justify-content-between mb-2">
@@ -1843,7 +1831,6 @@
     // ===== 在线更新检查（全局） =====
     let _globalUpdateData = null;  // 缓存的更新检查结果
     let _dlPollInterval = null;    // 下载进度轮询 timer
-    let _updateChannel = 'stable'; // 当前更新通道
     let _forceUpdate = false;      // 是否强制更新
     let _aboutUpdateStep = 'idle'; // 当前升级步骤: 'idle' | 'step1' | 'step2' | 'step3' | 'force'
 
@@ -1881,13 +1868,9 @@
             if (data && data.version) {
                 document.getElementById('aboutVersion').textContent = 'V ' + data.version;
             }
-            // 更新通道
+            // 更新信息
             if (data && data.update) {
-                if (data.update.channel) {
-                    _updateChannel = data.update.channel;
-                }
                 _forceUpdate = !!(data.update.force_update);
-                updateChannelBadge();
             }
             // 根据缓存的更新信息切换状态
             if (data && data.update && data.update.has_update) {
@@ -2004,19 +1987,6 @@
         return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
     }
 
-    function updateChannelBadge() {
-        var badge = document.getElementById('aboutChannel');
-        var label = document.getElementById('aboutChannelLabel');
-        if (_updateChannel === 'beta') {
-            badge.textContent = 'Beta';
-            badge.className = 'badge ms-2 bg-warning text-dark';
-            if (label) label.title = '当前更新通道为 Beta 测试版，可以提前体验新功能';
-        } else {
-            badge.textContent = 'Stable';
-            badge.className = 'badge ms-2 bg-success';
-            if (label) label.title = '当前更新通道为稳定版，仅接收正式版本更新';
-        }
-    }
 
     /** 设置 aboutDownloadBtn 为 Step 1 状态（"下载更新"） */
     function setAboutDownloadBtnStep1() {
@@ -2548,7 +2518,6 @@
 
                 _globalUpdateData = data;
                 _forceUpdate = !!(data.force_update);
-                _updateChannel = data.channel || 'stable';
                 document.getElementById('aboutRedDot').classList.add('show');
                 // 显示简洁的新版本通知 toast（点击可打开关于弹窗查看详情）
                 showUpdateNotifyToast(data);
