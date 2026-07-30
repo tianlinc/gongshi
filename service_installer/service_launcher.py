@@ -64,8 +64,8 @@ def _maybe_apply_update():
 
     update_type = update_info.get('type', '')
 
-    if update_type == 'incremental':
-        _apply_incremental_update(update_info, update_ready)
+    if update_type in ('incremental', 'staging'):
+        _apply_staging_update(update_info, update_ready)
     elif update_type == 'full':
         _apply_full_update(update_info, update_ready)
     else:
@@ -81,8 +81,8 @@ def _cleanup_update_ready(path):
         pass
 
 
-def _apply_incremental_update(update_info, update_ready_path):
-    """应用增量 staging 更新并重启 exe 以加载新代码。
+def _apply_staging_update(update_info, update_ready_path):
+    """应用 staging 更新并重启 exe 以加载新代码。
 
     导入 _bootstrap 模块执行 staging → app 目录的文件替换，
     成功后通过 subprocess 重启自身（新版文件生效），
@@ -103,10 +103,14 @@ def _apply_incremental_update(update_info, update_ready_path):
 
     if success:
         _log.info("[OK] INSPUR-109: 增量更新已应用，重启加载新代码...")
-        import subprocess
-        subprocess.Popen(
+        import subprocess as _sp
+        startupinfo = _sp.STARTUPINFO()
+        startupinfo.dwFlags |= _sp.STARTF_USESHOWWINDOW
+        startupinfo.wShowWindow = _sp.SW_HIDE
+        _sp.Popen(
             [sys.executable],
-            creationflags=subprocess.CREATE_NO_WINDOW
+            startupinfo=startupinfo,
+            creationflags=_sp.CREATE_NO_WINDOW
         )
         sys.exit(0)
     else:
@@ -115,85 +119,32 @@ def _apply_incremental_update(update_info, update_ready_path):
 
 
 def _apply_full_update(update_info, update_ready_path):
-    """完整包安装：运行 Inno Setup 静默安装器。
+    """完整包安装：委托 _bootstrap 模块执行静默安装。
 
-    与 _desktop_common.restart_and_install() 逻辑一致，
-    通过 batch 脚本在独立进程中执行安装（避免文件锁问题）。
+    与旧 restart_and_install() 逻辑一致，现统一迁入 _bootstrap.py。
     """
-    _cleanup_update_ready(update_ready_path)
-
-    installer_path = update_info.get('installer_path', '')
-    if not installer_path or not os.path.isfile(installer_path):
+    import logging as _log2
+    try:
+        import _bootstrap
+    except ImportError:
+        _log2.error("[X] _bootstrap 模块不可用，无法应用完整包更新")
         return
 
-    import subprocess
-
-    # 确定安装目标目录
-    frozen_dir = os.path.dirname(sys.executable)
     try:
-        import winreg
-        key = winreg.OpenKey(
-            winreg.HKEY_CURRENT_USER,
-            r'Software\Microsoft\Windows\CurrentVersion\Uninstall'
-            r'\{A8F3C2B1-9D4E-5F6A-7B8C-0D1E2F3A4B5C}_is1'
+        success = _bootstrap._apply_full_installer(update_info)
+    except Exception as e:
+        _log2.error("[X] 应用完整包更新异常: %s", e)
+        success = False
+
+    _cleanup_update_ready(update_ready_path)
+    if success:
+        _log2.info("[OK] 完整包安装成功，即将重启...")
+        import subprocess as _sp
+        _sp.Popen(
+            [sys.executable],
+            creationflags=_sp.CREATE_NO_WINDOW
         )
-        try:
-            val, _ = winreg.QueryValueEx(key, 'InstallLocation')
-            install_dir = val if (val and os.path.isdir(val)) else None
-        finally:
-            winreg.CloseKey(key)
-    except OSError:
-        install_dir = None
-
-    target_dir = install_dir or os.path.join(
-        os.environ.get('LOCALAPPDATA', ''), 'IEI Timer Faster')
-
-    bat_path = os.path.join(os.path.dirname(installer_path), '_install.bat')
-    log_file = os.path.join(os.path.dirname(installer_path), '_update.log')
-
-    bat_lines = [
-        '@echo off',
-        'setlocal enabledelayedexpansion',
-        f'set LOG={log_file}',
-        '',
-        f'echo [!date! !time!] 开始更新... >> "!LOG!"',
-        '',
-        'taskkill /f /im "IEI Timer Faster.exe" >nul 2>&1',
-        f'echo [!date! !time!] 已终止旧进程 >> "!LOG!"',
-        '',
-        'ping 127.0.0.1 -n 3 >nul',
-        '',
-        f'echo [!date! !time!] 运行安装程序... >> "!LOG!"',
-        f'"{installer_path}" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR="{target_dir}"',
-        'set SETUP_ERR=!ERRORLEVEL!',
-        '',
-        'if !SETUP_ERR! neq 0 (',
-        f'    echo [!date! !time!] [X] 安装失败, 错误码=!SETUP_ERR! >> "!LOG!"',
-        '    exit /b !SETUP_ERR!',
-        ')',
-        '',
-        f'echo [!date! !time!] [OK] 安装成功 >> "!LOG!"',
-        f'echo [!date! !time!] 启动新版本... >> "!LOG!"',
-        f'start "" "{os.path.join(target_dir, "IEI Timer Faster.exe")}"',
-        '',
-        f'echo [!date! !time!] 清理临时文件... >> "!LOG!"',
-        f'del /f /q "{installer_path}" >nul 2>&1',
-        f'del /f /q "{bat_path}" >nul 2>&1',
-        f'echo [!date! !time!] 更新流程完成 >> "!LOG!"',
-    ]
-
-    with open(bat_path, 'w', encoding='gbk') as f:
-        f.write('\r\n'.join(bat_lines))
-
-    startupinfo = subprocess.STARTUPINFO()
-    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-    startupinfo.wShowWindow = subprocess.SW_HIDE
-    subprocess.Popen(
-        ['cmd.exe', '/c', bat_path],
-        startupinfo=startupinfo,
-        creationflags=subprocess.CREATE_NO_WINDOW,
-    )
-    sys.exit(0)
+        sys.exit(0)
 
 
 _maybe_apply_update()

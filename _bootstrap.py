@@ -321,7 +321,80 @@ def _apply_bsdiff_patch(original_file, patch_file, output_file):
 # 核心：应用 staging 更新
 # -------------------------------------------------------------------------
 
-def _apply_staging(update_info):
+def _apply_full_installer(update_info):
+    """执行完整包 Inno Setup 静默安装（Windows）。
+
+    供 service_launcher._apply_full_update 和 bootstrap 自身调用，
+    统一收口到 _bootstrap 模块。
+
+    Parameters
+    ----------
+    update_info : dict
+        update_ready.json 内容，含 installer_path 和 target_version
+
+    Returns
+    -------
+    bool
+        成功返回 True，失败返回 False
+    """
+    installer_path = update_info.get('installer_path', '')
+    if not installer_path or not os.path.isfile(installer_path):
+        _log(f'[!] 安装包不存在: {installer_path}')
+        return False
+
+    target_version = update_info.get('target_version', '')
+
+    # 确定安装目标目录
+    frozen_dir = None
+    if getattr(sys, 'frozen', False):
+        frozen_dir = os.path.dirname(sys.executable)
+
+    try:
+        import winreg
+        key = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r'Software\Microsoft\Windows\CurrentVersion\Uninstall'
+            r'\{A8F3C2B1-9D4E-5F6A-7B8C-0D1E2F3A4B5C}_is1'
+        )
+        try:
+            val, _ = winreg.QueryValueEx(key, 'InstallLocation')
+            install_dir = val if (val and os.path.isdir(val)) else None
+        finally:
+            winreg.CloseKey(key)
+    except OSError:
+        install_dir = None
+
+    target_dir = install_dir or frozen_dir or os.path.join(
+        os.environ.get('LOCALAPPDATA', ''), 'IEI Timer Faster')
+
+    _log(f'[OK] 运行静默安装: {installer_path} → {target_dir}')
+
+    try:
+        result = subprocess.run(
+            [installer_path, '/VERYSILENT', '/SUPPRESSMSGBOXES',
+             '/NORESTART', f'/DIR={target_dir}'],
+            capture_output=True,
+            timeout=300,
+        )
+        if result.returncode != 0:
+            _log(f'[X] 静默安装失败, 错误码={result.returncode}: {result.stderr}')
+            return False
+    except Exception as e:
+        _log(f'[X] 静默安装异常: {e}')
+        return False
+
+    _log(f'[OK] 静默安装成功: {target_version}')
+
+    # 清理安装包
+    try:
+        os.remove(installer_path)
+    except Exception:
+        pass
+
+    return True
+
+
+def _apply_staging(update_info, progress_callback=None):
     """执行 staging 目录到 app 根目录的原子替换。
 
     流程：
@@ -337,6 +410,8 @@ def _apply_staging(update_info):
     ----------
     update_info : dict
         update_ready.json 的内容，含 staging_dir 和 target_version
+    progress_callback : callable or None
+        进度回调 function(current_step: int, total_steps: int, message: str)
 
     Returns
     -------
@@ -370,6 +445,8 @@ def _apply_staging(update_info):
     changed_files = manifest.get('changed_files', [])
     removed_files = manifest.get('removed_files', [])
     expected_sha256 = manifest.get('sha256', {})
+    # 总步骤：SHA256校验 + 备份 + 新增 + 覆盖 + 删除 + 写版本 + 清理 = 7
+    total_steps = 7
 
     # 0. 校验 SHA256（如果 manifest 中提供了哈希）
     if expected_sha256:
@@ -388,10 +465,14 @@ def _apply_staging(update_info):
         if not all_valid:
             _log('[X] 文件完整性校验失败，中止更新')
             return False
+    if progress_callback:
+        progress_callback(1, total_steps, '校验文件完整性...')
 
     # 1. 创建 rollback 备份
     _log('[OK] 创建回滚备份...')
     _backup_for_rollback(changed_files, added_files)
+    if progress_callback:
+        progress_callback(2, total_steps, '创建回滚备份...')
 
     # 2. 应用 added_files
     _log('[OK] 复制新增文件...')
@@ -409,6 +490,9 @@ def _apply_staging(update_info):
                 return False
         else:
             _log(f'[!] 源文件不存在: {src}')
+
+    if progress_callback:
+        progress_callback(3, total_steps, '复制新增文件...')
 
     # 3. 应用 changed_files（含 bsdiff 可选）
     _log('[OK] 覆盖变更文件...')
@@ -438,6 +522,9 @@ def _apply_staging(update_info):
             _restore_from_rollback()
             return False
 
+    if progress_callback:
+        progress_callback(4, total_steps, '覆盖变更文件...')
+
     # 4. 删除 removed_files
     _log('[OK] 删除废弃文件...')
     for fname in removed_files:
@@ -451,11 +538,16 @@ def _apply_staging(update_info):
         else:
             _log(f'[OK] 已不存在,跳过: {fname}')
 
+    if progress_callback:
+        progress_callback(5, total_steps, '删除废弃文件...')
+
     # 5. 写入新版本号
     try:
         with open(VERSION_FILE, 'w', encoding='utf-8') as f:
             f.write(target_version)
         _log(f'[OK] 版本号已更新: {target_version}')
+        if progress_callback:
+            progress_callback(6, total_steps, '写入版本号...')
     except Exception as e:
         _log(f'[X] 版本号更新失败: {e}')
         _restore_from_rollback()
@@ -483,8 +575,107 @@ def _apply_staging(update_info):
     except Exception:
         pass
 
+    if progress_callback:
+        progress_callback(7, total_steps, '清理临时文件...')
+
     _log(f'[OK] === 更新完成: {target_version} ===')
     return True
+
+
+# -------------------------------------------------------------------------
+# 升级进度窗口（tkinter）
+# -------------------------------------------------------------------------
+
+def _show_upgrade_progress(update_type, target_version):
+    """显示升级进度窗口（tkinter GUI）。
+
+    有标题栏、显示版本号和进度条。升级完成后自动关闭。
+
+    Returns
+    -------
+    callable
+        进度回调函数 f(step, total, message)，用于更新窗口
+    """
+    try:
+        import tkinter as tk
+        from tkinter import ttk
+    except ImportError:
+        _log('[!] tkinter 不可用，无进度窗口')
+        noop = lambda step, total, msg: None
+        return noop, noop, type('FakeRoot', (), {'mainloop': lambda: None, 'after': lambda *a: None, 'destroy': lambda: None})()
+
+    root = tk.Tk()
+    root.title('IEI Timer Faster - 正在升级')
+    root.geometry('420x180')
+    root.resizable(False, False)
+
+    # 居中显示
+    root.update_idletasks()
+    sw = root.winfo_screenwidth()
+    sh = root.winfo_screenheight()
+    root.geometry(f'420x180+{(sw-420)//2}+{(sh-180)//2}')
+
+    # 标题
+    type_label = '增量更新' if update_type in ('incremental', 'staging') else '完整安装'
+    tk.Label(
+        root,
+        text=f'正在{type_label} IEI Timer Faster',
+        font=('微软雅黑', 11, 'bold'),
+    ).pack(pady=(20, 5))
+
+    if target_version:
+        tk.Label(
+            root,
+            text=f'目标版本: v{target_version}',
+            font=('微软雅黑', 9),
+            fg='gray',
+        ).pack(pady=(0, 10))
+
+    # 进度条
+    progress_var = tk.DoubleVar(value=0)
+    progress_bar = ttk.Progressbar(
+        root,
+        variable=progress_var,
+        maximum=100,
+        length=360,
+        mode='determinate',
+    )
+    progress_bar.pack(pady=5)
+
+    # 状态文本
+    status_var = tk.StringVar(value='准备升级...')
+    tk.Label(
+        root,
+        textvariable=status_var,
+        font=('微软雅黑', 9),
+        fg='#555',
+    ).pack(pady=5)
+
+    # 关闭标记
+    close_flag = {'done': False}
+
+    def on_progress(step, total, message):
+        """进度回调：更新进度条和状态文本。"""
+        if close_flag['done']:
+            return
+        pct = int(step * 100 / total) if total > 0 else 0
+        root.after(0, lambda: progress_var.set(pct))
+        root.after(0, lambda: status_var.set(message))
+        root.update_idletasks()
+
+    def on_done(success):
+        """升级完成，更新窗口状态后延迟关闭。"""
+        close_flag['done'] = True
+        if success:
+            root.after(0, lambda: progress_var.set(100))
+            root.after(0, lambda: status_var.set('升级完成，正在启动...'))
+        else:
+            root.after(0, lambda: status_var.set('升级失败，正在恢复...'))
+        root.update_idletasks()
+        root.after(2000, root.destroy)
+
+    root.update()
+    return on_progress, on_done, root
 
 
 # -------------------------------------------------------------------------
@@ -506,8 +697,11 @@ def _find_main_app():
 def launch_main_app():
     """启动主应用（IEI Timer Faster.exe）。
 
-    使用 subprocess.Popen 以 CREATE_NO_WINDOW 启动，
+    使用 subprocess.Popen 以 CREATE_NO_WINDOW + SW_HIDE 启动，
     不等待子进程退出——bootstrap 在这里直接退出。
+
+    CREATE_NO_WINDOW 防止为新进程创建控制台，
+    SW_HIDE 确保即使有初始窗口也不显示（防止 CMD 黑框闪现）。
     """
     app_path = _find_main_app()
     if not app_path:
@@ -517,9 +711,12 @@ def launch_main_app():
     _log(f'[OK] 启动主应用: {app_path}')
     try:
         if sys.platform == 'win32':
-            # 使用 CREATE_NO_WINDOW 防止控制台窗口，让子进程自行管理 GUI 窗口
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            startupinfo.wShowWindow = subprocess.SW_HIDE
             subprocess.Popen(
                 [app_path],
+                startupinfo=startupinfo,
                 creationflags=subprocess.CREATE_NO_WINDOW,
             )
         else:
@@ -592,24 +789,48 @@ def main():
             launch_main_app()
             return
 
+        update_type = update_info.get('type', '')
+        target_version = update_info.get('target_version', '')
+
         # 关闭旧应用进程（确保文件锁释放）
         _kill_app_process()
 
-        # 应用更新
-        if _apply_staging(update_info):
+        # 显示升级进度窗口
+        on_progress, on_done, root = _show_upgrade_progress(update_type, target_version)
+
+        if update_type in ('incremental', 'staging'):
+            # staging 目录文件替换
+            on_progress(0, 7, '开始升级...')
+            success = _apply_staging(update_info, progress_callback=on_progress)
+        elif update_type == 'full':
+            # 完整包 Inno Setup 静默安装
+            on_progress(0, 1, '正在安装...')
+            success = _apply_full_installer(update_info)
+        else:
+            _log(f'[!] 未知更新类型: {update_type}')
+            success = False
+
+        if success:
             _log('[OK] 更新应用成功')
+            on_done(True)
         else:
             _log('[X] 更新应用失败，尝试回滚...')
-            rolled_back = _restore_from_rollback()
-            if not rolled_back:
-                _log('[!] 回滚失败，删除 update_ready.json 防止死循环')
-            # 无论回滚是否成功，都要删除 update_ready.json
-            # 否则每次启动 bootstrap 都会重复尝试应用更新 → 重复失败
+            if update_type in ('incremental', 'staging'):
+                _restore_from_rollback()
+            # 删除 update_ready.json 防止死循环
             try:
                 os.remove(UPDATE_READY_FILE)
                 _log('[OK] update_ready.json 已删除')
             except Exception as del_err:
                 _log(f'[!] update_ready.json 删除失败: {del_err}')
+            on_done(False)
+
+        # 等待进度窗口关闭（on_done 会延迟 2 秒后 destroy）
+        try:
+            root.after(2500, root.destroy)
+            root.mainloop()
+        except Exception:
+            pass
 
     # 启动主应用
     launch_main_app()

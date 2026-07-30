@@ -31,12 +31,12 @@ a = Analysis(
         'shutil',
         'subprocess',
         'traceback',
+        'tkinter',
     ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
     excludes=[
-        'tkinter',
         'matplotlib',
         'numpy',
         'pandas',

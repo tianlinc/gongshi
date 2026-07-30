@@ -1051,7 +1051,8 @@ class UpdateChecker:
 
         _log.info("[OK] 下载完整安装包: %s", full_url)
         save_dir = os.path.join(_get_data_dir(), 'updates')
-        self._do_download(full_url, save_dir)
+        current_version = _read_version()
+        self._do_download_and_prepare(full_url, save_dir, current_version, target_version)
 
     def _download_single_incremental(self, url, from_version, to_version, is_chain=False):
         """下载单个增量包并解压到 staging 目录。
@@ -1438,9 +1439,71 @@ class UpdateChecker:
             # 下载完成，清理续传状态
             self._save_resume_state(url, filepath, so_far, total)
 
+    def _do_download_and_prepare(self, url, save_dir, from_version, to_version):
+        """下载完整包并自动准备 staging（统一路径）。
+
+        流程：
+        1. 下载到临时目录
+        2. 如果是 zip：解压到 staging，生成 manifest.json
+        3. 如果是 exe：保留文件路径，由 bootstrap 执行静默安装
+        4. 完成后通过 _finalize_download 标记 ready_to_restart
+        """
+        self._do_download(url, save_dir)
+
+        with self._lock:
+            file_path = self._file_path
+            downloaded = self._downloaded
+
+        if not downloaded or not file_path or not os.path.isfile(file_path):
+            return
+
+        # 尝试 zip 解压到 staging
+        if file_path.endswith('.zip') or zipfile.is_zipfile(file_path):
+            self._extract_zip_to_staging(file_path, from_version, to_version)
+
+    def _extract_zip_to_staging(self, zip_path, from_version, to_version):
+        """将 zip 包解压到 staging 目录并生成 manifest.json。
+
+        解压后自动清理 zip 文件，通过 _finalize_download 标记就绪。
+        """
+        import zipfile
+
+        staging_dir = self._get_staging_dir()
+        files_dir = os.path.join(staging_dir, 'files')
+        os.makedirs(files_dir, exist_ok=True)
+
+        try:
+            with zipfile.ZipFile(zip_path, 'r') as zf:
+                zf.extractall(files_dir)
+            print(f"[OK] 完整包解压完成: staging/files/")
+        except zipfile.BadZipFile:
+            print(f"[!] 完整包不是有效的 ZIP 文件，保留原始路径")
+            self._finalize_download(to_version)
+            return
+        except Exception as e:
+            print(f"[X] 完整包解压失败: {e}")
+            self._set_download_error(f'解压失败: {e}')
+            return
+
+        # 删除原始 zip
+        try:
+            os.remove(zip_path)
+        except Exception:
+            pass
+
+        # 检查 manifest.json 是否在 zip 中
+        manifest_in_files = os.path.join(files_dir, 'manifest.json')
+        if os.path.isfile(manifest_in_files):
+            shutil.copy2(manifest_in_files, os.path.join(staging_dir, 'manifest.json'))
+            print("[OK] manifest.json 已复制到 staging 根目录")
+        else:
+            print("[!] ZIP 中未找到 manifest.json，自动生成...")
+            self._generate_manifest_from_extracted(files_dir, from_version, to_version)
+
+        self._finalize_download(to_version)
+
     @staticmethod
     def _is_network_error(exception):
-        """判断异常是否为网络类错误（值得重试的）。"""
         import requests
 
         # requests 库封装的网络异常
@@ -1527,15 +1590,13 @@ class UpdateChecker:
             return False, f'不支持的平台: {sys.platform}'
 
     def prepare_restart(self):
-        """准备重启并应用更新（INSPUR-102：替换原 Inno Setup 静默安装流程）。
+        """准备重启并应用更新（统一升级路径，删除 restart_and_install）。
 
-        新流程：
-        1. 写入 update_ready.json（bootstrap 启动时读取）
-        2. 对完整包下载的场景：将 .exe 安装包路径也记录到 update_ready.json
-           让 bootstrap 在启动后静默安装
-        3. 返回成功，由调用方执行 os._exit(0)
-
-        移除了原 batch 脚本 + Inno Setup 静默安装流程。
+        流程（无论增量还是完整包统一走此路径）：
+        1. 确定更新源（staging 目录 或 完整包 zip/installer）
+        2. 写入 update_ready.json（bootstrap 启动时读取并执行）
+        3. 用 subprocess.Popen 启动 bootstrap.exe（确保 os._exit 后应用自动被拉起）
+        4. 返回成功，由调用方执行 os._exit(0)
 
         返回 (success: bool, message: str)
         """
@@ -1544,14 +1605,12 @@ class UpdateChecker:
             downloaded = self._downloaded
             is_incremental = self._is_incremental
             staging_dir = self._staging_dir
-            download_event = self._download_event
 
-        # 准备 update_ready.json
         last = self.get_last_check()
         target_version = last.get('version', '') if last else ''
 
         if is_incremental:
-            # 增量更新：staging 目录已就绪
+            # 增量更新：staging 目录已就绪（_finalize_download 已设置）
             actual_staging = staging_dir or self._get_staging_dir()
             if not os.path.isdir(actual_staging):
                 with self._lock:
@@ -1562,16 +1621,34 @@ class UpdateChecker:
             update_ready = {
                 'target_version': target_version,
                 'staging_dir': actual_staging,
-                'type': 'incremental',
+                'type': 'staging',
             }
-        elif downloaded and file_path and os.path.isfile(file_path):
-            # 完整包下载：需要 bootstrap 启动后执行 Inno Setup 静默安装
-            # 或者直接用现有 restart_and_install 路径
-            update_ready = {
-                'target_version': target_version,
-                'installer_path': file_path,
-                'type': 'full',
-            }
+        elif downloaded and file_path:
+            # 完整包：可能是 zip（已解压到 staging）或 exe 安装器
+            if file_path.endswith('.zip') and os.path.isfile(file_path):
+                # zip 已在 _do_download 中解压到 staging
+                actual_staging = staging_dir or self._get_staging_dir()
+                if not os.path.isdir(actual_staging):
+                    with self._lock:
+                        self._install_status = 'failed'
+                        self._install_error = 'staging 目录未就绪'
+                    return False, 'staging 目录未就绪'
+                update_ready = {
+                    'target_version': target_version,
+                    'staging_dir': actual_staging,
+                    'type': 'staging',
+                }
+            elif os.path.isfile(file_path):
+                update_ready = {
+                    'target_version': target_version,
+                    'installer_path': file_path,
+                    'type': 'full',
+                }
+            else:
+                with self._lock:
+                    self._install_status = 'failed'
+                    self._install_error = '安装包文件不存在'
+                return False, '安装包文件不存在'
         else:
             with self._lock:
                 self._install_status = 'failed'
@@ -1592,10 +1669,49 @@ class UpdateChecker:
                 self._install_error = f'写入 update_ready.json 失败: {e}'
             return False, f'写入 update_ready.json 失败: {e}'
 
+        # 启动 bootstrap.exe，确保 os._exit 后应用自动被拉起
+        self._launch_bootstrap()
+
         with self._lock:
             self._install_status = 'done'
             self._download_event = 'ready_to_restart'
         return True, '更新已就绪，应用即将重启'
+
+    def _launch_bootstrap(self):
+        """启动 bootstrap.exe 子进程，确保应用退出后自动被拉起。
+
+        bootstrap.exe 启动后会检查 update_ready.json：
+        - 有 → 应用更新（staging 文件替换 或 静默安装器）
+        - 没有 → 直接启动主应用
+
+        使用 CREATE_NO_WINDOW + SW_HIDE 防止 CMD 黑框闪现。
+        """
+        import subprocess as _sp
+
+        # 定位 bootstrap.exe：与主应用 exe 同目录
+        frozen_dir = None
+        if getattr(sys, 'frozen', False):
+            frozen_dir = os.path.dirname(sys.executable)
+
+        if frozen_dir:
+            bootstrap_exe = os.path.join(frozen_dir, 'bootstrap.exe')
+            if os.path.isfile(bootstrap_exe):
+                print(f"[OK] 启动 bootstrap.exe: {bootstrap_exe}")
+                startupinfo = _sp.STARTUPINFO()
+                startupinfo.dwFlags |= _sp.STARTF_USESHOWWINDOW
+                startupinfo.wShowWindow = _sp.SW_HIDE
+                try:
+                    _sp.Popen(
+                        [bootstrap_exe],
+                        startupinfo=startupinfo,
+                        creationflags=_sp.CREATE_NO_WINDOW,
+                    )
+                except Exception as e:
+                    print(f"[!] 启动 bootstrap.exe 失败: {e}")
+            else:
+                print(f"[!] bootstrap.exe 不存在: {bootstrap_exe}")
+        else:
+            print("[!] 非 frozen 模式，跳过启动 bootstrap.exe")
 
     def prepare_rollback(self):
         """准备回滚：检查 rollback 目录是否存在。
@@ -1674,109 +1790,6 @@ class UpdateChecker:
         self._auto_download = True
         self.start_incremental_download()
 
-    # ---- 旧的 restart_and_install 保留向后兼容（完整包安装器路径） ----
-
-    def restart_and_install(self):
-        """执行后台静默安装并自动重启应用（Windows 平台，完整包兼容路径）。
-
-        保留用于完整 .exe 安装包的回退场景。
-        增量更新应使用 prepare_restart() 新路径。
-
-        返回 (success: bool, message: str)
-        """
-        with self._lock:
-            file_path = self._file_path
-            downloaded = self._downloaded
-
-        if not downloaded or not file_path or not os.path.isfile(file_path):
-            with self._lock:
-                self._install_status = 'failed'
-                self._install_error = '安装包文件不存在'
-            return False, '安装包文件不存在'
-
-        import subprocess
-
-        frozen_dir = None
-        if getattr(sys, 'frozen', False):
-            frozen_dir = os.path.dirname(sys.executable)
-
-        install_dir = frozen_dir or self._get_windows_install_dir()
-        default_dir = os.path.join(os.environ.get('LOCALAPPDATA', os.path.expanduser('~')),
-                                   'IEI Timer Faster')
-        target_dir = install_dir or default_dir
-        new_exe = os.path.join(target_dir, 'IEI Timer Faster.exe')
-
-        log_file = os.path.join(os.path.dirname(file_path), '_update.log')
-        bat_path = os.path.join(os.path.dirname(file_path), '_install.bat')
-
-        desktop_lnk = os.path.join(os.environ.get('USERPROFILE', ''), 'Desktop', 'IEI Timer Faster.lnk')
-
-        bat_lines = [
-            '@echo off',
-            'setlocal enabledelayedexpansion',
-            f'set LOG={log_file}',
-            '',
-            f'echo [!date! !time!] 开始更新... >> "!LOG!"',
-            '',
-            'taskkill /f /im "IEI Timer Faster.exe" >nul 2>&1',
-            f'echo [!date! !time!] 已终止旧进程 >> "!LOG!"',
-            '',
-            'ping 127.0.0.1 -n 6 >nul',
-            '',
-            f'echo [!date! !time!] 运行安装程序... >> "!LOG!"',
-            f'"{file_path}" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR="{target_dir}"',
-            'set SETUP_ERR=!ERRORLEVEL!',
-            '',
-            'if !SETUP_ERR! neq 0 (',
-            f'    echo [!date! !time!] [X] 安装失败, 错误码=!SETUP_ERR! >> "!LOG!"',
-            '    exit /b !SETUP_ERR!',
-            ')',
-            '',
-            f'echo [!date! !time!] [OK] 安装成功 >> "!LOG!"',
-            '',
-            f'echo [!date! !time!] 检查桌面快捷方式... >> "!LOG!"',
-            f'if exist "{desktop_lnk}" (',
-            f'    echo [!date! !time!] [OK] 桌面快捷方式已存在 >> "!LOG!"',
-            f') else (',
-            f'    echo [!date! !time!] [!] 快捷方式缺失(右键exe→发送到→桌面快捷方式) >> "!LOG!"',
-            f')',
-            '',
-            f'echo [!date! !time!] 启动新版本... >> "!LOG!"',
-            f'start "" "{new_exe}"',
-            '',
-            f'echo [!date! !time!] 清理临时文件... >> "!LOG!"',
-            f'del /f /q "{file_path}" >nul 2>&1',
-            f'del /f /q "{bat_path}" >nul 2>&1',
-            f'echo [!date! !time!] 更新流程完成 >> "!LOG!"',
-        ]
-        try:
-            with open(bat_path, 'w', encoding='gbk') as f:
-                f.write('\r\n'.join(bat_lines))
-        except Exception as e:
-            with self._lock:
-                self._install_status = 'failed'
-                self._install_error = f'创建安装脚本失败: {e}'
-            return False, f'创建安装脚本失败: {e}'
-
-        try:
-            print(f"[OK] 启动后台静默安装脚本: {bat_path}")
-            startupinfo = subprocess.STARTUPINFO()
-            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-            startupinfo.wShowWindow = subprocess.SW_HIDE
-            subprocess.Popen(
-                ['cmd.exe', '/c', bat_path],
-                startupinfo=startupinfo,
-                creationflags=subprocess.CREATE_NO_WINDOW,
-            )
-        except Exception as e:
-            with self._lock:
-                self._install_status = 'failed'
-                self._install_error = f'启动安装失败: {e}'
-            return False, f'启动安装失败: {e}'
-
-        with self._lock:
-            self._install_status = 'done'
-        return True, '安装已启动，应用即将重启'
 
     @staticmethod
     def _get_windows_install_dir():
