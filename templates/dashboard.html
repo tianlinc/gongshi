@@ -359,7 +359,12 @@
                 <!-- 更新通道 -->
                 <div class="version-info-card" style="background:#f0f4ff;border-color:#c5d0f0;">
                     <div class="d-flex align-items-center justify-content-between">
-                        <span style="color:#888;font-size:13px;"><i class="bi bi-broadcast"></i> 更新通道</span>
+                        <span style="color:#888;font-size:13px;"
+                              id="aboutChannelLabel"
+                              title="当前更新通道为稳定版，仅接收正式版本更新">
+                            <i class="bi bi-broadcast"></i> 更新通道
+                            <i class="bi bi-question-circle-fill" style="font-size:10px;color:#aaa;cursor:help;"></i>
+                        </span>
                         <span class="badge ms-2" id="aboutChannel" style="font-size:12px;">-</span>
                     </div>
                 </div>
@@ -383,19 +388,29 @@
                 </div>
 
                 <!-- 发现新版本后的介绍区域 -->
-                <div class="version-info-card" id="aboutNewVerBox" style="display:none;background:#fff8e1;border-color:#ffe082;">
-                    <h6 style="color:#f57c00;"><i class="bi bi-rocket-takeoff"></i> <span id="aboutNewVerTitle">新版本</span></h6>
+                <div class="version-info-card" id="aboutNewVerBox" style="display:none;">
+                    <!-- 三步流程指示器 -->
+                    <div class="about-update-steps">
+                        <span class="about-step-item active" id="aboutStep1"><i class="bi bi-1-circle-fill"></i> 发现新版本</span>
+                        <span class="about-step-arrow">&rarr;</span>
+                        <span class="about-step-item" id="aboutStep2"><i class="bi bi-2-circle-fill"></i> 下载更新</span>
+                        <span class="about-step-arrow">&rarr;</span>
+                        <span class="about-step-item" id="aboutStep3"><i class="bi bi-3-circle-fill"></i> 重启升级</span>
+                    </div>
+                    <h6 style="color:#667eea;"><i class="bi bi-rocket-takeoff"></i> <span id="aboutNewVerTitle">新版本</span></h6>
                     <p style="font-size:12px;color:#666;margin:0 0 8px;" id="aboutNewVerDesc">-</p>
-                    <button class="btn btn-outline-primary btn-sm" id="aboutReleaseNoteBtn2">
-                        <i class="bi bi-eye"></i> 查看更新内容
-                    </button>
-                    <button class="btn btn-primary btn-sm ms-2" id="aboutDownloadBtn" style="display:none;">
-                        <i class="bi bi-download"></i> 重启并升级
-                    </button>
-                    <!-- 强制更新按钮 -->
-                    <button class="btn btn-danger btn-sm ms-2" id="aboutForceRestartBtn" style="display:none;">
-                        <i class="bi bi-exclamation-triangle"></i> 立即重启
-                    </button>
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                        <button class="btn btn-outline-primary btn-sm" id="aboutReleaseNoteBtn2">
+                            <i class="bi bi-eye"></i> 查看更新内容
+                        </button>
+                        <button class="btn btn-primary btn-sm ms-2" id="aboutDownloadBtn" style="display:none;">
+                            <i class="bi bi-download"></i> 下载更新
+                        </button>
+                        <!-- 强制更新按钮 -->
+                        <button class="btn btn-danger btn-sm ms-2" id="aboutForceRestartBtn" style="display:none;">
+                            <i class="bi bi-exclamation-triangle"></i> 立即重启
+                        </button>
+                    </div>
                     <div class="mt-2" id="aboutDlProgress" style="display:none;">
                         <div class="progress" style="height:8px;border-radius:4px;">
                             <div class="progress-bar progress-bar-striped progress-bar-animated"
@@ -1830,28 +1845,32 @@
     let _dlPollInterval = null;    // 下载进度轮询 timer
     let _updateChannel = 'stable'; // 当前更新通道
     let _forceUpdate = false;      // 是否强制更新
-    let _bgDownloadToast = null;   // 后台下载 toast 引用
+    let _aboutUpdateStep = 'idle'; // 当前升级步骤: 'idle' | 'step1' | 'step2' | 'step3' | 'force'
 
     // ===== 关于弹窗 =====
     let aboutModalInst = null;
 
     async function openAboutModal() {
-        // 关闭更新确认 toast
-        const toast = document.getElementById('confirmUpdateToast');
-        if (toast) toast.style.display = 'none';
+        // 关闭升级通知 toast
+        const toast = document.getElementById('updateNotifyToast');
+        if (toast) toast.remove();
 
         if (!aboutModalInst) {
             aboutModalInst = new bootstrap.Modal(document.getElementById('aboutModal'));
         }
         aboutModalInst.show();
 
-        // 重置 UI
+        // 重置 UI 为初始状态
+        _aboutUpdateStep = 'idle';
+        resetAboutUpdateSteps();
         document.getElementById('aboutUpdateIdle').style.display = '';
         document.getElementById('aboutUpdateLatest').style.display = 'none';
         document.getElementById('aboutUpdateAvailable').style.display = 'none';
         document.getElementById('aboutNewVerBox').style.display = 'none';
         document.getElementById('aboutDownloadBtn').style.display = 'none';
+        document.getElementById('aboutForceRestartBtn').style.display = 'none';
         document.getElementById('aboutDlProgress').style.display = 'none';
+        document.getElementById('aboutChainProgress').style.display = 'none';
         document.getElementById('aboutCheckUpdateBtn').disabled = false;
         document.getElementById('aboutCheckUpdateBtn').innerHTML = '<i class="bi bi-arrow-repeat"></i> 检查更新';
 
@@ -1872,9 +1891,13 @@
             }
             // 根据缓存的更新信息切换状态
             if (data && data.update && data.update.has_update) {
-                // 有新版本：显示更新信息框
+                // 有新版本：显示三步流程 Step 1
                 _globalUpdateData = data.update;
                 showAboutUpdateAvailable(data.update);
+                // 如果之前有下载/安装状态，恢复对应步骤
+                if (data.update.dl_status) {
+                    restoreDownloadStatus(data.update.dl_status);
+                }
             } else if (data && data.update && data.update.has_update === false) {
                 // 无新版本：隐藏新版本信息框，显示已是最新提示
                 document.getElementById('aboutUpdateIdle').style.display = 'none';
@@ -1883,16 +1906,26 @@
                 document.getElementById('aboutDownloadBtn').style.display = 'none';
                 document.getElementById('aboutDlProgress').style.display = 'none';
             }
-            // 恢复下载进度（如果正在下载或已下载，仅在有新版本时恢复）
-            if (data && data.update && data.update.has_update && data.update.dl_status) {
-                restoreDownloadStatus(data.update.dl_status);
-            }
         } catch (_) {
             document.getElementById('aboutVersion').textContent = 'V -';
         }
 
         // 加载 Release Note 内容
         preloadReleaseNote();
+    }
+
+    /** 重置三步流程指示器为初始状态（步骤1高亮，其余灰色） */
+    function resetAboutUpdateSteps() {
+        document.getElementById('aboutStep1').className = 'about-step-item active';
+        document.getElementById('aboutStep2').className = 'about-step-item';
+        document.getElementById('aboutStep3').className = 'about-step-item';
+    }
+
+    /** 设置步骤指示器：activeStep 为当前激活步骤，doneSteps 之前的步骤标记为完成 */
+    function setAboutUpdateStep(activeStep) {
+        document.getElementById('aboutStep1').className = 'about-step-item' + (activeStep >= 1 ? (activeStep > 1 ? ' done' : ' active') : '');
+        document.getElementById('aboutStep2').className = 'about-step-item' + (activeStep >= 2 ? (activeStep > 2 ? ' done' : ' active') : '');
+        document.getElementById('aboutStep3').className = 'about-step-item' + (activeStep >= 3 ? (activeStep > 3 ? ' done' : ' active') : '');
     }
 
     function restoreDownloadStatus(dl) {
@@ -1973,13 +2006,23 @@
 
     function updateChannelBadge() {
         var badge = document.getElementById('aboutChannel');
+        var label = document.getElementById('aboutChannelLabel');
         if (_updateChannel === 'beta') {
             badge.textContent = 'Beta';
             badge.className = 'badge ms-2 bg-warning text-dark';
+            if (label) label.title = '当前更新通道为 Beta 测试版，可以提前体验新功能';
         } else {
             badge.textContent = 'Stable';
             badge.className = 'badge ms-2 bg-success';
+            if (label) label.title = '当前更新通道为稳定版，仅接收正式版本更新';
         }
+    }
+
+    /** 设置 aboutDownloadBtn 为 Step 1 状态（"下载更新"） */
+    function setAboutDownloadBtnStep1() {
+        document.getElementById('aboutDownloadBtn').style.display = '';
+        document.getElementById('aboutDownloadBtn').innerHTML = '<i class="bi bi-download"></i> 下载更新';
+        document.getElementById('aboutDownloadBtn').disabled = false;
     }
 
     function showForceUpdateUI() {
@@ -1992,6 +2035,8 @@
 
     function showAboutUpdateAvailable(data) {
         if (!data || !data.has_update) return;
+        _aboutUpdateStep = 'step1';
+        setAboutUpdateStep(1);
         document.getElementById('aboutUpdateIdle').style.display = 'none';
         document.getElementById('aboutUpdateLatest').style.display = 'none';
         document.getElementById('aboutUpdateAvailable').style.display = '';
@@ -2006,8 +2051,15 @@
         _forceUpdate = !!(data.force_update);
         if (_forceUpdate) {
             document.getElementById('aboutDownloadBtn').style.display = 'none';
+            // 强制更新显示红色按钮
+            document.getElementById('aboutForceRestartBtn').style.display = '';
+            document.getElementById('aboutDlText').textContent = '安全更新，必须立即重启';
+            document.getElementById('aboutDlText').className = 'text-danger mt-1';
+            _aboutUpdateStep = 'force';
+        } else if (data.download_url) {
+            setAboutDownloadBtnStep1();
         } else {
-            document.getElementById('aboutDownloadBtn').style.display = data.download_url ? '' : 'none';
+            document.getElementById('aboutDownloadBtn').style.display = 'none';
         }
     }
 
@@ -2031,14 +2083,6 @@
                 _globalUpdateData = data;
                 _forceUpdate = !!(data.force_update);
                 showAboutUpdateAvailable(data);
-                // 强制更新立即下载；普通更新先询问用户确认
-                if (data.download_url) {
-                    if (data.force_update) {
-                        triggerBackgroundDownload(data);
-                    } else {
-                        showConfirmUpdateToast(data);
-                    }
-                }
             } else {
                 document.getElementById('aboutUpdateLatest').style.display = '';
                 btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> 检查更新';
@@ -2053,90 +2097,36 @@
         }
     }
 
-    async function triggerBackgroundDownload(updateData) {
+    async function startAboutDownload() {
+        _aboutUpdateStep = 'step2';
+        setAboutUpdateStep(2);
+        document.getElementById('aboutDlProgress').style.display = 'block';
+        document.getElementById('aboutDlBar').style.width = '0%';
+        document.getElementById('aboutDlText').textContent = '正在下载... 0%';
+        document.getElementById('aboutDlText').className = 'text-info mt-1';
+        document.getElementById('aboutDownloadBtn').style.display = 'none';
+        document.getElementById('aboutChainProgress').style.display = 'none';
         try {
             await fetch('/api/update/download', { method: 'POST' });
-            // 开始轮询进度
             pollAboutDlProgress();
-            // 非阻塞 toast 通知
-            showBgDownloadToast(updateData);
         } catch (_) {
-            // 静默失败，用户可以手动点击按钮
+            document.getElementById('aboutDlText').textContent = '下载启动失败，请重试';
+            document.getElementById('aboutDlText').className = 'text-danger mt-1';
+            _aboutUpdateStep = 'step1';
+            setAboutDownloadBtnStep1();
         }
     }
 
-    function showBgDownloadToast(updateData) {
-        // 关闭已有 toast
-        if (_bgDownloadToast) _bgDownloadToast.remove();
-        _bgDownloadToast = document.createElement('div');
-        _bgDownloadToast.className = 'update-toast-wrapper';
-        _bgDownloadToast.id = 'bgDownloadToast';
-        _bgDownloadToast.innerHTML =
-            '<div class="update-toast" style="background:linear-gradient(135deg,#e3f2fd,#bbdefb);">' +
-            '<div class="update-toast-header-green" style="background:linear-gradient(135deg,#42a5f5,#1e88e5);">' +
-            '<i class="bi bi-cloud-download"></i>' +
-            '<strong>正在后台下载</strong>' +
-            '<button class="update-toast-close" id="bgDlToastClose">&times;</button>' +
-            '</div>' +
-            '<div class="update-toast-body">' +
-            '<span class="version-tag">V' + escapeHtml(updateData.version || '') + '</span>' +
-            '<span id="bgDlToastPct" style="font-size:13px;color:#333;">准备下载...</span>' +
-            '</div>' +
-            '<div class="update-toast-footer">' +
-            '<span id="bgDlFooterText" style="font-size:12px;color:#999;">下载完成后可重启升级</span>' +
-            '<span class="click-hint" id="bgDlClickHint"><i class="bi bi-hand-index"></i> 查看详情</span>' +
-            '<button class="btn btn-success btn-sm" id="bgDlRestartBtn" style="display:none;">' +
-            '<i class="bi bi-arrow-repeat"></i> 立即重启升级</button>' +
-            '</div>' +
-            '</div>';
-        document.body.appendChild(_bgDownloadToast);
-
-        // 点击打开关于弹窗
-        _bgDownloadToast.querySelector('.update-toast').addEventListener('click', function() {
-            closeBgDownloadToast();
-            openAboutModal();
-        });
-        document.getElementById('bgDlToastClose').addEventListener('click', function(e) {
-            e.stopPropagation();
-            closeBgDownloadToast();
-        });
-        // 立即重启升级按钮
-        document.getElementById('bgDlRestartBtn').addEventListener('click', function(e) {
-            e.stopPropagation();
-            closeBgDownloadToast();
-            doAboutRestart();
-        });
-    }
-
-    function closeBgDownloadToast() {
-        if (_bgDownloadToast) {
-            _bgDownloadToast.remove();
-            _bgDownloadToast = null;
-        }
-    }
-
-    // ---- 重启并升级按钮（关于弹窗内）----
     document.getElementById('aboutDownloadBtn').addEventListener('click', async function() {
-        if (!_globalUpdateData) return;
-        const btn = this;
-        btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 正在准备...';
-        try {
-            // 先确认下载状态，如果未下载完则触发下载
-            const statusR = await fetch('/api/update/status');
-            const status = await statusR.json();
-            if (!status.downloaded && !status.downloading) {
-                // 未开始下载，触发后台下载
-                await fetch('/api/update/download', { method: 'POST' });
-                document.getElementById('aboutDlProgress').style.display = 'block';
-                btn.style.display = 'none';
-                pollAboutDlProgress();
-                return;
-            }
-            // 已下载完成，直接重启安装
+        if (_aboutUpdateStep === 'step3') {
+            // 步骤3：立即重启升级
             doAboutRestart();
-        } catch (_) {
-            resetAboutDownloadBtn();
+        } else {
+            // 步骤1：开始下载
+            const btn = this;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 准备下载...';
+            startAboutDownload();
         }
     });
 
@@ -2152,11 +2142,10 @@
         const btn = document.getElementById('aboutDownloadBtn');
         btn.style.display = '';
         btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> 重启并升级';
+        btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> 立即重启升级';
     }
 
     function pollAboutDlProgress() {
-        // 先清除旧的轮询 timer（如果弹窗关闭再打开会重新调用）
         if (_dlPollInterval) clearInterval(_dlPollInterval);
         _dlPollInterval = setInterval(async () => {
             try {
@@ -2164,34 +2153,20 @@
                 const s = await r.json();
                 var dlEvent = s.event || '';
 
-                // 更新后台 toast 进度
-                updateBgDlToastPct(s);
-
-                if (dlEvent === 'downloading_incremental') {
+                if (dlEvent === 'downloading_incremental' || dlEvent === 'downloading_full' || dlEvent === 'downloading_resume' || s.downloading) {
                     document.getElementById('aboutDlBar').style.width = (s.progress_percent || 0) + '%';
-                    document.getElementById('aboutDlText').textContent = '正在下载增量包 ' + (s.progress_percent || 0) + '%';
-                    return;
-                }
-                if (dlEvent === 'downloading_full') {
-                    document.getElementById('aboutDlBar').style.width = (s.progress_percent || 0) + '%';
-                    document.getElementById('aboutDlText').textContent = '增量包不可用，正在下载完整包 ' + (s.progress_percent || 0) + '%';
-                    return;
-                }
-                if (dlEvent === 'downloading_resume') {
-                    document.getElementById('aboutDlBar').style.width = (s.progress_percent || 0) + '%';
-                    document.getElementById('aboutDlText').textContent = '下载中断，正在恢复... ' + (s.progress_percent || 0) + '%';
+                    var txt = '正在下载... ' + (s.progress_percent || 0) + '%';
+                    if (dlEvent === 'downloading_incremental') txt = '正在下载增量包 ' + (s.progress_percent || 0) + '%';
+                    else if (dlEvent === 'downloading_full') txt = '正在下载完整包 ' + (s.progress_percent || 0) + '%';
+                    else if (dlEvent === 'downloading_resume') txt = '下载恢复中... ' + (s.progress_percent || 0) + '%';
+                    document.getElementById('aboutDlText').textContent = txt;
+                    document.getElementById('aboutDlText').className = 'text-info mt-1';
                     return;
                 }
                 if (dlEvent === 'updating_chain') {
                     document.getElementById('aboutDlBar').style.width = (s.progress_percent || 0) + '%';
                     document.getElementById('aboutChainProgress').style.display = 'block';
-                    document.getElementById('aboutChainText').textContent = s.chain_text || ('正在更新（步骤 ' + (s.current_step || '?') + '/' + (s.total_steps || '?') + '）...');
-                    return;
-                }
-                if (s.downloading) {
-                    const pct = s.progress_percent || 0;
-                    document.getElementById('aboutDlBar').style.width = pct + '%';
-                    document.getElementById('aboutDlText').textContent = '下载中 ' + pct + '%';
+                    document.getElementById('aboutChainText').textContent = s.chain_text || '正在更新...';
                     return;
                 }
                 if (s.error) {
@@ -2200,25 +2175,25 @@
                     document.getElementById('aboutDlText').textContent = s.error;
                     document.getElementById('aboutDlText').className = 'text-danger mt-1';
                     document.getElementById('aboutDlBar').style.width = '0%';
-                    resetAboutDownloadBtn();
-                    closeBgDownloadToast();
+                    _aboutUpdateStep = 'step1';
+                    setAboutUpdateStep(1);
+                    setAboutDownloadBtnStep1();
                     return;
                 }
                 if (dlEvent === 'ready_to_restart' || s.downloaded) {
                     clearInterval(_dlPollInterval);
                     _dlPollInterval = null;
-                    document.getElementById('aboutDlProgress').style.display = 'block';
+                    _aboutUpdateStep = 'step3';
+                    setAboutUpdateStep(3);
                     document.getElementById('aboutDlBar').style.width = '100%';
-                    document.getElementById('aboutDlText').textContent = '新版本已就绪，重启后生效';
+                    document.getElementById('aboutDlText').textContent = 'V' + (_globalUpdateData ? _globalUpdateData.version || '' : '') + ' 已就绪，重启后生效';
                     document.getElementById('aboutDlText').className = 'text-success mt-1';
                     document.getElementById('aboutDownloadBtn').style.display = '';
-                    document.getElementById('aboutDownloadBtn').innerHTML = '<i class="bi bi-arrow-repeat"></i> 重启并升级';
+                    document.getElementById('aboutDownloadBtn').innerHTML = '<i class="bi bi-arrow-repeat"></i> 立即重启升级';
                     document.getElementById('aboutDownloadBtn').disabled = false;
                     document.getElementById('aboutChainProgress').style.display = 'none';
-                    // 后台 toast 也更新
-                    updateBgDlToastComplete();
-                    // 强制更新自动触发重启
                     if (_forceUpdate) {
+                        _aboutUpdateStep = 'force';
                         showForceUpdateToast();
                     }
                     return;
@@ -2228,58 +2203,22 @@
                     _dlPollInterval = null;
                     document.getElementById('aboutDlText').textContent = '上次更新未完成，已恢复到 ' + (s.rollback_version || '上一版本');
                     document.getElementById('aboutDlText').className = 'text-warning mt-1';
-                    closeBgDownloadToast();
+                    _aboutUpdateStep = 'step1';
+                    setAboutDownloadBtnStep1();
                     return;
                 }
             } catch (_) {
                 clearInterval(_dlPollInterval);
                 _dlPollInterval = null;
-                resetAboutDownloadBtn();
+                _aboutUpdateStep = 'step1';
+                setAboutUpdateStep(1);
+                setAboutDownloadBtnStep1();
             }
         }, 500);
     }
 
-    function updateBgDlToastPct(status) {
-        var pctEl = document.getElementById('bgDlToastPct');
-        if (!pctEl) return;
-        var pct = status.progress_percent || 0;
-        var event = status.event || '';
-        if (event === 'downloading_incremental') {
-            pctEl.textContent = '下载增量包 ' + pct + '%';
-        } else if (event === 'downloading_full') {
-            pctEl.textContent = '下载完整包 ' + pct + '%';
-        } else if (event === 'downloading_resume') {
-            pctEl.textContent = '恢复下载 ' + pct + '%';
-        } else if (status.downloading) {
-            pctEl.textContent = '下载中 ' + pct + '%';
-        }
-    }
-
-    function updateBgDlToastComplete() {
-        var pctEl = document.getElementById('bgDlToastPct');
-        if (!pctEl) return;
-        pctEl.textContent = '下载完成，点击重启升级';
-        pctEl.style.color = '#4caf50';
-        // 更新 toast 标题
-        if (_bgDownloadToast) {
-            var header = _bgDownloadToast.querySelector('.update-toast-header-green');
-            if (header) {
-                header.innerHTML = '<i class="bi bi-check-circle-fill"></i><strong>新版本已就绪</strong>' +
-                    '<button class="update-toast-close">&times;</button>';
-            }
-            // 显示"立即重启升级"按钮，隐藏提示文字
-            var restartBtn = document.getElementById('bgDlRestartBtn');
-            if (restartBtn) restartBtn.style.display = '';
-            var clickHint = document.getElementById('bgDlClickHint');
-            if (clickHint) clickHint.style.display = 'none';
-            var footerText = document.getElementById('bgDlFooterText');
-            if (footerText) footerText.style.display = 'none';
-        }
-    }
-
     function showForceUpdateToast() {
         // 显示红色强制更新 toast
-        closeBgDownloadToast();
         var existing = document.getElementById('forceUpdateToast');
         if (existing) existing.remove();
         var wrapper = document.createElement('div');
@@ -2599,9 +2538,8 @@
         }
     });
 
-    // ===== 新版本提示 Toast（绿色渐变+点击打开关于弹窗） =====
+    // ===== 新版本提示 Toast =====
     (function checkForUpdates() {
-        // 延迟 3 秒检查，不阻塞主页面
         setTimeout(async () => {
             try {
                 const r = await fetch('/api/update/check');
@@ -2611,53 +2549,48 @@
                 _globalUpdateData = data;
                 _forceUpdate = !!(data.force_update);
                 _updateChannel = data.channel || 'stable';
-                // 显示关于按钮红点
                 document.getElementById('aboutRedDot').classList.add('show');
-                // 弹出确认通知，用户点击"立即升级"后才下载
-                if (data.download_url) {
-                    showConfirmUpdateToast(data);
-                }
-            } catch (_) {
-                // 静默忽略（非桌面模式无此 API 或无网络）
-            }
+                // 显示简洁的新版本通知 toast（点击可打开关于弹窗查看详情）
+                showUpdateNotifyToast(data);
+            } catch (_) { }
         }, 3000);
     })();
 
-    function showConfirmUpdateToast(updateData) {
-        const existing = document.getElementById('confirmUpdateToast');
+    function showUpdateNotifyToast(updateData) {
+        const existing = document.getElementById('updateNotifyToast');
         if (existing) existing.remove();
 
         const wrapper = document.createElement('div');
-        wrapper.id = 'confirmUpdateToast';
+        wrapper.id = 'updateNotifyToast';
         wrapper.className = 'update-toast-wrapper';
         wrapper.innerHTML =
             '<div class="update-toast">' +
             '<div class="update-toast-header-green">' +
             '<i class="bi bi-rocket-takeoff"></i>' +
             '<strong>发现新版本 V' + escapeHtml(updateData.version || '') + '</strong>' +
-            '<button class="update-toast-close" id="confirmUpdateClose">&times;</button>' +
+            '<button class="update-toast-close" id="updateNotifyClose">&times;</button>' +
             '</div>' +
             '<div class="update-toast-body">' +
             '<span class="version-tag">V' + escapeHtml(updateData.version || '') + '</span>' +
             escapeHtml((updateData.release_notes || '本次更新包含功能优化和体验提升。').substring(0, 120)) +
             '</div>' +
-            '<div class="update-toast-footer" style="justify-content:space-between;">' +
-            '<button class="btn btn-outline-secondary btn-sm" id="confirmUpdateLater">稍后提醒</button>' +
-            '<button class="btn btn-success btn-sm" id="confirmUpdateNow"><i class="bi bi-download"></i> 立即升级</button>' +
+            '<div class="update-toast-footer" style="justify-content:flex-end;">' +
+            '<button class="btn btn-outline-primary btn-sm" id="updateNotifyDismiss">知道了</button>' +
+            '<button class="btn btn-primary btn-sm ms-2" id="updateNotifyView"><i class="bi bi-info-circle"></i> 查看详情</button>' +
             '</div>' +
             '</div>';
         document.body.appendChild(wrapper);
 
-        document.getElementById('confirmUpdateNow').addEventListener('click', function() {
+        document.getElementById('updateNotifyView').addEventListener('click', function() {
             wrapper.remove();
-            triggerBackgroundDownload(updateData);
+            openAboutModal();
         });
 
-        document.getElementById('confirmUpdateClose').addEventListener('click', function() {
+        document.getElementById('updateNotifyClose').addEventListener('click', function() {
             wrapper.remove();
         });
 
-        document.getElementById('confirmUpdateLater').addEventListener('click', function() {
+        document.getElementById('updateNotifyDismiss').addEventListener('click', function() {
             wrapper.remove();
         });
     }

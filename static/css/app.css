@@ -1734,3 +1734,37 @@ body {
 #updateToastInner {
     cursor: pointer;
 }
+
+/* ============================================================
+ * 关于弹窗 · 升级三步流程步骤指示器
+ * ============================================================ */
+.about-update-steps {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 12px;
+    font-size: 12px;
+    flex-wrap: wrap;
+}
+.about-step-item {
+    padding: 4px 10px;
+    border-radius: 12px;
+    color: #999;
+    background: #f0f0f0;
+    white-space: nowrap;
+    transition: all 0.3s;
+}
+.about-step-item.active {
+    background: #667eea;
+    color: #fff;
+    font-weight: 600;
+}
+.about-step-item.done {
+    background: #28a745;
+    color: #fff;
+}
+.about-step-arrow {
+    color: #ccc;
+    margin: 0 2px;
+    font-weight: 700;
+}
