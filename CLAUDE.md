@@ -364,7 +364,7 @@ v1.1.11 → v1.1.14 发布过程暴露了多类可预防的事故。以下 check
 | 2 | **setup.iss [Code] 段无花括号 GUID** | `grep -nP '\{[A-F0-9]{8}-' service_installer/installer/setup.iss` 应无输出（或仅匹配 `[Setup]` 段的 `AppId={{GUID}}` 和字符串字面量的 `{{GUID}}`） | `check-iscc` brace lint step |
 | 3 | **ISCC 编译通过** | 本地运行 `ISCC.exe installer/setup.iss` 无报错 | `check-iscc` ISCC compile step |
 | 4 | **端到端自测** | 安装最新版本后，触发自动升级到待发布版本，重启后确认窗口可见、版本号已更新。 | 暂无 |
-| 5 | **烟雾测试** | 下载 CI 构建产物，安装到干净目录，启动确认窗口可见、无 CMD 黑框、版本号正确、无后台自动下载（等 30 秒）。 | `build-windows` smoke test step（INSPUR-114） |
+| 5 | **烟雾测试（手动）** | 下载 CI 构建产物（GitHub Actions Artifacts），安装到干净目录，启动确认窗口可见、无 CMD 黑框、版本号正确、无后台自动下载（等 30 秒）。组长发版前手动执行。 | 暂无（Inno Setup `/VERYSILENT` 在 headless CI 死锁，无法自动化；已从 CI 移除） |
 | 6 | **上述两项全部通过后才允许 push tag** | 步骤 4 和步骤 5 全部确认通过后，才能执行 push tag 操作。任一项不通过都应先修复再重新验证。 | 暂无 |
 | 7 | **`_desktop_common.py` 无 `/B` 参数** | `grep '/B' _desktop_common.py` 应无输出（`start "" /B` 会导致版本号刷新失效） | 暂无（需人工确认） |
 | 8 | **GitHub Actions action 版本兼容** | 确认 `actions/upload-artifact`、`actions/download-artifact` 等使用 v4（非 v3），v3 已 deprecated | 暂无 |
