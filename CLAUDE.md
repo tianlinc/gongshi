@@ -332,7 +332,8 @@ Old v1 of the same project — earlier `app.py`, CLI tool (`rdm_timesheet.py`), 
 
 - **Windows console can't print Unicode arrows.** Use `[OK]` / `[X]` instead of `✓` / `✗` in any script that prints to stdout — the system encoding is GBK and unicode arrows crash with `UnicodeEncodeError`. `tools/explore.py` was rewritten to follow this; keep it that way.
 - **All user-facing strings are Chinese** (UI labels, error messages, doc filenames like `使用说明.md`). Match this when adding routes or messages.
-- **Agent 自行完成 git 操作，不推给用户。** 代码修改完成后，组长/开发者自行合并到 main、打 tag、推送，在回复中告知用户结果即可。不要列出需要用户手动执行的 git 命令（如 `git merge`、`git tag`、`git push`）。用户不是运维，不要让他们参与纯机械性的发布操作。
+- **Agent 自行完成 git 操作，不推给用户。** 只有组长可以 push tag 和发版。开发者 push 到分支后由组长审核合并，严禁开发者自行合并到 main 或 push tag。
+- **发版前组长必须逐项执行 checklist。** CLAUDE.md 中的发布 checklist 不是参考文档——是组长发版前的强制流程。每一项必须执行并确认通过，不允许跳过。检查结果必须在发版 comment 中说明。
 - **The RDM base URL is hardcoded** to `http://10.111.36.3:2029` in `RDMClient.__init__`. Not configurable yet — change it there if needed.
 - **`docs/` has two Chinese guides** (`使用说明.md` technical, `完整说明-用户版.md` end-user). The README is the canonical English-ish overview; the two docs are for the user, not for navigating the code.
 - **RELEASE_NOTES.md 必须面向客户写，不写内部实现细节。** 每条更新说明回答"用户能感受到什么变化"，不写"改了哪个文件""修复了什么 bug 的根因"。正确示例："检测到新版本后，会先询问是否升级，不再后台自动下载"；错误示例："修复了 `checkForUpdates()` 中 `triggerBackgroundDownload()` 提前调用的问题"。每次发版前必须更新 RELEASE_NOTES.md 反映当次变化，不允许多个版本共用同一份说明。
@@ -406,6 +407,40 @@ git push origin v<ver>
 | 1 | Release 产物文件名版本号正确 | GitHub Release Assets 中的 exe/dmg 文件名应与 tag 一致 |
 | 2 | 自动升级可用 | 旧版本点击"检查更新"应能检测到新版本并下载 |
 | 3 | 升级后重启版本号刷新 | 自动升级重启后，UI 显示的版本号应为新版本 |
+
+## 质量保障规范（INSPUR-100 复盘成果）
+
+从 v1.2.0 到 v1.3.4 共 15 个版本，每个版本都有新的 bug 需要下一个版本修复。根因不是某个人的失误，是流程性、系统性的缺陷。以下规范从机制层面而非具体 bug 层面保障交付质量。
+
+### 发版质量门禁（三项全部通过才能 push tag）
+
+| # | 门禁 | 责任人 | 说明 |
+|---|------|--------|------|
+| G1 | CI 文件完整性校验 | CI（自动） | bootstrap.exe PE 头 MZ 签名 + 文件大小 ≥1MB。不通过则 CI fail，Release 不发布 |
+| G2 | 安装包手动验证 | 组长 | 安装到干净目录 → 启动确认窗口可见 → 无 CMD 黑框 → 版本号正确 → 等 30 秒确认无后台下载 |
+| G3 | 集成测试 | 组长 | 安装旧版本 → 检测更新 → 手动点击下载 → 下载完手动点击重启 → 确认 bootstrap 升级窗口 → 确认新版本号 |
+
+### 发版前主动排查（已知易出错点，组长必须逐项确认）
+
+| # | 排查项 | 命令/方式 |
+|---|--------|----------|
+| E1 | bootstrap.exe 构建产物是否有效 | CI 自动校验 PE 头 + 文件大小；组长下载安装包后实际启动验证 |
+| E2 | 后台自动下载是否已消除 | 安装后等 30 秒，观察无下载行为；grep `auto_start_download` `_desktop_common.py` 应无调用 |
+| E3 | VERSION 文件与实际 tag 一致 | `cat VERSION` 与计划打的 tag 一致 |
+| E4 | RELEASE_NOTES.md 已更新且不重复 | `git diff HEAD~1 -- RELEASE_NOTES.md` 有本次版本特有的客户视角变化 |
+| E5 | _launch_bootstrap 失败时不会静默消失 | 检查 `_launch_bootstrap()` 有回退逻辑（bootstrap.exe 不存在时直接启动主应用）；组长实际验证 |
+| E6 | update_ready.json 失败时被删除（不会死循环） | grep 确认 `_bootstrap.py` 中更新失败路径有 `os.remove('update_ready.json')` 或等效逻辑 |
+
+### 跨模块变更互通
+
+- 并行开发的两个子任务（后端 + 前端），开发者交付时必须说明**已验证的跨模块交互路径**
+- 组长整合后必须做集成测试，不能只分别审代码
+- 修改前端交互行为时，必须检查后端是否有对应入口可能绕过前端控制（例如：改 toast → 查后台定时器是否仍在自动触发）
+- 修改后端行为时，必须检查前端是否有对应 UI 引用了旧行为
+
+### 安装包烟雾测试说明
+
+CI 无法自动执行安装包烟雾测试：Inno Setup 的 `/VERYSILENT` 在 headless Windows CI Runner 中会因 `PrivilegesRequiredOverridesAllowed=dialog` 死锁。该测试必须由组长在本地桌面环境手动执行。CI 保留 bootstrap.exe 文件完整性校验（PE 头 + 大小）作为自动门禁。
 
 
 <!-- BEGIN MULTICA-RUNTIME (auto-managed; do not edit) -->
