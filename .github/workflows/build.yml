@@ -368,32 +368,62 @@ jobs:
       #  INSPUR-114: 烟雾测试 — 安装 + 启动 + 存活检查
       #  用 /VERYSILENT 静默安装构建产物，启动 bootstrap.exe，
       #  等待 10s 后检查进程存活，然后清理。失败则阻断。
+      #
+      #  安装命令有 120s 超时保护：若 Inno Setup 因权限对话框
+      #  或其他交互行为在 headless CI 上死锁，超时后自动失败。
+      #  /LOG= 标志写入安装日志用于诊断。
       # =========================================================
       - name: Smoke test (install + launch)
         shell: bash
         run: |
+          INSTALL_TIMEOUT=120
           VERSION=$(cat VERSION | tr -d '[:space:]')
           INSTALLER="service_installer/dist/IEI_Timer_Faster_Setup_v${VERSION}.exe"
           SMOKE_DIR="C:/tmp/gongshi_smoke_test"
           INSTALL_DIR="${SMOKE_DIR}/IEI Timer Faster"
+          INSTALL_LOG="${SMOKE_DIR}/install.log"
 
           if [ ! -f "$INSTALLER" ]; then
             echo "[X] Smoke test FAILED: installer not found at $INSTALLER"
             exit 1
           fi
 
-          echo "[OK] Smoke test: installing to ${SMOKE_DIR} ..."
+          echo "[OK] Smoke test: installing to ${SMOKE_DIR} (timeout: ${INSTALL_TIMEOUT}s) ..."
           rm -rf "${SMOKE_DIR}" 2>/dev/null || true
           mkdir -p "${SMOKE_DIR}"
 
-          # Silent install
-          "$INSTALLER" /VERYSILENT /SUPPRESSMSGBOXES '/DIR=C:\tmp\gongshi_smoke_test\IEI Timer Faster' || {
-            echo "[X] Smoke test FAILED: installer returned error"
-            exit 1
-          }
+          # Silent install with timeout watchdog
+          # /LOG= 写入 Inno Setup 安装日志，超时时可用于诊断
+          "$INSTALLER" /VERYSILENT /SUPPRESSMSGBOXES '/DIR=C:\tmp\gongshi_smoke_test\IEI Timer Faster' "/LOG=${INSTALL_LOG}" &
+          INSTALL_PID=$!
 
-          # Give installer time to finish background work
-          sleep 5
+          _install_timed_out=false
+          _elapsed=0
+          while [ $_elapsed -lt $INSTALL_TIMEOUT ]; do
+            if ! kill -0 $INSTALL_PID 2>/dev/null; then
+              wait $INSTALL_PID
+              _rc=$?
+              if [ $_rc -ne 0 ]; then
+                echo "[X] Smoke test FAILED: installer exit code $_rc"
+                echo "--- Installer log (tail) ---"
+                tail -40 "${INSTALL_LOG}" 2>/dev/null || echo "(no install log)"
+                exit 1
+              fi
+              break  # installer finished successfully
+            fi
+            sleep 2
+            _elapsed=$(($_elapsed + 2))
+          done
+
+          if kill -0 $INSTALL_PID 2>/dev/null; then
+            kill $INSTALL_PID 2>/dev/null || true
+            echo "[X] Smoke test FAILED: installer timed out after ${INSTALL_TIMEOUT}s"
+            echo "--- Installer log (tail) ---"
+            tail -40 "${INSTALL_LOG}" 2>/dev/null || echo "(no install log)"
+            exit 1
+          fi
+
+          echo "[OK] Installation completed"
 
           # Verify bootstrap.exe was installed
           if [ ! -f "${INSTALL_DIR}/bootstrap.exe" ]; then
